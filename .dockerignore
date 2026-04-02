@@ -1,0 +1,32 @@
+# Go build artifacts
+bin/
+*.exe
+*.test
+
+# Frontend build — not needed for the Go binary
+frontend/node_modules/
+frontend/dist/
+
+# Local secrets — never bake into images
+.env
+.env.*
+!.env.example
+
+# Claude Code config
+.claude/
+
+# Git internals
+.git/
+.gitignore
+
+# Docs — not needed at runtime
+docs/
+
+# Temporal local state
+temporal-config/
+
+# macOS
+.DS_Store
+
+# Pre-built macOS binary (not usable in Linux containers)
+server

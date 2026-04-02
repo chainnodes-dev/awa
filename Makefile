@@ -1,4 +1,4 @@
-.PHONY: dev infra stop server worker frontend migrate tidy
+.PHONY: dev infra stop server worker frontend migrate tidy build docker-build stack stack-down
 
 # Start infrastructure (postgres, redis, temporal)
 infra:
@@ -44,6 +44,21 @@ test:
 build:
 	go build -o bin/server ./cmd/server
 	go build -o bin/worker ./cmd/worker
+	go build -o bin/specialist-worker ./cmd/specialist-worker
+
+# Build Docker images for all three binaries
+docker-build:
+	docker build --build-arg CMD=server           -t asm/server:latest .
+	docker build --build-arg CMD=worker           -t asm/worker:latest .
+	docker build --build-arg CMD=specialist-worker -t asm/specialist-worker:latest .
+
+# Start full stack (infra + app) via docker compose
+stack:
+	docker compose up --build -d
+
+# Stop full stack
+stack-down:
+	docker compose down
 
 # Install frontend deps
 frontend-install:

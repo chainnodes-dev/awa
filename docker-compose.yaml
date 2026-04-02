@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -54,6 +52,50 @@ services:
       - "8088:8080"
     depends_on:
       - temporal
+
+  server:
+    build:
+      context: .
+      args:
+        CMD: server
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://asm:asm_secret@postgres:5432/asm?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      TEMPORAL_ADDRESS: temporal:7233
+      JWT_SECRET: dev-insecure-secret-change-in-prod
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      args:
+        CMD: worker
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://asm:asm_secret@postgres:5432/asm?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      TEMPORAL_ADDRESS: temporal:7233
+      EXECUTOR_MODE: temporal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   postgres_data:
