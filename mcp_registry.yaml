@@ -1,0 +1,42 @@
+# MCP Server Registry
+# Maps logical server names to environment variable keys and descriptions.
+# Referenced in workflow YAML as: config.mcp_servers: "{{ env.MY_MCP_URL }}"
+#
+# To add a new server:
+#   1. Add an entry here with a unique name, the env var key, and a description.
+#   2. Set the env var in your .env file or deployment config.
+#   3. Reference the server in your agent config by logical name (for the AI generator)
+#      or directly as {{ env.ENV_VAR_KEY }} in your YAML.
+
+mcp_servers:
+  - name: invoice-parser
+    env_var: MCP_INVOICE_PARSER_URL
+    description: "Parses PDF and email-based invoices. Extracts structured fields: vendor, amount, currency, line items, due date."
+
+  - name: erp-writer
+    env_var: MCP_ERP_WRITER_URL
+    description: "Writes approved invoices to ERP systems (SAP, NetSuite). Requires: vendor_id, amount, currency, line_items."
+
+  - name: email-sender
+    env_var: MCP_EMAIL_SENDER_URL
+    description: "Sends transactional emails. Tools: send_email(to, subject, body), send_template(template_id, recipient, vars)."
+
+  - name: document-store
+    env_var: MCP_DOCUMENT_STORE_URL
+    description: "Stores and retrieves documents. Tools: upload_document, get_document, list_documents, delete_document."
+
+  - name: web-search
+    env_var: MCP_WEB_SEARCH_URL
+    description: "Performs web searches and fetches web pages. Tools: search(query), fetch_url(url)."
+
+  - name: code-executor
+    env_var: MCP_CODE_EXECUTOR_URL
+    description: "Executes sandboxed code snippets (Python, JavaScript). Tools: run_python(code), run_js(code)."
+
+  - name: data-validator
+    env_var: MCP_DATA_VALIDATOR_URL
+    description: "Validates data against JSON schemas, business rules, and regulatory requirements."
+
+  - name: notification-hub
+    env_var: MCP_NOTIFICATION_HUB_URL
+    description: "Sends multi-channel notifications (Slack, email, SMS, webhooks). Tools: notify(channel, message, recipients)."

@@ -1,0 +1,76 @@
+<template>
+  <div class="flex flex-col h-full">
+    <div class="px-4 py-2.5 border-b border-border flex items-center gap-3">
+      <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Event Log</span>
+      <span class="text-xs text-slate-600">{{ events.length }} events</span>
+      <button @click="clear" class="ml-auto btn-ghost text-xs py-0.5 px-2">Clear</button>
+    </div>
+
+    <div ref="logEl" class="flex-1 overflow-y-auto p-2 space-y-0.5 font-mono text-xs">
+      <div
+        v-for="(ev, i) in events" :key="i"
+        class="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-white/5 group"
+      >
+        <span class="text-slate-600 shrink-0 w-[72px]">{{ formatTime(ev.timestamp) }}</span>
+        <span :class="['shrink-0 w-32 truncate', eventColor(ev.type)]">{{ ev.type }}</span>
+        <span class="text-slate-500 truncate group-hover:whitespace-normal">{{ summarise(ev) }}</span>
+      </div>
+
+      <div v-if="!events.length" class="text-slate-600 text-center py-8">
+        Waiting for events…
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, watch, nextTick } from 'vue'
+
+const props = defineProps({
+  events:  { type: Array, default: () => [] },
+  autoScroll: { type: Boolean, default: true }
+})
+
+const emit = defineEmits(['clear'])
+const logEl = ref(null)
+const events = ref([...props.events])
+
+watch(() => props.events, (v) => {
+  events.value = [...v]
+  if (props.autoScroll) nextTick(() => {
+    if (logEl.value) logEl.value.scrollTop = 0
+  })
+}, { deep: true })
+
+function clear() { events.value = []; emit('clear') }
+
+function formatTime(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  return d.toLocaleTimeString('en', { hour12: false })
+}
+
+const EVENT_COLORS = {
+  'run.created':        'text-green-400',
+  'run.completed':      'text-green-500',
+  'run.failed':         'text-red-400',
+  'state.changed':      'text-indigo-400',
+  'blackboard.updated': 'text-blue-400',
+  'agent.thinking':     'text-slate-500',
+  'hitl.waiting':       'text-amber-400',
+  'hitl.resolved':      'text-amber-300',
+}
+function eventColor(type) { return EVENT_COLORS[type] ?? 'text-slate-400' }
+
+function summarise(ev) {
+  const d = ev.data ?? {}
+  switch (ev.type) {
+    case 'state.changed':      return `${d.from_state} → ${d.to_state}  (${d.trigger})`
+    case 'blackboard.updated': return `${d.key} = ${JSON.stringify(d.value)}`
+    case 'agent.thinking':     return `[${d.agent_name}] ${(d.token ?? '').slice(0, 60)}`
+    case 'run.created':        return `run ${d.run?.id?.slice(0, 8)}`
+    case 'hitl.waiting':       return `${d.state_name}${d.assignee ? ` → ${d.assignee}` : ''}`
+    default:                   return JSON.stringify(d).slice(0, 80)
+  }
+}
+</script>

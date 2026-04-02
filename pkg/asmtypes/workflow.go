@@ -1,0 +1,134 @@
+package asmtypes
+
+// WorkflowDef is the root of a workflow YAML manifest.
+type WorkflowDef struct {
+	APIVersion  string        `yaml:"apiVersion"  json:"apiVersion"`
+	Kind        string        `yaml:"kind"        json:"kind"`
+	Metadata    WorkflowMeta  `yaml:"metadata"    json:"metadata"`
+	Blackboard  BlackboardDef `yaml:"blackboard"  json:"blackboard"`
+	States      []StateDef    `yaml:"states"      json:"states"`
+	Transitions []Transition  `yaml:"transitions" json:"transitions"`
+	Agents      []AgentDef    `yaml:"agents"      json:"agents"`
+}
+
+type WorkflowMeta struct {
+	Name        string            `yaml:"name"                  json:"name"`
+	Version     string            `yaml:"version"               json:"version"`
+	Description string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Labels      map[string]string `yaml:"labels,omitempty"      json:"labels,omitempty"`
+}
+
+// BlackboardDef defines the typed schema of the shared blackboard.
+type BlackboardDef struct {
+	Schema map[string]FieldDef `yaml:"schema" json:"schema"`
+}
+
+type FieldDef struct {
+	Type     string      `yaml:"type"               json:"type"`     // string | number | bool | object
+	Required bool        `yaml:"required,omitempty" json:"required"`
+	Default  interface{} `yaml:"default,omitempty"  json:"default,omitempty"`
+}
+
+// StateType classifies the role of a state in the machine.
+type StateType string
+
+const (
+	StateInitial      StateType = "initial"
+	StateIntermediate StateType = "intermediate"
+	StateHITL         StateType = "hitl"      // Human-in-the-loop pause
+	StateTerminal     StateType = "terminal"
+	StateScript       StateType = "script"    // Deterministic expr-lang evaluation; no LLM
+)
+
+type StateDef struct {
+	Name         string     `yaml:"name"                   json:"name"`
+	Type         StateType  `yaml:"type"                   json:"type"`
+	Instructions string     `yaml:"instructions,omitempty" json:"instructions,omitempty"` // Plain-language context for the LLM agent
+	Agent        string     `yaml:"agent,omitempty"        json:"agent,omitempty"`
+	Script       *ScriptDef `yaml:"script,omitempty"       json:"script,omitempty"`        // Set when type == "script"
+	Timeout      string     `yaml:"timeout,omitempty"      json:"timeout,omitempty"`
+	OnTimeout    string     `yaml:"on_timeout,omitempty"   json:"on_timeout,omitempty"`
+	OnEnter      []string   `yaml:"on_enter,omitempty"     json:"on_enter,omitempty"`
+	Assignee     string     `yaml:"assignee,omitempty"     json:"assignee,omitempty"` // HITL
+	Compensation string     `yaml:"compensation,omitempty" json:"compensation,omitempty"`
+	// Layout hint for the designer canvas — not required at runtime.
+	Position *Position `yaml:"position,omitempty" json:"position,omitempty"`
+}
+
+// ScriptDef defines deterministic inline logic for a state of type "script".
+// Both fields are evaluated using the expr-lang expression language.
+// The blackboard fields are available as top-level variables.
+type ScriptDef struct {
+	// Trigger is an expr-lang expression that evaluates to a string — the name of
+	// the transition trigger to fire.  Example: `amount > 1000 ? "needs_review" : "auto_approve"`
+	Trigger string `yaml:"trigger" json:"trigger"`
+	// Updates maps blackboard field names to expr-lang expressions that compute the
+	// new value.  Example: { "approved": "amount < 1000", "vat": "amount * 0.2" }
+	Updates map[string]string `yaml:"updates,omitempty" json:"updates,omitempty"`
+}
+
+type Position struct {
+	X float64 `yaml:"x" json:"x"`
+	Y float64 `yaml:"y" json:"y"`
+}
+
+type Transition struct {
+	From    string `yaml:"from"            json:"from"`
+	To      string `yaml:"to"              json:"to"`
+	Trigger string `yaml:"trigger"         json:"trigger"`
+	Guard   string `yaml:"guard,omitempty" json:"guard,omitempty"` // expr-lang expression
+}
+
+type AgentDef struct {
+	Name           string            `yaml:"name"                      json:"name"`
+	Model          string            `yaml:"model,omitempty"           json:"model,omitempty"`
+	// TaskQueue overrides the default Temporal task queue for this agent.
+	// When set, the ASM workflow schedules this agent's activity on the named
+	// queue so that a specialist worker (not the LLM worker) picks it up.
+	// Leave empty to use the platform default queue (asm-workers).
+	TaskQueue      string            `yaml:"task_queue,omitempty"      json:"task_queue,omitempty"`
+	Tools          []string          `yaml:"tools,omitempty"           json:"tools,omitempty"`
+	PromptTemplate string            `yaml:"prompt_template,omitempty" json:"prompt_template,omitempty"`
+	Rules          []string          `yaml:"rules,omitempty"           json:"rules,omitempty"`
+	Config         map[string]string `yaml:"config,omitempty"          json:"config,omitempty"`
+}
+
+// Helpers
+
+func (w *WorkflowDef) StateByName(name string) *StateDef {
+	for i := range w.States {
+		if w.States[i].Name == name {
+			return &w.States[i]
+		}
+	}
+	return nil
+}
+
+func (w *WorkflowDef) AgentByName(name string) *AgentDef {
+	for i := range w.Agents {
+		if w.Agents[i].Name == name {
+			return &w.Agents[i]
+		}
+	}
+	return nil
+}
+
+func (w *WorkflowDef) InitialState() *StateDef {
+	for i := range w.States {
+		if w.States[i].Type == StateInitial {
+			return &w.States[i]
+		}
+	}
+	return nil
+}
+
+// TransitionsFrom returns all transitions whose source is `from`.
+func (w *WorkflowDef) TransitionsFrom(from string) []Transition {
+	var out []Transition
+	for _, t := range w.Transitions {
+		if t.From == from {
+			out = append(out, t)
+		}
+	}
+	return out
+}

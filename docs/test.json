@@ -1,0 +1,9 @@
+{
+  "invoice_id":     "INV-2024-001",
+  "vendor_name":    "Acme GmbH",
+  "vendor_address": "Hauptstrasse 1, 10115 Berlin, Germany",
+  "amount":         15000,
+  "line_items": [
+    { "description": "Software development services Q1", "qty": 1, "unit_price": 15000 }
+  ]
+}

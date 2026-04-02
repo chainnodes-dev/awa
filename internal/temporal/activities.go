@@ -1,0 +1,77 @@
+package temporal
+
+import (
+	"context"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/asm-platform/asm/internal/events"
+	"github.com/asm-platform/asm/internal/orchestrator"
+	"github.com/asm-platform/asm/internal/store"
+	"github.com/asm-platform/asm/pkg/asmtypes"
+)
+
+// Activities holds all dependencies needed by Temporal activity functions.
+// Register an instance with the Temporal worker via worker.RegisterActivity(acts).
+type Activities struct {
+	Store    store.Store
+	Bus      events.Bus
+	Executor orchestrator.Executor
+}
+
+func NewActivities(s store.Store, bus events.Bus, exec orchestrator.Executor) *Activities {
+	return &Activities{Store: s, Bus: bus, Executor: exec}
+}
+
+// UpdateRun persists run state changes to the store.
+func (a *Activities) UpdateRun(ctx context.Context, p UpdateRunParams) error {
+	run, err := a.Store.GetRun(ctx, p.RunID)
+	if err != nil {
+		return err
+	}
+	run.CurrentState = p.CurrentState
+	run.Status = p.Status
+	run.Blackboard = p.Blackboard
+	run.UpdatedAt = time.Now()
+	if p.IsTerminal {
+		now := time.Now()
+		run.CompletedAt = &now
+	}
+	return a.Store.UpdateRun(ctx, run)
+}
+
+// RecordTransition appends an immutable transition record to the store.
+func (a *Activities) RecordTransition(ctx context.Context, p RecordTransitionParams) error {
+	if p.Record.ID == "" {
+		p.Record.ID = uuid.NewString()
+	}
+	if p.Record.Timestamp.IsZero() {
+		p.Record.Timestamp = time.Now()
+	}
+	return a.Store.RecordTransition(ctx, p.Record)
+}
+
+// PublishEvent publishes a single event to the event bus.
+func (a *Activities) PublishEvent(ctx context.Context, p PublishEventParams) error {
+	return a.Bus.Publish(ctx, events.New(p.EventType, p.Data))
+}
+
+// CreateHITL persists a new HITL request to the store.
+func (a *Activities) CreateHITL(ctx context.Context, p CreateHITLParams) error {
+	if p.Request.ID == "" {
+		p.Request.ID = uuid.NewString()
+	}
+	return a.Store.CreateHITL(ctx, p.Request)
+}
+
+// ExecuteAgent runs an LLM agent and returns its structured output.
+// This activity has a longer timeout than the others (10 min vs 10 s).
+func (a *Activities) ExecuteAgent(ctx context.Context, p ExecuteAgentParams) (*asmtypes.AgentOutput, error) {
+	return a.Executor.Execute(ctx, orchestrator.AgentTask{
+		RunID:      p.RunID,
+		AgentDef:   p.AgentDef,
+		StateDef:   p.StateDef,
+		Blackboard: p.Blackboard,
+	})
+}
