@@ -125,6 +125,7 @@ func makeTask(providerName string) orchestrator.AgentTask {
 			Type: asmtypes.StateIntermediate,
 		},
 		Blackboard: map[string]interface{}{"invoice_id": "INV-001"},
+		Def:        &asmtypes.WorkflowDef{},
 	}
 }
 

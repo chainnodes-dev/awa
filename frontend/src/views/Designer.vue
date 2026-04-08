@@ -207,6 +207,12 @@
                   <span v-if="a.model" class="text-[10px] text-slate-600 truncate">{{ a.model.split('/').pop() }}</span>
                 </div>
               </div>
+
+              <!-- System Prompt (relocated to bottom) -->
+              <div class="space-y-1 pt-2 border-t border-border/50">
+                <label class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">System Prompt (Global Personality)</label>
+                <textarea v-model="meta.systemPrompt" class="input h-32 font-mono text-[11px] leading-relaxed resize-none" placeholder="You are a helpful assistant…" @input="isDirty=true"/>
+              </div>
             </div>
 
             <!-- State selected -->
@@ -216,6 +222,7 @@
               :node="selected.data"
               :edges="edges"
               :agent-def="getAgent(selected.data.agent)"
+              :bb-schema="bbSchema"
               @update="updateNode"
               @delete="deleteSelected"
             />
@@ -276,7 +283,7 @@ const { layout }  = useLayout()
 const nodes   = ref([])
 const edges   = ref([])
 const agents  = ref([])   // [{name, model, task_queue, config: {prompt, mcp_servers}}]
-const meta    = reactive({ name: '', version: '1.0.0', versionNumber: 0, description: '' })
+const meta    = reactive({ name: '', version: '1.0.0', versionNumber: 0, description: '', systemPrompt: '' })
 const bbSchema = reactive({})
 const versions = ref([])   // [{version_number, version, created_at}]
 
@@ -338,6 +345,7 @@ function loadDefinition(def, src, updateYaml = true) {
   meta.version       = def.metadata?.version        ?? '1.0.0'
   meta.versionNumber = def.metadata?.version_number ?? 0
   meta.description   = def.metadata?.description    ?? ''
+  meta.systemPrompt  = def.metadata?.system_prompt   ?? ''
 
   // Clear and repopulate bbSchema
   Object.keys(bbSchema).forEach(k => delete bbSchema[k])
@@ -586,7 +594,12 @@ function buildDefinition() {
   return {
     apiVersion: 'asm/v1',
     kind:       'Workflow',
-    metadata:   { name: meta.name, version: meta.version || 'draft', description: meta.description },
+    metadata:   { 
+      name: meta.name, 
+      version: meta.version || 'draft', 
+      description: meta.description,
+      system_prompt: meta.systemPrompt
+    },
     blackboard: { schema: { ...bbSchema } },
     states:     nodes.value.map(n => ({
       name:         n.id,
@@ -846,22 +859,24 @@ export const StatePanel = defineComponent({
       mcp_servers: p.agentDef?.config?.mcp_servers ?? '',
     })
 
-    // Scaffold (code generation) state
-    const scaffoldCode    = ref('')
+    // Scaffold (script generation) state
+    const scaffoldScript  = ref(null) // { trigger, updates: {} }
     const scaffoldLoading = ref(false)
     const scaffoldError   = ref('')
 
-    async function generateCode() {
+    async function generateScript() {
       scaffoldLoading.value = true
       scaffoldError.value   = ''
-      scaffoldCode.value    = ''
+      scaffoldScript.value  = null
       try {
         const { data } = await api.post('/designer/scaffold', {
           agent_name:  form.agent,
           state_name:  form.name,
           description: form.instructions || '',
+          triggers:    outgoingTransitions.value.map(t => t.label),
+          bb_schema:   Object.fromEntries(Object.entries(p.bbSchema).map(([k, v]) => [k, v.type])),
         })
-        scaffoldCode.value = data.code
+        scaffoldScript.value = data
       } catch (e) {
         scaffoldError.value = e.response?.data?.error ?? e.message
       } finally {
@@ -869,19 +884,22 @@ export const StatePanel = defineComponent({
       }
     }
 
-    function copyCode() {
-      navigator.clipboard.writeText(scaffoldCode.value)
+    function applyScript() {
+      if (!scaffoldScript.value) return
+      
+      form.type = 'script'
+      form.agent = ''
+      form.script_trigger = scaffoldScript.value.trigger
+      form.script_updates = Object.entries(scaffoldScript.value.updates || {}).map(([key, expr]) => ({ key, expr }))
+      
+      onApply()
+      scaffoldScript.value = null
     }
 
-    function downloadCode() {
-      const blob = new Blob([scaffoldCode.value], { type: 'text/plain' })
-      const url  = URL.createObjectURL(blob)
-      const a    = Object.assign(document.createElement('a'), {
-        href:     url,
-        download: `${form.agent || 'handler'}.go`,
-      })
-      a.click()
-      URL.revokeObjectURL(url)
+    function copyScript() {
+      if (!scaffoldScript.value) return
+      const text = JSON.stringify(scaffoldScript.value, null, 2)
+      navigator.clipboard.writeText(text)
     }
 
     const incomingTransitions = computed(() => 
@@ -1051,55 +1069,54 @@ export const StatePanel = defineComponent({
               onInput: e => agentForm.mcp_servers = e.target.value,
             })
           ),
-          field('System Prompt',
-            h('textarea', {
-              class: 'input font-mono text-[11px] leading-relaxed resize-none h-32',
-              value: agentForm.prompt,
-              placeholder: 'You are a helpful assistant…',
-              onInput: e => agentForm.prompt = e.target.value,
-            })
-          ),
         ]),
 
-        // Specialist worker code generation
-        h('div', { class: 'pt-3 border-t border-border space-y-2' }, [
-          h('div', { class: 'flex items-center gap-2' }, [
-            h('h4', { class: 'text-xs font-semibold text-slate-500 uppercase tracking-wider flex-1' }, 'Specialist Worker'),
-            h('button', {
-              class: `text-xs px-2.5 py-1 rounded font-medium transition-colors ${
-                scaffoldLoading.value
-                  ? 'bg-indigo-500/20 text-indigo-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-              }`,
-              disabled: scaffoldLoading.value,
-              onClick: generateCode,
-            }, scaffoldLoading.value ? 'Generating…' : 'Generate Code'),
-          ]),
-          h('p', { class: 'text-[10px] text-slate-600 leading-relaxed' },
-            'Generate a Go HandlerFunc that replaces this LLM agent with deterministic code.'
-          ),
-
-          // Error
-          scaffoldError.value && h('p', { class: 'text-[10px] text-red-400 font-mono' }, scaffoldError.value),
-
-          // Code display
-          scaffoldCode.value && h('div', { class: 'space-y-1.5' }, [
-            h('div', { class: 'flex items-center gap-1.5 justify-end' }, [
+        // Script generation section (for non-script types with an agent name set)
+        ...(form.type !== 'script' && form.agent ? [
+          h('div', { class: 'pt-3 border-t border-border space-y-2' }, [
+            h('div', { class: 'flex items-center gap-2' }, [
+              h('h4', { class: 'text-xs font-semibold text-slate-500 uppercase tracking-wider flex-1' }, 'Convert to Script'),
               h('button', {
-                class: 'text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-border hover:border-slate-500 transition-colors',
-                onClick: copyCode,
-              }, 'Copy'),
-              h('button', {
-                class: 'text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-border hover:border-slate-500 transition-colors',
-                onClick: downloadCode,
-              }, 'Download .go'),
+                class: `text-xs px-2.5 py-1 rounded font-medium transition-colors ${
+                  scaffoldLoading.value
+                    ? 'bg-indigo-500/20 text-indigo-400 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                }`,
+                disabled: scaffoldLoading.value,
+                onClick: generateScript,
+              }, scaffoldLoading.value ? 'Generating…' : 'Generate Script'),
             ]),
-            h('pre', {
-              class: 'bg-surface-0 border border-border rounded p-2.5 text-[10px] font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-64 whitespace-pre leading-relaxed',
-            }, scaffoldCode.value),
+            h('p', { class: 'text-[10px] text-slate-600 leading-relaxed' },
+              'Convert this LLM agent into deterministic expr-lang logic for zero-latency execution.'
+            ),
+
+            // Error
+            scaffoldError.value && h('p', { class: 'text-[10px] text-red-400 font-mono' }, scaffoldError.value),
+
+            // Script Preview
+            scaffoldScript.value && h('div', { class: 'space-y-2' }, [
+              h('div', { class: 'bg-surface-0 border border-border rounded p-2 space-y-2' }, [
+                h('div', { class: 'space-y-0.5' }, [
+                  h('span', { class: 'text-[9px] text-slate-500 font-bold uppercase' }, 'Trigger'),
+                  h('div', { class: 'text-[10px] font-mono text-indigo-400' }, scaffoldScript.value.trigger),
+                ]),
+                Object.keys(scaffoldScript.value.updates || {}).length > 0 && h('div', { class: 'space-y-0.5' }, [
+                  h('span', { class: 'text-[9px] text-slate-500 font-bold uppercase' }, 'Updates'),
+                  Object.entries(scaffoldScript.value.updates).map(([k, v]) => h('div', { class: 'text-[10px] font-mono text-slate-400 flex gap-2' }, [
+                    h('span', { class: 'text-slate-500 shrink-0' }, k),
+                    h('span', { class: 'text-slate-600 shrink-0' }, '='),
+                    h('span', { class: 'truncate' }, v),
+                  ])),
+                ]),
+              ]),
+              h('div', { class: 'flex gap-2' }, [
+                h('button', { class: 'btn-primary text-[10px] flex-1 py-1.5', onClick: applyScript }, 'Apply to State'),
+                h('button', { class: 'btn-ghost text-[10px] px-2 py-1.5', onClick: copyScript }, 'Copy'),
+              ]),
+            ]),
           ]),
-        ]),
-      ] : []
+        ] : [])
+      ] : [];
 
       return h('div', { class: 'p-4 space-y-2.5 flex-1 overflow-y-auto' }, [
         // Header

@@ -176,6 +176,8 @@ metadata:
   name: workflow-name          # kebab-case, unique
   version: "1.0.0"
   description: "Optional description"
+  system_prompt: |             # GLOBAL: Define the agent's identity and global rules here
+    You are a supportive financial assistant...
 
 blackboard:
   schema:
@@ -240,7 +242,9 @@ agents:
 13. The LLM agent decides which trigger to fire based on its analysis. Mention the available trigger names in the instructions so the agent knows its options.
 14. The "initial" state should capture the input and start processing. **Assign an agent to the initial state to begin work immediately.**
 15. Keep the blackboard schema minimal — only fields that flow between states.
-16. Prefer intermediate (LLM-powered) states over script states. Only use script when the logic is a simple expression like "amount > threshold".
+16. **CRITICAL**: Define the agent's identity, tone, and global business logic in "metadata.system_prompt". This applies to all LLM agents in the workflow.
+17. **DO NOT** put prompts or instructions inside the "agents" list. Use the agent config only for "mcp_servers" or "model" overrides.
+18. The "instructions" field on each state should only contain the specific task for that state.
 
 ## How Triggers Work
 

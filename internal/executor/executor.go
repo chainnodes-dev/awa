@@ -321,6 +321,7 @@ func (e *DirectExecutor) buildSystemPrompt(agent asmtypes.AgentDef, task orchest
 
 	var buf bytes.Buffer
 	_ = tmpl.Execute(&buf, map[string]interface{}{
+		"SystemPrompt": task.Def.Metadata.SystemPrompt,
 		"AgentName":    agent.Name,
 		"StateName":    task.StateDef.Name,
 		"Instructions": task.StateDef.Instructions,
@@ -334,12 +335,13 @@ func parseAgentOutput(content string) (*asmtypes.AgentOutput, error) {
 	start := -1
 	depth := 0
 	for i, ch := range content {
-		if ch == '{' {
+		switch ch {
+		case '{':
 			if start == -1 {
 				start = i
 			}
 			depth++
-		} else if ch == '}' {
+		case '}':
 			depth--
 			if depth == 0 && start != -1 {
 				var output asmtypes.AgentOutput
@@ -355,13 +357,17 @@ func parseAgentOutput(content string) (*asmtypes.AgentOutput, error) {
 // agentSystemPrompt is the default system prompt template.
 // When tools are available the model should use them before producing the final
 // JSON output. The final response MUST be a JSON object — nothing else.
-const agentSystemPrompt = `You are an autonomous agent in an Agentic State Machine (ASM) platform.
+const agentSystemPrompt = `{{if .SystemPrompt}}
+{{.SystemPrompt}}
+{{else}}
+You are an autonomous agent in an Agentic State Machine (ASM) platform.
+{{end}}
 
 Your current role: {{.AgentName}}
 Current state: {{.StateName}}
 
 {{if .Instructions}}
-State instructions:
+State instructions (TACTICAL TASK):
 {{.Instructions}}
 {{end}}
 

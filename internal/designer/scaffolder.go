@@ -2,6 +2,7 @@ package designer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -23,12 +24,12 @@ type ScaffoldRequest struct {
 	BBSchema map[string]string `json:"bb_schema,omitempty"`
 }
 
-// ScaffoldResult holds the LLM-generated Go handler code.
+// ScaffoldResult holds the LLM-generated expr-lang script definition.
 type ScaffoldResult struct {
-	// Code is a self-contained Go source snippet that can be pasted into a
-	// specialist worker binary. It includes the package declaration, imports,
-	// and a single HandlerFunc implementation.
-	Code string `json:"code"`
+	// Trigger is an expr-lang expression that returns a transition trigger name.
+	Trigger string `json:"trigger"`
+	// Updates maps blackboard field names to expr-lang expression strings.
+	Updates map[string]string `json:"updates,omitempty"`
 }
 
 // Scaffold calls the LLM and returns a Go HandlerFunc implementation for the
@@ -47,92 +48,72 @@ func (g *Generator) Scaffold(ctx context.Context, req ScaffoldRequest) (*Scaffol
 		return nil, fmt.Errorf("LLM call failed: %w", err)
 	}
 
-	code, err := extractGoBlock(resp.Content)
+	// Extract JSON block
+	jsonStr, err := extractJSONBlock(resp.Content)
 	if err != nil {
-		return nil, fmt.Errorf("no Go code block in LLM response: %w", err)
+		return nil, fmt.Errorf("no JSON block in LLM response: %w", err)
 	}
 
-	return &ScaffoldResult{Code: code}, nil
+	var res ScaffoldResult
+	if err := json.Unmarshal([]byte(jsonStr), &res); err != nil {
+		return nil, fmt.Errorf("failed to parse generated script JSON: %w", err)
+	}
+
+	if res.Trigger == "" {
+		return nil, fmt.Errorf("LLM failed to generate a trigger expression")
+	}
+
+	return &res, nil
 }
 
 // buildScaffoldSystemPrompt returns the system prompt that teaches the LLM
 // the specialist-worker SDK conventions.
 func buildScaffoldSystemPrompt() string {
-	return `You are an expert Go developer who writes specialist worker handlers for the ASM (Agentic State Machine) platform.
+	return `You are a deterministic logic generator for the ASM (Agentic State Machine) platform.
+Your task is to convert plain-language instructions into deterministic "expr-lang" expressions.
 
-Your task is to generate a self-contained Go source file containing a single handler function that implements deterministic business logic as an alternative to an LLM agent.
+## expr-lang Syntax
 
-## SDK Contract
+We use the "expr-lang/expr" Go library. Expressions have access to the "blackboard" as a map of variables.
 
-Every handler must satisfy the HandlerFunc type:
+### Accessing Data
+- Variables: Just use the name, e.g. "amount", "status", "invoice_id".
+- Maps: "metadata.author" or "nested['key']".
+- Existence: "field != nil".
 
-` + "```go" + `
-type HandlerFunc func(ctx context.Context, bb map[string]interface{}) (*asmtypes.AgentOutput, error)
-` + "```" + `
+### Logic & Math
+- Standard operators: "+", "-", "*", "/", "==", "!=", ">", "<", ">=", "<=".
+- Boolean: "&&", "||", "!".
+- Ternary: "condition ? true_val : false_val".
+- Grouping: "(a + b) * c".
 
-Where AgentOutput is:
+### Built-ins
+- Strings: "contains(str, substr)", "startsWith(str, prefix)", "upper(str)", "lower(str)".
+- Collections: "len(list)", "any(list, # > 0)", "all(list, # != nil)".
 
-` + "```go" + `
-// AgentOutput is the value returned by every agent (LLM or specialist).
-type AgentOutput struct {
-    // Trigger is the transition trigger to fire (must be non-empty).
-    // It must match one of the "trigger" values defined in the workflow transitions.
-    Trigger string ` + "`json:\"trigger\"`" + `
+## Your Task
 
-    // Reasoning is a human-readable explanation for the decision (optional).
-    Reasoning string ` + "`json:\"reasoning,omitempty\"`" + `
-
-    // BlackboardUpdates is a map of field name → new value to merge into
-    // the workflow's shared blackboard (optional).
-    BlackboardUpdates map[string]interface{} ` + "`json:\"blackboard_updates,omitempty\"`" + `
-}
-` + "```" + `
-
-## Imports
-
-Use these exact import paths:
-
-` + "```go" + `
-import (
-    "context"
-    "fmt"
-
-    "github.com/asm-platform/asm/pkg/asmtypes"
-)
-` + "```" + `
-
-## Blackboard Access Pattern
-
-Blackboard values are always ` + "`map[string]interface{}`" + `. Access them with type assertions:
-
-` + "```go" + `
-// String field
-val, _ := bb["field_name"].(string)
-
-// Number field (JSON numbers decode as float64)
-amount, _ := bb["amount"].(float64)
-
-// Optional with default
-status, ok := bb["status"].(string)
-if !ok {
-    status = "pending"
-}
-` + "```" + `
+Generate a JSON object containing:
+1. "trigger": A single expression string that returns a string (the name of the transition trigger to fire).
+2. "updates": A map of blackboard field names to expression strings evaluating to the new value for that field.
 
 ## Rules
-
-1. The function must be deterministic — no LLM calls, no HTTP requests to external services.
-2. Never return a nil *asmtypes.AgentOutput with a nil error. Always return one or the other.
-3. The Trigger field in AgentOutput must be non-empty.
-4. Handle type assertion failures gracefully — fields may be absent from the blackboard.
-5. Return a descriptive Reasoning string so operators understand the decision.
-6. Include a package declaration (` + "`package main`" + `) and all necessary imports.
-7. Write idiomatic, production-quality Go code with brief comments.
+1. Be 100% deterministic. No stochastic behavior.
+2. The Trigger expression must return one of the allowed trigger names.
+3. Access blackboard variables directly by their name.
+4. If a field might be missing, use a safe check like "status ?? 'default'".
 
 ## Output Format
-
-Respond with ONLY the Go source code, wrapped in a ` + "```go" + ` code block.
-Do not include any explanation before or after the code block.
+Respond with ONLY a JSON block:
+` + "```json" + `
+{
+  "trigger": "condition ? 'ok' : 'error'",
+  "updates": {
+    "priority": "amount > 100 ? 'high' : 'low'",
+    "processed": "true"
+  }
+}
+` + "```" + `
 `
 }
 
@@ -140,21 +121,18 @@ Do not include any explanation before or after the code block.
 func buildScaffoldUserMsg(req ScaffoldRequest) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Generate a specialist worker handler for the agent named %q", req.AgentName))
-	if req.StateName != "" {
-		sb.WriteString(fmt.Sprintf(" (used in state %q)", req.StateName))
-	}
+	sb.WriteString(fmt.Sprintf("Generate expr-lang logic for the state %q handled by agent %q", req.StateName, req.AgentName))
 	sb.WriteString(".\n\n")
 
 	if req.Description != "" {
-		sb.WriteString("## Handler Description\n\n")
+		sb.WriteString("## State Description / Instructions\n\n")
 		sb.WriteString(req.Description)
 		sb.WriteString("\n\n")
 	}
 
 	if len(req.Triggers) > 0 {
-		sb.WriteString("## Triggers to Return\n\n")
-		sb.WriteString("The handler must return exactly one of these trigger strings:\n")
+		sb.WriteString("## Allowed Trigger Names\n\n")
+		sb.WriteString("The 'trigger' expression must evaluate to one of these strings:\n")
 		for _, t := range req.Triggers {
 			sb.WriteString(fmt.Sprintf("- %q\n", t))
 		}
@@ -162,30 +140,26 @@ func buildScaffoldUserMsg(req ScaffoldRequest) string {
 	}
 
 	if len(req.BBSchema) > 0 {
-		sb.WriteString("## Blackboard Schema\n\n")
-		sb.WriteString("The following fields are available in the blackboard (`bb` parameter):\n")
+		sb.WriteString("## Blackboard Variable Names\n\n")
+		sb.WriteString("Use these field names in your expressions:\n")
 		for field, typ := range req.BBSchema {
 			sb.WriteString(fmt.Sprintf("- `%s` (%s)\n", field, typ))
 		}
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("Generate the complete Go source file including package declaration, imports, and the handler function.\n")
-	sb.WriteString("Name the function after the agent: ")
-	funcName := agentNameToFuncName(req.AgentName)
-	sb.WriteString(fmt.Sprintf("`%s`\n", funcName))
-
+	sb.WriteString("Return only a JSON block with 'trigger' and 'updates'.\n")
 	return sb.String()
 }
 
 // extractGoBlock finds the first ```go ... ``` block in the LLM response.
 func extractGoBlock(content string) (string, error) {
-	const goMarker = "```go"
+	const marker = "```go"
 	const endMarker = "```"
 
-	start := strings.Index(content, goMarker)
+	start := strings.Index(content, marker)
 	if start != -1 {
-		inner := content[start+len(goMarker):]
+		inner := content[start+len(marker):]
 		end := strings.Index(inner, endMarker)
 		if end != -1 {
 			return strings.TrimSpace(inner[:end]), nil
@@ -215,26 +189,39 @@ func extractGoBlock(content string) (string, error) {
 	return "", fmt.Errorf("response does not contain a Go code block")
 }
 
-// agentNameToFuncName converts a kebab-case or snake_case agent name to a
-// camelCase Go function name, e.g. "invoice-validator" → "invoiceValidator".
-func agentNameToFuncName(name string) string {
-	// Normalise separators to underscore first.
-	name = strings.ReplaceAll(name, "-", "_")
-	parts := strings.Split(name, "_")
-	if len(parts) == 0 {
-		return "handle"
-	}
-	var sb strings.Builder
-	for i, p := range parts {
-		if p == "" {
-			continue
-		}
-		if i == 0 {
-			sb.WriteString(strings.ToLower(p))
-		} else {
-			sb.WriteString(strings.ToUpper(p[:1]))
-			sb.WriteString(strings.ToLower(p[1:]))
+// extractJSONBlock finds the first ```json ... ``` block in the LLM response.
+func extractJSONBlock(content string) (string, error) {
+	const marker = "```json"
+	const endMarker = "```"
+
+	start := strings.Index(content, marker)
+	if start != -1 {
+		inner := content[start+len(marker):]
+		end := strings.Index(inner, endMarker)
+		if end != -1 {
+			return strings.TrimSpace(inner[:end]), nil
 		}
 	}
-	return sb.String()
+
+	// Plain ``` block as fallback.
+	const plainMarker = "```"
+	start = strings.Index(content, plainMarker)
+	if start != -1 {
+		inner := content[start+len(plainMarker):]
+		end := strings.Index(inner, plainMarker)
+		if end != -1 {
+			candidate := strings.TrimSpace(inner[:end])
+			if strings.HasPrefix(candidate, "{") {
+				return candidate, nil
+			}
+		}
+	}
+
+	// Last resort: if it looks like JSON, return as-is.
+	trimmed := strings.TrimSpace(content)
+	if strings.HasPrefix(trimmed, "{") {
+		return trimmed, nil
+	}
+
+	return "", fmt.Errorf("response does not contain a JSON block")
 }

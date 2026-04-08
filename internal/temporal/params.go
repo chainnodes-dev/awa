@@ -63,4 +63,5 @@ type ExecuteAgentParams struct {
 	AgentDef   asmtypes.AgentDef
 	StateDef   asmtypes.StateDef
 	Blackboard map[string]interface{}
+	Def        *asmtypes.WorkflowDef
 }

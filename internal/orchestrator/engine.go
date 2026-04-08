@@ -27,6 +27,7 @@ type AgentTask struct {
 	AgentDef   asmtypes.AgentDef
 	StateDef   asmtypes.StateDef
 	Blackboard map[string]interface{}
+	Def        *asmtypes.WorkflowDef
 }
 
 // TemporalEngineClient abstracts the Temporal client used by the engine.
@@ -221,6 +222,7 @@ func (e *Engine) driveRun(ctx context.Context, runID string, rc *runContext) {
 				AgentDef:   *agentDef,
 				StateDef:   *state,
 				Blackboard: rc.blackboard.Read(),
+				Def:        rc.def,
 			})
 			if err != nil {
 				slog.Error("Executor error", "run_id", runID, "error", err)

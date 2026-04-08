@@ -176,6 +176,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				AgentDef:   *agentDef,
 				StateDef:   *state,
 				Blackboard: bb,
+				Def:        p.Def,
 			}).Get(ctx, &output)
 			if err != nil {
 				return failWorkflow(ctx, shortOpts, p, fmt.Errorf("agent execution failed: %w", err))

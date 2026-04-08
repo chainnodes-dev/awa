@@ -22,7 +22,8 @@ type WorkflowMeta struct {
 	//   "0 0 9 * * *"  — daily at 09:00:00
 	//   "0 */15 * * * *" — every 15 minutes
 	// Leave empty to disable.
-	Schedule string `yaml:"schedule,omitempty" json:"schedule,omitempty"`
+	Schedule     string `yaml:"schedule,omitempty"      json:"schedule,omitempty"`
+	SystemPrompt string `yaml:"system_prompt,omitempty" json:"system_prompt,omitempty"`
 }
 
 // BlackboardDef defines the typed schema of the shared blackboard.

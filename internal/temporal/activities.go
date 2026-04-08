@@ -83,5 +83,6 @@ func (a *Activities) ExecuteAgent(ctx context.Context, p ExecuteAgentParams) (*a
 		AgentDef:   p.AgentDef,
 		StateDef:   p.StateDef,
 		Blackboard: p.Blackboard,
+		Def:        p.Def,
 	})
 }

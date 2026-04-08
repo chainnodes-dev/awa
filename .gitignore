@@ -6,6 +6,7 @@ bin/
 *.exe
 *.test
 server
+.cache/
 
 # Frontend
 frontend/node_modules/
