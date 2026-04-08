@@ -38,10 +38,20 @@ export const useWorkflowStore = defineStore('workflows', () => {
     )
   }
 
+  async function fetchVersions(name) {
+    const { data } = await api.get(`/workflows/${name}/versions`)
+    return data ?? []
+  }
+
+  async function fetchByVersion(name, versionNumber) {
+    const { data } = await api.get(`/workflows/${name}/v/${versionNumber}`)
+    return data
+  }
+
   async function startRun(workflowName, workflowVersion, input = {}) {
     const { data } = await api.post('/runs', { workflow_name: workflowName, workflow_version: workflowVersion, input })
     return data
   }
 
-  return { definitions, loading, error, fetchAll, fetchOne, save, remove, startRun }
+  return { definitions, loading, error, fetchAll, fetchOne, fetchVersions, fetchByVersion, save, remove, startRun }
 })

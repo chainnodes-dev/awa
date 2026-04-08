@@ -1,33 +1,50 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/asm-platform/asm/internal/auth"
 	"github.com/asm-platform/asm/internal/designer"
+	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
-type Handlers struct {
-	engine    *orchestrator.Engine
-	store     store.Store
-	jwtSvc    *auth.JWTService
-	// generator is nil when no LLM key is configured.
-	generator *designer.Generator
+// SchedulerAdder is the minimal scheduler interface needed by the handlers.
+// Using an interface keeps the api package free of a direct import on internal/scheduler.
+type SchedulerAdder interface {
+	AddWorkflow(def *asmtypes.WorkflowDef) error
+	RemoveWorkflow(name, version string)
 }
 
-func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator) *Handlers {
-	return &Handlers{engine: engine, store: s, jwtSvc: jwtSvc, generator: gen}
+type Handlers struct {
+	engine      *orchestrator.Engine
+	store       store.Store
+	jwtSvc      *auth.JWTService
+	// generator is nil when no LLM key is configured.
+	generator   *designer.Generator
+	scheduler   SchedulerAdder
+	llmRegistry *llm.Registry
+}
+
+func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, sched SchedulerAdder, llmReg *llm.Registry) *Handlers {
+	return &Handlers{engine: engine, store: s, jwtSvc: jwtSvc, generator: gen, scheduler: sched, llmRegistry: llmReg}
 }
 
 // -- Workflow Definitions --
 
 func (h *Handlers) ListWorkflows(c *gin.Context) {
-	defs, err := h.store.ListDefinitions(c.Request.Context())
+	filter := store.DefinitionFilter{
+		Limit:  queryInt(c, "limit", 50),
+		Offset: queryInt(c, "offset", 0),
+	}
+	defs, err := h.store.ListDefinitions(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -66,7 +83,42 @@ func (h *Handlers) CreateWorkflow(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, def)
+	// Register (or update) cron schedule if the workflow carries one.
+	if h.scheduler != nil {
+		if err := h.scheduler.AddWorkflow(def); err != nil {
+			slog.Warn("Failed to register workflow schedule", "workflow", def.Metadata.Name, "error", err)
+		}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"definition":     def,
+		"version_number": def.Metadata.VersionNumber,
+	})
+}
+
+func (h *Handlers) ListWorkflowVersions(c *gin.Context) {
+	name := c.Param("name")
+	versions, err := h.store.ListDefinitionVersions(c.Request.Context(), name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, versions)
+}
+
+func (h *Handlers) GetWorkflowByVersion(c *gin.Context) {
+	name := c.Param("name")
+	vnum, err := strconv.Atoi(c.Param("version"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "version must be an integer"})
+		return
+	}
+	def, yaml, err := h.store.GetDefinitionByVersion(c.Request.Context(), name, vnum)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"definition": def, "yaml": yaml})
 }
 
 func (h *Handlers) DeleteWorkflow(c *gin.Context) {
@@ -76,6 +128,10 @@ func (h *Handlers) DeleteWorkflow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// Deregister any cron schedule for this workflow.
+	if h.scheduler != nil {
+		h.scheduler.RemoveWorkflow(name, version)
+	}
 	c.Status(http.StatusNoContent)
 }
 
@@ -83,9 +139,22 @@ func (h *Handlers) DeleteWorkflow(c *gin.Context) {
 
 func (h *Handlers) ListRuns(c *gin.Context) {
 	filter := store.RunFilter{
+		TenantID:     store.TenantIDFromContext(c.Request.Context()),
 		WorkflowName: c.Query("workflow"),
 		Status:       asmtypes.RunStatus(c.Query("status")),
-		Limit:        50,
+		CurrentState: c.Query("state"),
+		Limit:        queryInt(c, "limit", 50),
+		Offset:       queryInt(c, "offset", 0),
+	}
+	if from := c.Query("started_from"); from != "" {
+		if t, err := time.Parse(time.RFC3339, from); err == nil {
+			filter.StartedFrom = &t
+		}
+	}
+	if to := c.Query("started_to"); to != "" {
+		if t, err := time.Parse(time.RFC3339, to); err == nil {
+			filter.StartedTo = &t
+		}
 	}
 	runs, err := h.engine.ListRuns(c.Request.Context(), filter)
 	if err != nil {
@@ -95,6 +164,16 @@ func (h *Handlers) ListRuns(c *gin.Context) {
 	c.JSON(http.StatusOK, runs)
 }
 
+// queryInt reads a query parameter as an integer, returning defaultVal if absent or invalid.
+func queryInt(c *gin.Context, key string, defaultVal int) int {
+	if s := c.Query(key); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return defaultVal
+}
+
 func (h *Handlers) GetRun(c *gin.Context) {
 	run, err := h.engine.GetRun(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -102,6 +181,14 @@ func (h *Handlers) GetRun(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, run)
+}
+
+func (h *Handlers) DeleteRun(c *gin.Context) {
+	if err := h.engine.DeleteRun(c.Request.Context(), c.Param("id")); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 func (h *Handlers) GetRunHistory(c *gin.Context) {

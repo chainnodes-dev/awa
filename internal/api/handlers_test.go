@@ -13,6 +13,7 @@ import (
 
 	"github.com/asm-platform/asm/internal/auth"
 	"github.com/asm-platform/asm/internal/events"
+	"github.com/asm-platform/asm/internal/health"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -65,14 +66,14 @@ func testRouter(t *testing.T) testEnv {
 	eng := orchestrator.NewEngine(s, bus, exec)
 
 	jwtSvc := auth.NewJWTService("test-secret-do-not-use-in-prod")
-	adminToken, err := jwtSvc.GenerateAccessToken("test-admin-id", "testadmin", string(auth.RoleAdmin))
+	adminToken, err := jwtSvc.GenerateAccessToken("test-admin-id", store.DefaultTenantID, "testadmin", string(auth.RoleAdmin))
 	if err != nil {
 		t.Fatalf("generate test token: %v", err)
 	}
 
-	handlers := NewHandlers(eng, s, jwtSvc, nil) // nil generator: AI generation disabled in tests
+	handlers := NewHandlers(eng, s, jwtSvc, nil, nil, nil) // nil generator, scheduler, llmRegistry: disabled in tests
 	router := gin.New()
-	registerRoutes(router, handlers, NewHub(bus), jwtSvc)
+	registerRoutes(router, handlers, NewHub(bus), jwtSvc, health.New())
 
 	return testEnv{
 		router:     router,

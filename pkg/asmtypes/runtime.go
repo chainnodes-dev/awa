@@ -15,6 +15,7 @@ const (
 
 // WorkflowRun is a live instance of a WorkflowDef.
 type WorkflowRun struct {
+	TenantID        string                 `json:"tenant_id"`
 	ID              string                 `json:"id"`
 	WorkflowName    string                 `json:"workflow_name"`
 	WorkflowVersion string                 `json:"workflow_version"`

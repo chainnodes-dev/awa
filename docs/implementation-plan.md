@@ -1,7 +1,7 @@
 # ASM Platform — Implementation Plan
 
 > **Living document.** Update status, notes, and decisions as the project evolves.
-> Last updated: 2026-03-30 (M8 in progress — AI designer, per-state prompts, script states)
+> Last updated: 2026-04-04 (M11 complete — DB-backed LLM config UI, multi-provider support, HITL fixes)
 
 ---
 
@@ -26,11 +26,13 @@
 | M3 | Agent capability — tool-calling loop, MCP registry | ✅ | Done |
 | M4 | Multi-queue — specialist workers, per-agent task queues | ✅ | Done |
 | M5 | Security — auth layer, RBAC | ✅ | Done |
+| M5.2 | Multi-tenancy — tenant model, context propagation, super_admin, tenant API | ✅ | Done |
 | M6 | Designer UX — auto-layout, inline config, drag-connect | ✅ | Done |
-| M7 | Production readiness — observability, migration tooling | ⬜ | — |
-| M8 | Intelligence — AI workflow generator, per-state prompts, script states | 🔄 | — |
-| M9 | Code generation — LLM-assisted specialist worker scaffolding | ⬜ | — |
-| M10 | Generated MCP servers — sharable deterministic logic as services | ⬜ | — |
+| M7 | Production readiness — observability, migration tooling | ✅ | Done |
+| M8 | Intelligence — AI workflow generator, per-state prompts, script states | ✅ | Done |
+| M9 | Code generation — LLM-assisted specialist worker scaffolding | ✅ | Done |
+| M10 | Generated MCP servers — sharable deterministic logic as services | ✅ | Done |
+| M11 | LLM config UI — DB-backed provider management, hot-reload, HITL fixes | ✅ | Done |
 
 ---
 
@@ -96,6 +98,8 @@ Make LLM agents genuinely useful: they can call tools during reasoning, not just
 - [x] **`mcp.LoadRegistry`** (`internal/tools/mcp/tool.go`) — connects to MCP server, discovers tools, returns pre-populated `*tools.Registry`
 - [x] **Per-agent MCP server config** — `agent.Config["mcp_servers"]` (comma-separated, env-expanded URLs); referenced in workflow YAML as `{{ env.MY_MCP_URL }}`
 - [x] **LLM provider constructors** — `NewAnthropicProvider(apiKey, defaultModel)` and `NewOpenAIProvider(apiKey, defaultModel)`; no hardcoded model names
+- [x] **Ollama provider** — `NewOllamaProvider(baseURL, defaultModel)` for local / self-hosted LLMs; same `Provider` interface; `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` env vars
+- [x] **LLM provider auto-fallback** — if `LLM_PROVIDER` is unset or the named provider is not registered, server falls back to the first registered provider; `LLM_PROVIDER` default changed from `"anthropic"` to `""` so a local-only setup works without configuration
 - [x] **`.env.example`** — MCP server URL documentation pattern added
 - [x] **21 executor tests** — tool-calling loop, error handling, max iterations, `parseAgentOutput`, `buildAssistantBlocks`, registry merge; all passing
 - [x] **Full test suite** — 80 tests, 5 packages, all green; clean build
@@ -106,6 +110,7 @@ Make LLM agents genuinely useful: they can call tools during reasoning, not just
 - Agent tools win over global tools on name collision in `Registry.Merge` — agent-specific behaviour can always shadow a platform default
 - Tool errors are serialised and fed back to the LLM rather than aborting — the model can reason about failures and choose a fallback path
 - `maxToolIterations = 10` hard-coded constant — prevents runaway loops; configurable per-agent planned for M4+
+- LLM provider auto-fallback — `LLM_PROVIDER` default is `""` and the server falls back to the first registered provider; local-only (Ollama) setups work without any configuration change
 
 ### Deferred to later milestones
 - MCP SSE transport (currently HTTP POST only) — most servers support POST; SSE support added if needed
@@ -220,6 +225,51 @@ The platform should not be exposed beyond localhost without authentication.
 
 ---
 
+## M5.2 — Multi-Tenancy ✅
+
+### Goal
+Every B2B SaaS customer is a tenant. Without this, all customers share the same workflow definitions and run history, making the SaaS model impossible to retrofit later. Added before any production data exists — the cheapest possible moment.
+
+### Completed
+
+#### 5.2.1 Data model
+- [x] **`migrations/003_tenants.sql`** — `tenants` table (UUID PK, name, slug UNIQUE, created_at); `tenant_id` FK added to `workflow_definitions`, `workflow_runs`, `users`; per-tenant UNIQUE constraints on `(tenant_id, name, version)` and `(tenant_id, username)`; `super_admin` added to role CHECK constraint; default tenant seeded at `00000000-0000-0000-0000-000000000001`
+- [x] **`pkg/asmtypes/runtime.go`** — `TenantID string` added as first field of `WorkflowRun`
+- [x] **`internal/store/user.go`** — `Tenant` struct (ID, Name, Slug, CreatedAt); `TenantID` field on `User`; `TenantStore` interface (CreateTenant, GetTenant, GetTenantBySlug, ListTenants, DeleteTenant, HasAnyTenant)
+
+#### 5.2.2 Context propagation
+- [x] **`internal/store/interfaces.go`** — `DefaultTenantID` constant; `WithTenantID(ctx, id)` / `TenantIDFromContext(ctx)` helpers; `Store` embeds `TenantStore`; `RunFilter.TenantID` field
+- [x] **`internal/auth/jwt.go`** — `TenantID string \`json:"tid"\`` in `Claims`; `RoleSuperAdmin = "super_admin"` constant; `GenerateAccessToken` takes `(userID, tenantID, username, role)`
+- [x] **`internal/auth/middleware.go`** — `RequireAuth` propagates `tenant_id` into request context; `RequireRole` grants `super_admin` implicit access everywhere
+
+#### 5.2.3 Store implementations
+- [x] **`internal/store/memory.go`** — full `TenantStore`; definition keys `tenantID:name@version`; user keys `tenantID:username`; all list/get filter by `TenantIDFromContext(ctx)`
+- [x] **`internal/store/postgres.go`** — full `TenantStore`; all queries include `tenant_id` WHERE clauses; `ListRuns` filters by `RunFilter.TenantID`; `ListPendingHITL` joins `workflow_runs` for tenant scope
+
+#### 5.2.4 API layer
+- [x] **`internal/api/auth_handlers.go`** — Login accepts `tenant_slug` (defaults to `"default"`); user lookup scoped to resolved tenant
+- [x] **`internal/api/server.go`** — first-boot: creates default tenant before admin user; admin seeded as `super_admin`
+- [x] **`internal/api/tenant_handlers.go`** (new) — `CreateTenant`, `ListTenants`, `GetTenant`, `DeleteTenant`; default tenant protected from deletion
+- [x] **`internal/api/routes.go`** — `/api/v1/tenants` CRUD routes guarded by `RequireRole(RoleSuperAdmin)`
+- [x] **`internal/api/handlers.go`** — `ListRuns` populates `RunFilter.TenantID` from context
+- [x] **`internal/api/user_handlers.go`** — `CreateUser` sets `TenantID` from JWT claims; blocks creating `super_admin` via user API
+- [x] **`internal/orchestrator/engine.go`** — `StartRun` sets `run.TenantID = store.TenantIDFromContext(ctx)`
+- [x] Test suite updated — `GenerateAccessToken` 4-arg calls; engine HITL triggers aligned; `super_admin` in `ValidRole`; all tests pass
+
+### Architecture decisions made
+- **Context-based tenant propagation** — `tenant_id` flows JWT → middleware → Go context; store methods read from context with no signature changes
+- **`state_transitions` and `hitl_requests` not tenant-scoped directly** — always accessed via `run_id` FK; tenant isolation is inherited through the run
+- **Username uniqueness is per-tenant** — `(tenant_id, username)` UNIQUE constraint; same username can exist in different tenants (B2B SaaS standard)
+- **`super_admin` bypasses all `RequireRole` checks** — platform operators have global access; cannot be created via user API
+- **Default tenant has a fixed UUID** — `00000000-0000-0000-0000-000000000001`; ensures backfill and first-boot seeding are idempotent
+
+### Deferred
+- Frontend tenant switcher UI — tenant determined by `tenant_slug` at login; no in-app tenant display yet
+- Tenant deletion safety check — blocking delete if active runs/users exist not yet enforced
+- Per-tenant quotas and rate limits
+
+---
+
 ## M6 — Designer UX ✅
 
 ### Goal
@@ -274,49 +324,74 @@ The workflow designer should be fast and intuitive to use without needing to edi
 
 ---
 
-## M7 — Production Readiness ⬜
+## M7 — Production Readiness ✅
 
 ### Goal
 The platform should be observable, maintainable, and safe to operate in production.
 
-### Tasks
+### Completed
 
-#### 7.1 Structured logging
-- [ ] Replace `log.Printf` with `slog` (structured JSON logs)
-- [ ] Log levels from config
-- [ ] Request ID propagation through API → engine → activities
+#### 7.1 Structured logging ✅
+- [x] **`internal/logger/logger.go`** — `Init(logLevel)` configures global slog JSON handler on stdout; `WithRequestID(ctx, id)` / `RequestIDFromContext(ctx)` / `FromContext(ctx)` for structured per-request logging
+- [x] **`LOG_LEVEL` env var** — already in config; parsed by `logger.Init` into `slog.Level` (debug/info/warn/error)
+- [x] **`internal/auth/requestid.go`** — `RequestID()` gin middleware reads `X-Request-ID` header (or generates a UUID); writes ID back in response header and into Go context
+- [x] **All `log.Printf` replaced with `slog`** — `cmd/server`, `cmd/worker`, `cmd/specialist-worker`, `internal/api/server`, `seed_workflows`, `websocket`, `orchestrator/engine`, `executor/executor`, `migrate/migrate`, `scheduler/scheduler`
+- [x] Structured key-value fields throughout: `run_id`, `state`, `agent`, `error`, `workflow`, `provider`, etc.
 
-#### 7.2 Metrics
-- [ ] Prometheus metrics endpoint (`/metrics`)
-- [ ] Key metrics: runs started/completed/failed per workflow, activity duration, queue depth, HITL time-to-resolution
-- [ ] Grafana dashboard template
+#### 7.2 Metrics ✅
+- [x] **`internal/metrics/metrics.go`** — `promauto`-based package; defines all counters, gauges, and histograms with `asm_` prefix: `RunsStartedTotal`, `RunsCompletedTotal`, `RunsFailedTotal`, `RunsActive`, `RunDurationSeconds`, `StateTransitionsTotal`, `AgentExecutionsTotal`, `AgentDurationSeconds`, `HITLRequestsTotal`, `HITLResolutionDurationSeconds`, `HTTPRequestsTotal`, `HTTPRequestDurationSeconds`
+- [x] **Engine instrumented** — `StartRun`, `completeRun`, `failRun`, `transitionTo`, `handleHITL` all emit the corresponding metrics
+- [x] **Executor instrumented** — `Execute` measures agent duration and execution count with success/error label at every return point
+- [x] **`GET /metrics`** — `promhttp.Handler()` mounted in `registerRoutes`; no auth required (standard Prometheus scrape target)
+- [x] **`internal/api/metrics_middleware.go`** — `MetricsMiddleware()` gin handler records `HTTPRequestsTotal` and `HTTPRequestDurationSeconds`; uses `c.FullPath()` (route template) to keep cardinality bounded; unmatched routes get the label `unmatched`
+- [x] **`dashboards/asm-overview.json`** — importable Grafana dashboard; panels for run lifecycle, agent duration, HITL resolution time, HTTP request rate and latency; templated datasource variable
 
-#### 7.3 Database migrations
-- [ ] Adopt a migration tool (golang-migrate or goose)
-- [ ] Version all schema changes as numbered migration files
-- [ ] Auto-run pending migrations on server startup
+#### 7.3 Database migrations ✅
+- [x] **golang-migrate** added as dependency (`github.com/golang-migrate/migrate/v4`)
+- [x] Migration files renamed to `000001_init.up.sql` / `.down.sql` format; `.down.sql` files written for all three migrations
+- [x] **`migrations/embed.go`** — exposes `migrations.FS embed.FS` so SQL files are compiled into the binary; no filesystem path required at runtime
+- [x] **`internal/migrate/migrate.go`** — `migrate.Up(databaseURL)` applies all pending migrations idempotently; uses `iofs` source from embedded FS
+- [x] **`cmd/server/main.go`** — calls `migrate.Up` before `store.NewPostgresStore`; server refuses to start if migration fails
 
-#### 7.4 Health checks
-- [ ] `GET /health` — already exists (basic)
-- [ ] `GET /health/ready` — checks DB + Redis + Temporal connectivity
-- [ ] `GET /health/live` — lightweight liveness probe
+#### 7.4 Health checks ✅
+- [x] `GET /health` — backward-compat alias for `/health/live`
+- [x] `GET /health/live` — always 200 while process is running (Kubernetes liveness probe)
+- [x] `GET /health/ready` — pings all registered deps (postgres, redis); 200 if all healthy, 503 with per-dep status if any fails (Kubernetes readiness probe)
+- [x] **`internal/health/health.go`** — `Checker` with `Add(name, Pinger)`, `Live`, `Ready` handlers; 3-second timeout per readiness check
+- [x] `PostgresStore.Ping(ctx)` and `RedisBus.Ping(ctx)` methods added
 
-#### 7.5 Graceful degradation
-- [ ] If Temporal is unavailable at startup, fall back to direct mode with a warning
-- [ ] If Redis is unavailable, use local bus with a warning (already partially done)
-- [ ] Document trade-offs of each fallback mode
+#### 7.5 Graceful degradation ✅
+- [x] **Temporal fallback**: `client.Dial` is lazy (no TCP handshake); `temporalpkg.CheckHealth` is called with a 5 s deadline after the client is created. If the health check fails, the server logs a warning and continues in direct mode rather than exiting — operators can re-deploy once Temporal recovers
+- [x] **Redis fallback**: `NewRedisBus` only parses the URL; a 3 s `Ping` is now performed immediately after creation. If Redis is unreachable the server falls back to the in-process `LocalBus` with a warning noting that multi-process fan-out is disabled
+- [x] **Postgres fallback**: already present — falls back to `MemoryStore` with a warning
+- [x] **LLM provider fallback**: already present — cycles through registered providers; warns if none are available
 
-#### 7.6 Docker / deployment
-- [ ] Multi-stage Dockerfile for server binary
-- [ ] Multi-stage Dockerfile for worker binary
-- [ ] `docker-compose.yml` for full local stack (server + worker + postgres + redis + temporal)
-- [ ] Kubernetes manifests (Deployment, Service, ConfigMap) — optional
+**Trade-offs documented:**
+
+| Degraded component | Fallback | What you lose |
+|---|---|---|
+| **Temporal** | Direct in-process executor | Run durability across restarts; no replay on crash; no visibility in Temporal UI |
+| **Redis** | `LocalBus` (in-process) | WebSocket events visible only to the process that generated them; separate server replicas don't share events |
+| **Postgres** | `MemoryStore` | Persistence across restarts; all run history is lost on shutdown |
+| **LLM provider** | Log warning; agent states fail at runtime | Agent states error with "no LLM providers registered" |
+
+#### 7.6 Docker / deployment ✅
+- [x] Multi-stage Dockerfile for server and worker binaries (`ARG CMD=server|worker|specialist-worker`)
+- [x] `docker-compose.yml` for full local stack (server + worker + postgres + redis + temporal)
+- [x] `Makefile` targets — `docker-build`, `stack`, `stack-down`
+- [x] **`deploy/k8s/namespace.yaml`** — `asm` namespace with `app.kubernetes.io/part-of` label
+- [x] **`deploy/k8s/configmap.yaml`** — non-secret config (PORT, LOG_LEVEL, EXECUTOR_MODE, Temporal coords, LLM model names, ADMIN_USERNAME)
+- [x] **`deploy/k8s/secret.yaml`** — Opaque secret template for DATABASE_URL, REDIS_URL, JWT_SECRET, ANTHROPIC_API_KEY, OPENAI_API_KEY, ADMIN_PASSWORD; placeholder values + comment to use external-secrets/vault in production
+- [x] **`deploy/k8s/server-deployment.yaml`** — 2-replica Deployment; `RollingUpdate` with `maxUnavailable: 0`; readiness (`/health/ready`) + liveness (`/health/live`) probes; `topologySpreadConstraints` across nodes; `preStop` sleep for connection drain; Prometheus scrape annotations; non-root / read-only filesystem security context
+- [x] **`deploy/k8s/server-service.yaml`** — ClusterIP Service on port 80→8080; commented-out LoadBalancer and nginx Ingress examples (incl. WebSocket / SSE proxy settings)
+- [x] **`deploy/k8s/worker-deployment.yaml`** — 2-replica Deployment; `terminationGracePeriodSeconds: 60` for Temporal long-poll drain; always overrides `EXECUTOR_MODE=temporal`; exec liveness probe
+- [x] **`deploy/k8s/specialist-worker-deployment.yaml`** — same pattern as worker, separate image
+- [x] **`deploy/k8s/hpa.yaml`** — `autoscaling/v2` HPA for server (2–10 replicas, CPU 70% / mem 80%) and worker (2–20 replicas, CPU 70%); conservative scale-down window (5 min)
+- [x] **`Makefile`** — `k8s-apply`, `k8s-delete`, `k8s-status` targets
 
 ---
 
----
-
-## M8 — Intelligence 🔄
+## M8 — Intelligence ✅
 
 ### Goal
 Make the platform smarter: let an LLM draft entire workflows from plain-language descriptions, give each state its own instructions/context, and allow fully-deterministic states to run without an LLM at all.
@@ -363,40 +438,100 @@ Make the platform smarter: let an LLM draft entire workflows from plain-language
 
 ---
 
-## M9 — Code Generation ⬜
+## M9 — Code Generation ✅
 
 ### Goal
 For states where the logic is fully understood but writing the Go boilerplate is tedious, let an LLM scaffold the specialist worker code. A human reviews and approves before deployment.
 
-### Tasks
+### Completed
 
 #### 9.1 LLM-assisted specialist worker scaffolding
-- [ ] **`POST /api/v1/designer/scaffold`** — accepts state description + blackboard schema + possible triggers; returns generated Go file content
-- [ ] **Generator prompt** — system prompt teaches the LLM the `HandlerFunc` signature, `AgentOutput` struct, import paths, and best practices; blackboard schema and trigger list are injected as context
-- [ ] **Monaco editor panel in Designer** — "Generate Code" button in the state panel when type is `intermediate`; opens a full-height Monaco editor with the generated Go; read-only + copy + download buttons
-- [ ] **Download as `.go` file** — browser download of `<agent_name>_handler.go`; operator compiles this into a specialist worker binary
+- [x] **`POST /api/v1/designer/scaffold`** — accepts `agent_name`, `state_name`, `description`, optional triggers + blackboard schema; returns `{ "code": "..." }` (operator/admin only)
+- [x] **`Generator.Scaffold()`** — system prompt in `internal/designer/scaffolder.go` teaches the LLM the `HandlerFunc` signature, `AgentOutput` struct, import paths, type assertion patterns, and idempotency requirements
+- [x] **"Generate Code" panel in Designer** — appears in the State Panel when `type ≠ script` and `agent` is set; shows spinner while generating, then renders code in a `<pre>` block with **Copy** and **Download .go** buttons; no Monaco dep needed
 
 #### 9.2 Specialist worker template project
-- [ ] **`cmd/specialist-worker-template/`** — pre-wired Go project with go.mod, main.go, and a placeholder handler; operator replaces the handler with LLM-generated code and runs `go build`
-- [ ] **`Makefile` target** — `make specialist name=validate-invoices queue=validate-workers` scaffolds the directory
+- [x] **`cmd/specialist-worker-template/main.go`** — documented, self-contained starter project with placeholder handler, env var wiring, and graceful shutdown
+- [x] **`make specialist name=… queue=…`** — copies the template directory and prints setup instructions
 
 ---
 
-## M10 — Generated MCP Servers ⬜
+## M10 — Generated MCP Servers ✅
 
 ### Goal
 For deterministic logic that multiple workflows share, package it as a standalone MCP server so any workflow can consume it via `mcp_servers` config without touching the platform binary.
 
-### Tasks
+### Completed
 
 #### 10.1 MCP server scaffolding
-- [ ] **`POST /api/v1/designer/scaffold-mcp`** — accepts a tool description (name, input/output schema, logic description); returns a complete Go MCP server implementation
-- [ ] **Generated server** — Go HTTP server exposing JSON-RPC 2.0 `tools/list` + `tools/call` endpoints; single-binary; Docker-friendly
+- [x] **`POST /api/v1/designer/scaffold-mcp`** — accepts `server_name`, `description`, `tools[]` (name, description, input_schema); returns `{ "code": "..." }` (operator/admin only)
+- [x] **`Generator.ScaffoldMCP()`** — system prompt in `internal/designer/mcp_scaffolder.go` teaches JSON-RPC 2.0 protocol, `tools/list` + `tools/call` methods, CORS, `/health`, graceful shutdown, and standard-library-only constraint
+- [x] **`cmd/mcp-server-template/main.go`** — standalone JSON-RPC 2.0 server; ships with a `greet` example tool; includes Dockerfile comment; no external dependencies
 
 #### 10.2 MCP Server Registry promotion to DB
-- [ ] **`mcp_servers` DB table** — admin-manageable via API; stores name, URL pattern, description, created_by
-- [ ] **Admin UI** — manage registered MCP servers from the platform dashboard
-- [ ] **Migrate from static YAML** — `mcp_registry.yaml` still supported as seed source; DB takes precedence when populated
+- [x] **`migrations/000004_mcp_servers.up.sql`** — `mcp_servers` table with `(tenant_id, name)` unique constraint; applied automatically at startup
+- [x] **`MCPServerStore` interface** — `Create`, `Get`, `List`, `Update`, `Delete`, `HasAny`; implemented by both `MemoryStore` and `PostgresStore`
+- [x] **`GET /api/v1/mcp-servers`** — DB-backed with YAML fallback; returns full store model for admin UI, compatible with existing `mcp_servers` picker in AI generator dialog
+- [x] **`POST/PUT/DELETE /api/v1/mcp-servers`** — admin-only CRUD; `POST` creates with `tenant_id` from JWT claims
+- [x] **MCP Servers admin panel** — "MCP Server Registry" section in Dashboard (admin only); table with inline Edit/Delete; `MCPServerModal` component for add/edit; seeded from `mcp_registry.yaml` on first boot (idempotent)
+
+---
+
+## M11 — LLM Config UI, Multi-Provider Support & HITL Fixes ✅
+
+### Goal
+Make LLM provider selection observable and manageable without touching env vars or restarting processes. Add Grok, Deepseek, and Gemini alongside existing providers. Fix HITL workflow stuck in Temporal mode and live UI update issues.
+
+### Completed
+
+#### 11.1 DB-backed LLM configuration
+- [x] **`migrations/000006_llm_configs.up.sql`** — `llm_configs` table: `(tenant_id, provider)` unique; fields: `api_key`, `base_url`, `default_model`, `enabled`, `is_default`
+- [x] **`internal/store/llm_config.go`** — `LLMConfig` struct + `LLMConfigStore` interface (6 methods: List, Get, Upsert, Delete, SetDefault, HasAny)
+- [x] **`internal/store/postgres_llm.go`** — full PostgreSQL implementation; `UpsertLLMConfig` uses `ON CONFLICT DO UPDATE`; `SetDefaultProvider` uses a transaction to clear all `is_default` flags then set one
+- [x] **`internal/store/memory_llm.go`** — in-memory implementation for dev/test
+- [x] **`LLMConfigStore` added to `Store` aggregate interface**
+
+#### 11.2 New LLM providers
+- [x] **`internal/executor/llm/grok.go`** — `NewGrokProvider(apiKey, defaultModel)` → OpenAI-compatible wrapper at `https://api.x.ai/v1/chat/completions`; default model `grok-3`
+- [x] **`internal/executor/llm/deepseek.go`** — endpoint `https://api.deepseek.com/v1/chat/completions`; default model `deepseek-chat`
+- [x] **`internal/executor/llm/gemini.go`** — endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`; default model `gemini-2.0-flash`
+- [x] **`internal/executor/llm/loader.go`** — `BuildRegistryFromDB(ctx, store) (*Registry, string, error)`: loads enabled providers, constructs appropriate instances; `ProviderDefaultModels` map; `ProviderEndpoint(provider)` helper
+- [x] **Thread-safe Registry** — `sync.RWMutex` on all methods; `Reload(snapshot, defaultName)` for atomic hot-reload; `Default()`, `Snapshot()` methods added
+
+#### 11.3 Provider resolution & fallback
+- [x] **`internal/executor/executor.go`** — resolution order: `registry.Default()` → `e.defaultProv` fallback → per-agent `config["provider"]` override → Ollama fallback if provider not found → hard error
+- [x] **Per-agent provider override** — `config.provider` field in agent YAML; Designer adds provider `<select>` dropdown before the Model field
+
+#### 11.4 First-boot seeding
+- [x] **`cmd/server/main.go`** — `seedLLMConfigs(ctx, store, cfg)` inserts env-var-configured providers only when `HasAnyLLMConfig` returns false; idempotent on restart
+- [x] **`BuildRegistryFromDB`** replaces the old env-var-only LLM block in both server and worker binaries
+
+#### 11.5 API (Settings)
+- [x] **`internal/api/llm_handlers.go`** — `ListLLMConfigs` (keys masked as `***`), `UpsertLLMConfig` (preserves existing key when `***` or empty is sent), `DeleteLLMConfig`, `SetDefaultProvider`, `TestLLMConnection`, `reloadLLMRegistry` helper (hot-reload on save)
+- [x] **`internal/api/routes.go`** — `/api/v1/llm-configs` group (admin only): `GET`, `PUT /:provider`, `DELETE /:provider`, `POST /default`, `POST /:provider/test`
+- [x] **`NewHandlers` signature** updated to accept 6th `llmRegistry *llm.Registry` parameter; `handlers_test.go` updated to pass `nil` for the new arg
+
+#### 11.6 Worker hot-reload
+- [x] **`cmd/worker/main.go`** — background goroutine polls DB every 15 seconds; calls `llmRegistry.Reload(reg.Snapshot(), defaultName)` atomically; no worker restart required after UI config changes
+
+#### 11.7 Settings UI
+- [x] **`frontend/src/stores/llm.js`** — Pinia store: `PROVIDERS` metadata, `DEFAULT_MODELS`, `fetchAll`, `upsert`, `remove`, `setDefault`, `testConnection`
+- [x] **`frontend/src/views/Settings.vue`** — per-provider cards with enable toggle, API key input, model input, base URL (Ollama), Test/Save buttons; global default provider selector; admin guard
+- [x] **`frontend/src/router/index.js`** — `/settings` route added
+- [x] **`frontend/src/components/shared/Sidebar.vue`** — gear icon NavItem linking to `/settings`
+
+#### 11.8 HITL fixes
+- [x] **Temporal trigger mismatch** — `ASMWorkflow` was mapping resolutions to `"human_approved"`/`"human_rejected"` but workflow YAML only declared `"approved"`/`"rejected"` transitions. Fixed: `trigger = sig.Resolution` (the resolution value IS the trigger, mirroring direct mode)
+- [x] **`temporal_workflow_id` never persisted** — `UpdateRun` SQL did not include `temporal_workflow_id`; `GetRun` returned `""` so `SignalHITL` rejected with "run has no temporal workflow ID". Fixed: `UpdateRun` now includes `COALESCE(NULLIF($8,''), temporal_workflow_id)` — persists the ID on first call, preserves it on subsequent updates
+- [x] **HITL controls not auto-appearing** — `hitl.waiting` WebSocket event did not update `activeRun.status`. Fixed in `execution.js`: `hitl.waiting` patches `status = 'waiting'`; `hitl.resolved` patches `status = 'running'` and removes from `pendingHITL`
+- [x] **HITL errors silently swallowed** — `resolve()` in Monitor.vue had no try/catch. Fixed: errors displayed in an orange banner; `loadRun()` called on failure to restore correct state
+
+### Architecture decisions made
+- **DB is authoritative for LLM config after first boot** — env vars seed once; subsequent changes go through the UI/API only; eliminates config drift between env and runtime state
+- **API key masking** — `"***"` is both the display value and the "no change" sentinel on upsert; server never returns the raw key after initial insertion
+- **Worker 15s poll over push** — avoids a dedicated pub/sub channel for config changes; 15s lag is acceptable for provider config; `Reload` is atomic so in-flight requests see a consistent snapshot
+- **`COALESCE(NULLIF($8,''), temporal_workflow_id)` in UpdateRun** — preserves the Temporal workflow ID across all activity-driven `UpdateRun` calls (which pass `TemporalID = ""`); set once on `StartRun` and never overwritten
+- **`sig.Resolution` directly as HITL trigger** — no internal mapping layer; workflow YAML trigger names must match the resolution values sent by the client; documented explicitly in architecture.md
 
 ---
 
@@ -404,13 +539,17 @@ For deterministic logic that multiple workflows share, package it as a standalon
 
 | Issue | Severity | Notes |
 |---|---|---|
-| Tool call deduplication inside Temporal activity retries | Low | Tools should be idempotent; explicit tracking deferred to M4 |
-| No authentication on any endpoint | ~~High~~ | ✅ Resolved in M5 |
-| `internal/scheduler/scheduler.go` is a stub | Medium | Cron-triggered workflows not yet functional |
-| Frontend designer requires prompt to create edges (not drag) | ~~Medium~~ | ✅ Resolved in M6 — `PendingConnectionPanel` replaces `window.prompt()` |
+| ~~Tool call deduplication inside Temporal activity retries~~ | ~~Low~~ | ✅ Resolved — within-execution cache in `executor.go` (SHA-256 key); cross-retry deduplication requires idempotent tool implementations by design |
+| ~~No authentication on any endpoint~~ | ~~High~~ | ✅ Resolved in M5 |
+| ~~`internal/scheduler/scheduler.go` is a stub~~ | ~~Medium~~ | ✅ Resolved — full cron scheduler with `AddWorkflow`/`RemoveWorkflow`, per-definition `entries` map, graceful drain on shutdown |
+| ~~Frontend designer requires prompt to create edges (not drag)~~ | ~~Medium~~ | ✅ Resolved in M6 — `PendingConnectionPanel` replaces `window.prompt()` |
 | Worker binary requires Postgres — no memory store fallback | Low | Intentional: temporal mode needs DB |
-| `PublishEventParams.Data` is `interface{}` — deserialises as map on replay | Low | Safe but loses type info; consider typed event union |
-| No database migration tooling | Medium | Tracked in M7.3 |
+| ~~`PublishEventParams.Data` is `interface{}` — deserialises as map on replay~~ | ~~Low~~ | ✅ Resolved — `events.Event.Data` changed to `json.RawMessage`; `events.New()` marshals immediately; `Event.Decode()` helper added; `PublishEvent` activity re-marshals Temporal-deserialized data |
+| ~~No database migration tooling~~ | ~~Medium~~ | ✅ Resolved in M7.3 — golang-migrate with embedded SQL, applied at startup |
+| ~~HITL workflow stuck in Temporal mode~~ | ~~High~~ | ✅ Resolved in M11 — two root causes: trigger name mismatch (`human_approved` vs `approved`) and `temporal_workflow_id` never persisted by `UpdateRun` |
+| ~~Worker LLM registry stale after UI config changes~~ | ~~Medium~~ | ✅ Resolved in M11 — worker polls DB every 15s and calls `Registry.Reload()` atomically |
+| HITL `assignee` filtering — users should only see/resolve tasks assigned to them | Low | Needs user identity in HITL events and query filtering; tracked for future milestone |
+| Tenant deletion safety check | Low | Delete not blocked if tenant has active runs or users; safe for single-tenant deployments |
 
 ---
 
@@ -448,6 +587,34 @@ For deterministic logic that multiple workflows share, package it as a standalon
 | 2026-03-30 | `ScriptDef.Trigger` evaluates to a string | Allows choosing between multiple outgoing transitions based on computed values; more expressive than a bool guard |
 | 2026-03-30 | Script states skip the executor entirely | Deterministic, synchronous, no LLM tokens consumed; engine evaluates expr-lang expressions inline |
 | 2026-03-30 | AI generator validates output via `LoadFromYAML` | LLM output may be malformed; round-tripping through the existing YAML loader gives schema validation for free |
+| 2026-04-03 | Context-based tenant propagation (not method params) | Tenant_id flows JWT → middleware → Go context; store methods read via `TenantIDFromContext(ctx)`; zero method signature changes required |
+| 2026-04-03 | `state_transitions` and `hitl_requests` not tenant-scoped directly | Both always accessed via `run_id` FK; tenant isolation inherited from owning run; no redundant column needed |
+| 2026-04-03 | Username uniqueness is per-tenant, not global | `(tenant_id, username)` UNIQUE constraint; standard B2B SaaS pattern — same username can exist across different tenants |
+| 2026-04-03 | `super_admin` cannot be created via user API | Platform role reserved for operators; tenant admins cannot escalate beyond `admin` scope |
+| 2026-04-03 | Default tenant has fixed UUID `00000000-…-0001` | Idempotent backfill in migration; first-boot seed is re-runnable; pre-tenant data gets a home without logic changes |
+| 2026-04-03 | HITL resolution value used directly as the trigger name | `sig.Resolution` (e.g. `"approve"`) IS the trigger; workflow YAML must match; eliminates hidden string mapping in the engine |
+| 2026-04-03 | `promauto` for zero-boilerplate metric registration | Metrics are registered at package init time via `promauto`; no `MustRegister` calls scattered through `main.go`; adding a new metric is one line |
+| 2026-04-03 | `c.FullPath()` (route template) for HTTP metric labels | Using the raw request URL would create unbounded cardinality (one series per run ID); the route template (e.g. `/api/v1/runs/:id`) gives bounded, useful labels |
+| 2026-04-03 | `client.Dial` is lazy — explicit `CheckHealth` ping at startup | Temporal's gRPC client doesn't connect until the first RPC; without an explicit health check the server would start in Temporal mode but fail on the first `StartWorkflow` call |
+| 2026-04-03 | Temporal unavailability → warn + fall back, not `os.Exit` | Matches the Redis and Postgres fallback pattern; platform remains operational with reduced guarantees; operators are informed via structured log warning |
+| 2026-04-03 | Redis `Ping` immediately after `NewRedisBus` | `NewRedisBus` only parses the URL (lazy TCP); without a probe the server would silently fall through to `LocalBus` only after the first publish fails at runtime |
+| 2026-04-03 | K8s `maxUnavailable: 0` on server Deployment | Zero-downtime rolling updates; new pods must pass the `/health/ready` probe before any old pod is terminated; ensures there is always a healthy server pod during deploys |
+| 2026-04-03 | `terminationGracePeriodSeconds: 60` for workers | Temporal workers hold long-poll connections; 60 s lets in-flight activities complete before the pod is killed; server uses 30 s + preStop sleep |
+| 2026-04-03 | `autoscaling/v2` HPA over v1 | v2 supports multiple metrics (CPU + memory) and fine-grained scale-up/down behaviour policies; v1 is deprecated in Kubernetes 1.25+ |
+| 2026-04-03 | Secret manifest is a template (placeholder values) | Real secrets must never be committed; placeholder base64 values make the file syntactically valid for `kubectl apply` while making it obvious the values must be replaced |
+| 2026-04-03 | `Event.Data` as `json.RawMessage` (not `interface{}`) | Preserves payload type through Redis round-trips; `interface{}` decodes as `map[string]interface{}` after JSON unmarshal, losing type info; `json.RawMessage` stays as bytes and can be decoded into the correct struct with `event.Decode(&p)` |
+| 2026-04-03 | Tool call cache scoped to one `Execute` invocation, not the executor | Within-call dedup is safe and stateless; cross-call state would require locking and TTL logic; cross-retry dedup is left to tool implementors (idempotency) because the activity may run on a different worker instance |
+| 2026-04-03 | Scaffold (`POST /designer/scaffold`) on `Generator`, not a new struct | Reuses the same `llm.Provider` already held by `Generator`; avoids a new dependency in `NewHandlers`; scaffold and generate are complementary LLM-backed designer tools |
+| 2026-04-03 | MCP server scaffolding generates standard-library-only Go | Eliminates dependency management for generated servers; `encoding/json` + `net/http` cover the JSON-RPC 2.0 protocol; single `go run .` to start; trivial to Dockerise |
+| 2026-04-03 | MCP registry DB promotion with YAML fallback | Teams that manage servers via `mcp_registry.yaml` continue to work; once any DB entry exists for a tenant, the DB takes precedence; YAML is seeded into the DB on first boot for a smooth migration path |
+| 2026-04-03 | `MCPServerStore` added to `Store` interface | Consistent access pattern with `UserStore`, `TenantStore`, etc.; memory and Postgres implementations provided; no extra constructor parameter needed |
+| 2026-04-04 | DB is authoritative for LLM config after first boot | Env vars seed once via `seedLLMConfigs` when `HasAnyLLMConfig` is false; subsequent changes via Settings UI persist to DB; eliminates config drift between env and in-process state across restarts |
+| 2026-04-04 | `"***"` as both display mask and "no change" sentinel | Simplest possible API contract: server never returns a raw key; client that sends `***` (or empty) signals "keep existing"; no separate boolean flag needed |
+| 2026-04-04 | Worker polls DB every 15s for LLM config changes | Push (pub/sub) would require a dedicated channel and more complexity; 15s lag is acceptable for provider config; `Reload` is lock-protected and atomic so in-flight executions see a consistent registry snapshot |
+| 2026-04-04 | `COALESCE(NULLIF($8,''), temporal_workflow_id)` in `UpdateRun` | `CreateRun` inserts before `StartWorkflow` returns the Temporal ID; subsequent `UpdateRun` calls from Temporal activities pass `TemporalID = ""`; the COALESCE preserves the stored value while still allowing the first real update to persist it |
+| 2026-04-04 | `sig.Resolution` used directly as HITL trigger (no internal mapping) | Removing `human_approved`/`human_rejected` indirection makes the contract explicit in the YAML; workflow authors choose their trigger names; direct mode already used this pattern; Temporal mode now consistent |
+| 2026-04-04 | HITL resolve errors displayed in orange banner (not swallowed) | `resolve()` previously had no try/catch; silent failures left the UI in an inconsistent state (buttons hidden, workflow stuck); banner makes the problem visible immediately and `loadRun()` on error restores correct state |
+| 2026-04-04 | Grok/Deepseek/Gemini implemented as OpenAI-compatible wrappers | All three providers expose OpenAI-compatible `/chat/completions` endpoints; `NewOpenAICompatibleProvider(endpoint, key, name, model)` handles them all; no per-provider request/response mapping code needed |
 
 ---
 
@@ -470,17 +637,23 @@ source .env
 go run ./cmd/server
 ```
 
-### With Temporal (full production mode)
-```bash
-# Start all infrastructure
-docker compose up -d
+### With Temporal (full development mode)
 
-# Terminal 1 — API server
+To run the API server and workers on your host while using Docker for infrastructure:
+
+```bash
+# 1. Start only the infrastructure (Postgres, Redis, Temporal)
+docker compose up -d postgres redis temporal temporal-ui
+
+# 2. Terminal 1 — API server
 EXECUTOR_MODE=temporal go run ./cmd/server
 
-# Terminal 2 — Temporal worker
+# 3. Terminal 2 — Temporal worker (handles LLM agents)
 EXECUTOR_MODE=temporal go run ./cmd/worker
 ```
+
+> [!IMPORTANT]
+> Do NOT run `docker compose up -d` without service names if you intend to run the server on your host, as the Dockerized server will bind to port 8080 first and cause a conflict.
 
 ### With specialist workers (multi-queue mode)
 ```bash
@@ -495,11 +668,47 @@ The workflow YAML must declare `task_queue: validate-workers` on the agent that 
 cd frontend
 npm run dev
 # → http://localhost:5173  (proxied to :8080)
-# Login with ADMIN_USERNAME / ADMIN_PASSWORD from .env
+# Login with ADMIN_USERNAME / ADMIN_PASSWORD from .env; tenant_slug defaults to "default"
 ```
 
-### Run tests
+### Kubernetes (production)
 ```bash
-go test ./... -timeout 30s
-# 125 tests, 7 packages
+# 1. Build and push images to your registry
+docker build --build-arg CMD=server           -t registry.example.com/asm/server:latest .
+docker build --build-arg CMD=worker           -t registry.example.com/asm/worker:latest .
+docker build --build-arg CMD=specialist-worker -t registry.example.com/asm/specialist-worker:latest .
+docker push registry.example.com/asm/server:latest
+docker push registry.example.com/asm/worker:latest
+docker push registry.example.com/asm/specialist-worker:latest
+
+# 2. Edit deploy/k8s/configmap.yaml and deploy/k8s/secret.yaml with real values
+#    (or replace secret.yaml with External Secrets Operator resources)
+
+# 3. Update image references in the deployment manifests to match your registry
+
+# 4. Apply all manifests in order
+make k8s-apply
+
+# Check rollout status
+make k8s-status
+kubectl rollout status deployment/asm-server -n asm
+kubectl rollout status deployment/asm-worker -n asm
+```
+
+
+### Troubleshooting
+
+#### Go Build: "operation not permitted" on module cache
+If you see `go: could not create module cache: ... operation not permitted` during build, your environment may have restricted access to the global `GOMODCACHE`. Use a local cache within the project:
+
+```bash
+mkdir -p .cache/go-mod-cache
+GOMODCACHE=$(pwd)/.cache/go-mod-cache go build ./cmd/server
+```
+
+#### Port 8080: "address already in use"
+If the server fails to bind to 8080, check if a Dockerized instance is already running:
+```bash
+docker compose ps
+docker compose stop server
 ```

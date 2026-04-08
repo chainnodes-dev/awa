@@ -12,10 +12,19 @@ export const useExecutionStore = defineStore('execution', () => {
 
   async function fetchRuns(filter = {}) {
     const params = new URLSearchParams()
-    if (filter.workflow) params.set('workflow', filter.workflow)
-    if (filter.status)   params.set('status', filter.status)
+    if (filter.workflow)     params.set('workflow', filter.workflow)
+    if (filter.status)       params.set('status', filter.status)
+    if (filter.state)        params.set('state', filter.state)
+    if (filter.started_from) params.set('started_from', filter.started_from)
+    if (filter.started_to)   params.set('started_to', filter.started_to)
     const { data } = await api.get(`/runs?${params}`)
     runs.value = data ?? []
+  }
+
+  async function deleteRun(id) {
+    await api.delete(`/runs/${id}`)
+    runs.value = runs.value.filter(r => r.id !== id)
+    pendingHITL.value = pendingHITL.value.filter(h => h.run_id !== id)
   }
 
   async function fetchRun(id) {
@@ -59,9 +68,24 @@ export const useExecutionStore = defineStore('execution', () => {
 
       case 'run.completed':
       case 'run.failed': {
-        const idx = runs.value.findIndex(r => r.id === data.run.id)
-        if (idx !== -1) runs.value[idx] = data.run
-        if (activeRun.value?.id === data.run.id) activeRun.value = data.run
+        // Payload shape differs between direct mode {run: {...}} and
+        // Temporal mode {run_id, error}. Normalise to a run-id + error string.
+        const runId  = data.run?.id ?? data.run_id
+        const errMsg = data.run?.failure_reason ?? data.error ?? null
+        const idx = runs.value.findIndex(r => r.id === runId)
+        if (data.run) {
+          if (idx !== -1) runs.value[idx] = data.run
+          if (activeRun.value?.id === runId) activeRun.value = data.run
+        } else {
+          // Temporal mode: patch status + failure_reason in place
+          if (idx !== -1) {
+            runs.value[idx].status = type === 'run.failed' ? 'failed' : 'complete'
+            if (errMsg) runs.value[idx].failure_reason = errMsg
+          }
+          if (activeRun.value?.id === runId) {
+            activeRun.value = { ...activeRun.value, status: type === 'run.failed' ? 'failed' : 'complete', failure_reason: errMsg }
+          }
+        }
         break
       }
 
@@ -104,15 +128,33 @@ export const useExecutionStore = defineStore('execution', () => {
         break
       }
 
-      case 'hitl.waiting':
-        pendingHITL.value.push({ run_id: data.run_id, state_name: data.state_name })
+      case 'hitl.waiting': {
+        pendingHITL.value.push({ run_id: data.run_id, state_name: data.state_name, assignee: data.assignee })
+        // Update run status so HITL controls appear immediately without a manual refresh
+        const hwIdx = runs.value.findIndex(r => r.id === data.run_id)
+        if (hwIdx !== -1) runs.value[hwIdx].status = 'waiting'
+        if (activeRun.value?.id === data.run_id)
+          activeRun.value = { ...activeRun.value, status: 'waiting' }
         break
+      }
+
+      case 'hitl.resolved': {
+        // Remove from pending list and restore run status to 'running' so HITL
+        // controls disappear immediately while the workflow transitions.
+        pendingHITL.value = pendingHITL.value.filter(h => h.run_id !== data.run_id)
+        const hrIdx = runs.value.findIndex(r => r.id === data.run_id)
+        if (hrIdx !== -1 && runs.value[hrIdx].status === 'waiting')
+          runs.value[hrIdx].status = 'running'
+        if (activeRun.value?.id === data.run_id && activeRun.value.status === 'waiting')
+          activeRun.value = { ...activeRun.value, status: 'running' }
+        break
+      }
     }
   }
 
   return {
     runs, activeRun, transitions, eventLog, thinkingTokens, pendingHITL,
     fetchRuns, fetchRun, fetchHistory, fetchPendingHITL,
-    sendTrigger, resolveHITL, handleEvent
+    deleteRun, sendTrigger, resolveHITL, handleEvent
   }
 })

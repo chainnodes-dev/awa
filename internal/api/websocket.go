@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 
@@ -80,7 +80,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, jwtSvc *auth.JWTSe
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("[ws] upgrade error: %v", err)
+		slog.Warn("WebSocket upgrade error", "error", err)
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, jwtSvc *auth.JWTSe
 	h.clients[client] = true
 	h.mu.Unlock()
 
-	log.Printf("[ws] client connected (%d total)", len(h.clients))
+	slog.Debug("WebSocket client connected", "total", len(h.clients))
 
 	go client.writePump()
 	go func() {
@@ -103,7 +103,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, jwtSvc *auth.JWTSe
 		delete(h.clients, client)
 		h.mu.Unlock()
 		close(client.done)
-		log.Printf("[ws] client disconnected (%d remaining)", len(h.clients))
+		slog.Debug("WebSocket client disconnected", "remaining", len(h.clients))
 	}()
 }
 

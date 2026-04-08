@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: asm-server
+  namespace: asm
+  labels:
+    app: asm-server
+    app.kubernetes.io/part-of: asm-platform
+    app.kubernetes.io/component: server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: asm-server
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0        # zero-downtime: new pods come up before old ones go down
+  template:
+    metadata:
+      labels:
+        app: asm-server
+        app.kubernetes.io/part-of: asm-platform
+        app.kubernetes.io/component: server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Spread replicas across nodes for HA.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: asm-server
+
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: server
+          # Replace with your actual image registry path.
+          image: asm/server:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: asm-config
+            - secretRef:
+                name: asm-secret
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+
+          # Readiness: fail until all dependencies (postgres, redis) are healthy.
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+
+          # Liveness: restart the container if the process hangs.
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+
+          # Allow in-flight requests to drain before shutdown.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534       # nobody
+            capabilities:
+              drop: ["ALL"]
+
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

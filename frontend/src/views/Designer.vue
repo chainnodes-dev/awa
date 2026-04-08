@@ -10,6 +10,19 @@
       </RouterLink>
       <div class="w-px h-4 bg-border"/>
       <span class="text-sm font-medium text-slate-300">{{ workflowName || 'New Workflow' }}</span>
+      <!-- Version selector -->
+      <template v-if="versions.length > 1">
+        <select
+          :value="meta.versionNumber"
+          @change="switchVersion(Number($event.target.value))"
+          class="bg-surface-0 border border-border rounded px-2 py-1 text-xs text-slate-400 font-mono cursor-pointer hover:border-slate-500 outline-none"
+        >
+          <option v-for="v in versions" :key="v.version_number" :value="v.version_number">
+            v{{ v.version_number }}
+          </option>
+        </select>
+      </template>
+      <span v-else-if="meta.versionNumber" class="text-xs text-slate-500 font-mono">v{{ meta.versionNumber }}</span>
       <div v-if="isDirty" class="w-1.5 h-1.5 rounded-full bg-amber-500" title="Unsaved changes"/>
 
       <div class="flex-1"/>
@@ -128,70 +141,102 @@
           />
         </div>
 
-        <!-- Right property panel (canvas view only) -->
-        <aside v-if="view === 'canvas'" class="w-72 border-l border-border flex flex-col overflow-hidden bg-surface-1">
+        <!-- Right panel with tabs (canvas view only) -->
+        <aside v-if="view === 'canvas'" class="w-80 border-l border-border flex flex-col overflow-hidden bg-surface-1">
 
-          <!-- Pending connection: user dragged an edge, waiting for trigger name -->
-          <PendingConnectionPanel
-            v-if="pendingConnection"
-            :connection="pendingConnection"
-            @confirm="confirmConnection"
-            @cancel="cancelConnection"
-          />
-
-          <!-- Workflow metadata (no selection) -->
-          <div v-else-if="!selected" class="p-4 space-y-4 overflow-y-auto flex-1">
-            <div class="space-y-3">
-              <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Workflow</h3>
-              <div class="space-y-2">
-                <input v-model="meta.name"        class="input" placeholder="Name" @input="isDirty=true"/>
-                <input v-model="meta.version"     class="input" placeholder="Version (e.g. 1.0.0)" @input="isDirty=true"/>
-                <textarea v-model="meta.description" class="input h-16 resize-none" placeholder="Description" @input="isDirty=true"/>
-              </div>
-            </div>
-
-            <div class="space-y-2">
-              <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Blackboard Schema</h3>
-              <div v-for="(field, key) in bbSchema" :key="key"
-                   class="flex items-center gap-2 group">
-                <span class="text-xs font-mono text-slate-300 w-28 truncate">{{ key }}</span>
-                <span class="text-xs text-slate-500 flex-1">{{ field.type }}</span>
-                <button @click="removeBBField(key)" class="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 text-xs transition">✕</button>
-              </div>
-              <button @click="showBBModal = true" class="btn-ghost text-xs w-full justify-center border border-dashed border-border hover:border-accent/50">
-                + Add Field
-              </button>
-            </div>
-
-            <!-- Agents summary -->
-            <div v-if="agents.length" class="space-y-2">
-              <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Agents ({{ agents.length }})</h3>
-              <div v-for="a in agents" :key="a.name" class="text-xs text-slate-500 flex items-center gap-2 py-1">
-                <span class="font-mono text-slate-400 truncate flex-1">{{ a.name }}</span>
-                <span v-if="a.model" class="text-[10px] text-slate-600 truncate">{{ a.model.split('/').pop() }}</span>
-              </div>
-            </div>
+          <!-- Tab bar -->
+          <div class="flex border-b border-border shrink-0">
+            <button
+              @click="rightTab = 'properties'"
+              :class="['flex-1 py-2 text-xs font-medium transition-colors', rightTab === 'properties' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-400']"
+            >Properties</button>
+            <button
+              @click="rightTab = 'ai'"
+              :class="['flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5', rightTab === 'ai' ? 'text-slate-200 border-b-2 border-violet-500' : 'text-slate-500 hover:text-slate-400']"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+              </svg>
+              AI Assistant
+            </button>
           </div>
 
-          <!-- State selected -->
-          <!-- :key forces a full remount when the selected node changes,
-               so StatePanel.setup() re-runs and the form is reinitialised. -->
-          <StatePanel
-            v-else-if="selected?.type === 'node'"
-            :key="selected.id"
-            :node="selected.data"
-            :agent-def="getAgent(selected.data.agent)"
-            @update="updateNode"
-            @delete="deleteSelected"
-          />
+          <!-- Properties tab -->
+          <template v-if="rightTab === 'properties'">
+            <!-- Pending connection: user dragged an edge, waiting for trigger name -->
+            <PendingConnectionPanel
+              v-if="pendingConnection"
+              :connection="pendingConnection"
+              @confirm="confirmConnection"
+              @cancel="cancelConnection"
+            />
 
-          <!-- Edge selected -->
-          <EdgePanel
-            v-else-if="selected?.type === 'edge'"
-            :key="selected.id"
-            :edge="selected.data"
-            @update="updateEdge"
-            @delete="deleteSelected"
+            <!-- Workflow metadata (no selection) -->
+            <div v-else-if="!selected" class="p-4 space-y-4 overflow-y-auto flex-1">
+              <div class="space-y-3">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Workflow</h3>
+                <div class="space-y-2">
+                  <input v-model="meta.name"        class="input" placeholder="Name" @input="isDirty=true"/>
+                  <div v-if="meta.versionNumber" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-0 border border-border">
+                    <span class="text-xs text-slate-500">Version</span>
+                    <span class="text-xs font-mono text-slate-300">v{{ meta.versionNumber }}</span>
+                    <span class="text-[10px] text-slate-600 flex-1 text-right">auto-incremented on save</span>
+                  </div>
+                  <textarea v-model="meta.description" class="input h-16 resize-none" placeholder="Description" @input="isDirty=true"/>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Blackboard Schema</h3>
+                <div v-for="(field, key) in bbSchema" :key="key"
+                     class="flex items-center gap-2 group">
+                  <span class="text-xs font-mono text-slate-300 w-28 truncate">{{ key }}</span>
+                  <span class="text-xs text-slate-500 flex-1">{{ field.type }}</span>
+                  <button @click="removeBBField(key)" class="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 text-xs transition">✕</button>
+                </div>
+                <button @click="showBBModal = true" class="btn-ghost text-xs w-full justify-center border border-dashed border-border hover:border-accent/50">
+                  + Add Field
+                </button>
+              </div>
+
+              <!-- Agents summary -->
+              <div v-if="agents.length" class="space-y-2">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Agents ({{ agents.length }})</h3>
+                <div v-for="a in agents" :key="a.name" class="text-xs text-slate-500 flex items-center gap-2 py-1">
+                  <span class="font-mono text-slate-400 truncate flex-1">{{ a.name }}</span>
+                  <span v-if="a.model" class="text-[10px] text-slate-600 truncate">{{ a.model.split('/').pop() }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- State selected -->
+            <StatePanel
+              v-else-if="selected?.type === 'node'"
+              :key="'node-' + selected.id"
+              :node="selected.data"
+              :edges="edges"
+              :agent-def="getAgent(selected.data.agent)"
+              @update="updateNode"
+              @delete="deleteSelected"
+            />
+
+            <!-- Edge selected -->
+            <EdgePanel
+              v-else-if="selected?.type === 'edge'"
+              :key="'edge-' + selected.id"
+              :edge="selected.data"
+              @update="updateEdge"
+              @delete="deleteSelected"
+            />
+          </template>
+
+          <!-- AI Assistant tab -->
+          <AIChatPanel
+            v-else
+            :yaml-source="yamlSource"
+            :workflow-name="meta.name"
+            :workflow-description="meta.description"
+            @apply="onAIApply"
           />
         </aside>
       </template>
@@ -231,10 +276,12 @@ const { layout }  = useLayout()
 const nodes   = ref([])
 const edges   = ref([])
 const agents  = ref([])   // [{name, model, task_queue, config: {prompt, mcp_servers}}]
-const meta    = reactive({ name: '', version: '1.0.0', description: '' })
+const meta    = reactive({ name: '', version: '1.0.0', versionNumber: 0, description: '' })
 const bbSchema = reactive({})
+const versions = ref([])   // [{version_number, version, created_at}]
 
 const view          = ref('canvas')   // 'canvas' | 'split' | 'yaml'
+const rightTab      = ref('properties') // 'properties' | 'ai'
 const yamlSource    = ref('')
 const yamlError     = ref('')
 const saving        = ref(false)
@@ -259,29 +306,38 @@ const workflowName = computed(() => meta.name || '')
 onMounted(async () => {
   const { name, version } = route.params
   if (name && version) {
-    const { definition, yaml: src } = await wfStore.fetchOne(name, version)
-    loadDefinition(definition, src)
+    try {
+      const { definition, yaml: src } = await wfStore.fetchOne(name, version)
+      loadDefinition(definition, src)
 
-    // VueFlow mounts immediately (canvas is the default view) with empty nodes,
-    // so fit-view-on-init fires before data arrives and does nothing.
-    // Bumping the key forces a remount now that nodes are populated.
-    await nextTick()
-    flowKey.value++
+      // Load version history for this workflow.
+      try { versions.value = await wfStore.fetchVersions(name) } catch { /* ignore */ }
 
-    const hasExplicit = (definition.states ?? []).some(
-      s => s.position && (s.position.x !== 200 || s.position.y !== 100)
-    )
-    if (!hasExplicit && nodes.value.length > 1) {
+      // VueFlow mounts immediately (canvas is the default view) with empty nodes,
+      // so fit-view-on-init fires before data arrives and does nothing.
+      // Bumping the key forces a remount now that nodes are populated.
       await nextTick()
-      applyLayout(false)
+      flowKey.value++
+
+      const hasExplicit = (definition.states ?? []).some(
+        s => s.position && (s.position.x !== 200 || s.position.y !== 100)
+      )
+      if (!hasExplicit && nodes.value.length > 1) {
+        await nextTick()
+        applyLayout(false)
+      }
+    } catch (e) {
+      console.error('Failed to load workflow:', e)
+      alert(`Could not load workflow "${name}@${version}". It may have been saved with an older version format. Try deleting and re-creating it.`)
     }
   }
 })
 
 function loadDefinition(def, src, updateYaml = true) {
-  meta.name        = def.metadata?.name        ?? ''
-  meta.version     = def.metadata?.version     ?? '1.0.0'
-  meta.description = def.metadata?.description ?? ''
+  meta.name          = def.metadata?.name           ?? ''
+  meta.version       = def.metadata?.version        ?? '1.0.0'
+  meta.versionNumber = def.metadata?.version_number ?? 0
+  meta.description   = def.metadata?.description    ?? ''
 
   // Clear and repopulate bbSchema
   Object.keys(bbSchema).forEach(k => delete bbSchema[k])
@@ -381,33 +437,87 @@ function upsertAgent(def) {
 
 // Receives { node, agentDef } from StatePanel
 function updateNode({ node, agentDef }) {
-  const idx = nodes.value.findIndex(n => n.id === selected.value.id)
+  const currentSelected = selected.value
+  if (!currentSelected || currentSelected.type !== 'node') return
+
+  const idx = nodes.value.findIndex(n => n.id === currentSelected.id)
   if (idx === -1) return
 
   const newId = node.name
   const oldId = nodes.value[idx].id
-  nodes.value[idx] = { ...nodes.value[idx], id: newId, data: node }
 
-  if (newId !== oldId) {
-    edges.value = edges.value.map(e => ({
-      ...e,
-      source: e.source === oldId ? newId : e.source,
-      target: e.target === oldId ? newId : e.target,
-    }))
+  // If renaming, check for collisions
+  if (newId !== oldId && nodes.value.some(n => n.id === newId)) {
+    alert(`A state named "${newId}" already exists.`)
+    return
+  }
+
+  // Update the node in the array.
+  // We preserve the existing object properties (like position, selected, etc.)
+  // but update the id and data.
+  if (newId === oldId) {
+    // If ID hasn't changed, just update the data property to maintain object reference
+    nodes.value[idx].data = { ...node }
+  } else {
+    // If renaming, we must replace the object but we keep all other props
+    const updatedNode = { 
+      ...nodes.value[idx], 
+      id: newId, 
+      data: { ...node },
+      selected: true
+    }
+    nodes.value[idx] = updatedNode
+
+    // Update all connected edges
+    edges.value = edges.value.map(e => {
+      if (e.source === oldId || e.target === oldId) {
+        return {
+          ...e,
+          id: `${e.source === oldId ? newId : e.source}__${e.label}__${e.target === oldId ? newId : e.target}`,
+          source: e.source === oldId ? newId : e.source,
+          target: e.target === oldId ? newId : e.target,
+        }
+      }
+      return e
+    })
   }
 
   upsertAgent(agentDef)
-  selected.value = null
-  isDirty.value = true
+
+  // Use nextTick to ensure Vue Flow has processed the array change,
+  // then update our own selection ref.
+  nextTick(() => {
+    selected.value = { type: 'node', id: newId, data: { ...node } }
+    isDirty.value = true
+  })
 }
 
 function updateEdge(data) {
-  const idx = edges.value.findIndex(e => e.id === selected.value.id)
-  if (idx !== -1) {
-    edges.value[idx] = { ...edges.value[idx], label: data.label, data: { guard: data.guard } }
-    selected.value = null
-    isDirty.value = true
+  const currentSelected = selected.value
+  if (!currentSelected || currentSelected.type !== 'edge') return
+
+  const idx = edges.value.findIndex(e => e.id === currentSelected.id)
+  if (idx === -1) return
+
+  const oldId = edges.value[idx].id
+  const newId = `${edges.value[idx].source}__${data.label}__${edges.value[idx].target}`
+
+  edges.value[idx] = { 
+    ...edges.value[idx], 
+    id: newId,
+    label: data.label, 
+    data: { ...edges.value[idx].data, guard: data.guard },
+    selected: true
   }
+
+  nextTick(() => {
+    selected.value = { 
+      type: 'edge', 
+      id: newId, 
+      data: { label: data.label, guard: data.guard, from: edges.value[idx].source, to: edges.value[idx].target } 
+    }
+    isDirty.value = true
+  })
 }
 
 function deleteSelected() {
@@ -461,12 +571,14 @@ function buildDefinition() {
       const obj = { name: a.name }
       if (a.model)       obj.model      = a.model
       if (a.task_queue)  obj.task_queue = a.task_queue
-      const prompt = a.config?.prompt
-      const mcp    = a.config?.mcp_servers
-      if (prompt || mcp) {
+      const prompt    = a.config?.prompt
+      const mcp       = a.config?.mcp_servers
+      const provider  = a.config?.provider
+      if (prompt || mcp || provider) {
         obj.config = {}
-        if (prompt) obj.config.prompt      = prompt
-        if (mcp)    obj.config.mcp_servers = mcp
+        if (prompt)   obj.config.prompt      = prompt
+        if (mcp)      obj.config.mcp_servers = mcp
+        if (provider) obj.config.provider    = provider
       }
       return obj
     })
@@ -474,7 +586,7 @@ function buildDefinition() {
   return {
     apiVersion: 'asm/v1',
     kind:       'Workflow',
-    metadata:   { name: meta.name, version: meta.version, description: meta.description },
+    metadata:   { name: meta.name, version: meta.version || 'draft', description: meta.description },
     blackboard: { schema: { ...bbSchema } },
     states:     nodes.value.map(n => ({
       name:         n.id,
@@ -497,21 +609,66 @@ function buildDefinition() {
 }
 
 async function saveWorkflow() {
-  if (!meta.name || !meta.version) {
-    alert('Workflow name and version are required')
+  if (!meta.name) {
+    alert('Workflow name is required')
     return
   }
+
+  // Validate agents for initial/intermediate states
+  const unassigned = nodes.value.filter(n => 
+    (n.data.type === 'initial' || n.data.type === 'intermediate') && !n.data.agent
+  )
+  if (unassigned.length > 0) {
+    const names = unassigned.map(n => n.id).join(', ')
+    if (!confirm(`Warning: The following reasoning states have no agent assigned: ${names}.\n\nThese states will wait for external triggers and will NOT be automated by an LLM. Continue?`)) {
+      return
+    }
+  }
+
   saving.value = true
   try {
     const def = buildDefinition()
     const yamlStr = yaml.dump(def, { lineWidth: 120 })
-    await wfStore.save(yamlStr)
+    const result = await wfStore.save(yamlStr)
+    // Server auto-increments version; update local state.
+    const newDef = result.definition ?? result
+    meta.version       = newDef.metadata?.version ?? meta.version
+    meta.versionNumber = result.version_number ?? newDef.metadata?.version_number ?? meta.versionNumber
     isDirty.value = false
+    // Refresh version list
+    try { versions.value = await wfStore.fetchVersions(meta.name) } catch { /* ignore */ }
     router.replace(`/designer/${meta.name}/${meta.version}`)
   } catch (e) {
     alert(e.message)
   } finally {
     saving.value = false
+  }
+}
+
+async function switchVersion(vnum) {
+  if (isDirty.value && !confirm('You have unsaved changes. Discard and switch version?')) return
+  try {
+    const { definition, yaml: src } = await wfStore.fetchByVersion(meta.name, vnum)
+    loadDefinition(definition, src)
+    await nextTick()
+    flowKey.value++
+    router.replace(`/designer/${meta.name}/${meta.version}`)
+  } catch (e) {
+    alert(e.message)
+  }
+}
+
+// ── AI Assistant integration ─────────────────────────────────────────────────
+
+function onAIApply({ yamlStr, definition }) {
+  try {
+    const def = definition || yaml.load(yamlStr)
+    if (!def) return
+    loadDefinition(def, yamlStr)
+    nextTick(() => { flowKey.value++ })
+    isDirty.value = true
+  } catch (e) {
+    alert('Failed to apply AI-generated workflow: ' + e.message)
   }
 }
 
@@ -581,6 +738,7 @@ watch(view, v => {
 <!-- ── Inline sub-components ────────────────────────────────────────────────── -->
 <script>
 import { defineComponent, h, ref, reactive } from 'vue'
+import { api } from '@/stores/auth'
 
 // ── Shared helper ────────────────────────────────────────────────────────────
 function field(label, input) {
@@ -659,6 +817,7 @@ export const PendingConnectionPanel = defineComponent({
 export const StatePanel = defineComponent({
   props: {
     node:     Object,
+    edges:    { type: Array, default: () => [] },
     agentDef: { type: Object, default: null },
   },
   emits: ['update', 'delete'],
@@ -680,11 +839,57 @@ export const StatePanel = defineComponent({
     })
 
     const agentForm = reactive({
-      model:      p.agentDef?.model             ?? '',
-      task_queue: p.agentDef?.task_queue        ?? '',
-      prompt:     p.agentDef?.config?.prompt    ?? '',
+      provider:    p.agentDef?.config?.provider   ?? '',
+      model:       p.agentDef?.model              ?? '',
+      task_queue:  p.agentDef?.task_queue         ?? '',
+      prompt:      p.agentDef?.config?.prompt     ?? '',
       mcp_servers: p.agentDef?.config?.mcp_servers ?? '',
     })
+
+    // Scaffold (code generation) state
+    const scaffoldCode    = ref('')
+    const scaffoldLoading = ref(false)
+    const scaffoldError   = ref('')
+
+    async function generateCode() {
+      scaffoldLoading.value = true
+      scaffoldError.value   = ''
+      scaffoldCode.value    = ''
+      try {
+        const { data } = await api.post('/designer/scaffold', {
+          agent_name:  form.agent,
+          state_name:  form.name,
+          description: form.instructions || '',
+        })
+        scaffoldCode.value = data.code
+      } catch (e) {
+        scaffoldError.value = e.response?.data?.error ?? e.message
+      } finally {
+        scaffoldLoading.value = false
+      }
+    }
+
+    function copyCode() {
+      navigator.clipboard.writeText(scaffoldCode.value)
+    }
+
+    function downloadCode() {
+      const blob = new Blob([scaffoldCode.value], { type: 'text/plain' })
+      const url  = URL.createObjectURL(blob)
+      const a    = Object.assign(document.createElement('a'), {
+        href:     url,
+        download: `${form.agent || 'handler'}.go`,
+      })
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
+    const incomingTransitions = computed(() => 
+      p.edges.filter(e => e.target === p.node.name).map(e => ({ from: e.source, label: e.label }))
+    )
+    const outgoingTransitions = computed(() => 
+      p.edges.filter(e => e.source === p.node.name).map(e => ({ to: e.target, label: e.label }))
+    )
 
     function onApply() {
       // Build script definition when type is 'script'
@@ -711,15 +916,50 @@ export const StatePanel = defineComponent({
         name:       form.agent,
         model:      agentForm.model       || undefined,
         task_queue: agentForm.task_queue  || undefined,
-        config: (agentForm.prompt || agentForm.mcp_servers) ? {
+        config: (agentForm.prompt || agentForm.mcp_servers || agentForm.provider) ? {
           prompt:      agentForm.prompt      || undefined,
           mcp_servers: agentForm.mcp_servers || undefined,
+          provider:    agentForm.provider    || undefined,
         } : undefined,
       } : null
       emit('update', { node: nodeData, agentDef: agentData })
     }
 
     return () => {
+      // Transitions list (incoming/outgoing)
+      const transitionSection = h('div', { class: 'pt-3 border-t border-border space-y-3' }, [
+        h('h4', { class: 'text-xs font-semibold text-slate-500 uppercase tracking-wider' }, 'Transitions'),
+        
+        // Incoming
+        h('div', { class: 'space-y-1.5' }, [
+          h('div', { class: 'text-[10px] text-slate-500 font-medium' }, 'Incoming'),
+          incomingTransitions.value.length ? h('div', { class: 'space-y-1' }, 
+            incomingTransitions.value.map(t => h('div', { 
+              key: `${t.from}__${t.label}`,
+              class: 'flex items-center gap-1.5 px-2 py-1.5 rounded bg-surface-0 border border-border text-[10px]'
+            }, [
+              h('span', { class: 'text-slate-400 font-mono truncate max-w-[80px]' }, t.from),
+              h('span', { class: 'text-slate-600' }, '→'),
+              h('span', { class: 'text-indigo-400 font-mono font-medium truncate flex-1' }, t.label),
+            ]))
+          ) : h('p', { class: 'text-[10px] text-slate-600 italic' }, 'None'),
+        ]),
+
+        // Outgoing
+        h('div', { class: 'space-y-1.5' }, [
+          h('div', { class: 'text-[10px] text-slate-500 font-medium' }, 'Outgoing'),
+          outgoingTransitions.value.length ? h('div', { class: 'space-y-1' }, 
+            outgoingTransitions.value.map(t => h('div', { 
+              key: `${t.label}__${t.to}`,
+              class: 'flex items-center gap-1.5 px-2 py-1.5 rounded bg-surface-0 border border-border text-[10px]'
+            }, [
+              h('span', { class: 'text-indigo-400 font-mono font-medium truncate flex-1' }, t.label),
+              h('span', { class: 'text-slate-600' }, '→'),
+              h('span', { class: 'text-slate-400 font-mono truncate max-w-[80px]' }, t.to),
+            ]))
+          ) : h('p', { class: 'text-[10px] text-slate-600 italic' }, 'None'),
+        ]),
+      ])
       // Script editor (for type === 'script')
       const scriptSection = form.type === 'script' ? [
         h('div', { class: 'pt-3 border-t border-border space-y-2.5' }, [
@@ -772,11 +1012,26 @@ export const StatePanel = defineComponent({
       const agentSection = (form.type !== 'script' && form.agent) ? [
         h('div', { class: 'pt-3 border-t border-border space-y-2.5' }, [
           h('h4', { class: 'text-xs font-semibold text-slate-500 uppercase tracking-wider' }, 'Agent Config'),
+          field('Provider',
+            h('select', {
+              class: 'input text-xs',
+              value: agentForm.provider,
+              onChange: e => agentForm.provider = e.target.value,
+            }, [
+              h('option', { value: '' }, 'Default (global setting)'),
+              h('option', { value: 'anthropic' }, 'Anthropic'),
+              h('option', { value: 'openai' }, 'OpenAI'),
+              h('option', { value: 'grok' }, 'Grok (xAI)'),
+              h('option', { value: 'deepseek' }, 'Deepseek'),
+              h('option', { value: 'gemini' }, 'Gemini'),
+              h('option', { value: 'ollama' }, 'Ollama (local)'),
+            ])
+          ),
           field('Model',
             h('input', {
               class: 'input text-xs',
               value: agentForm.model,
-              placeholder: 'claude-sonnet-4-6',
+              placeholder: 'Leave blank to use provider default',
               onInput: e => agentForm.model = e.target.value,
             })
           ),
@@ -804,7 +1059,46 @@ export const StatePanel = defineComponent({
               onInput: e => agentForm.prompt = e.target.value,
             })
           ),
-        ])
+        ]),
+
+        // Specialist worker code generation
+        h('div', { class: 'pt-3 border-t border-border space-y-2' }, [
+          h('div', { class: 'flex items-center gap-2' }, [
+            h('h4', { class: 'text-xs font-semibold text-slate-500 uppercase tracking-wider flex-1' }, 'Specialist Worker'),
+            h('button', {
+              class: `text-xs px-2.5 py-1 rounded font-medium transition-colors ${
+                scaffoldLoading.value
+                  ? 'bg-indigo-500/20 text-indigo-400 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              }`,
+              disabled: scaffoldLoading.value,
+              onClick: generateCode,
+            }, scaffoldLoading.value ? 'Generating…' : 'Generate Code'),
+          ]),
+          h('p', { class: 'text-[10px] text-slate-600 leading-relaxed' },
+            'Generate a Go HandlerFunc that replaces this LLM agent with deterministic code.'
+          ),
+
+          // Error
+          scaffoldError.value && h('p', { class: 'text-[10px] text-red-400 font-mono' }, scaffoldError.value),
+
+          // Code display
+          scaffoldCode.value && h('div', { class: 'space-y-1.5' }, [
+            h('div', { class: 'flex items-center gap-1.5 justify-end' }, [
+              h('button', {
+                class: 'text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-border hover:border-slate-500 transition-colors',
+                onClick: copyCode,
+              }, 'Copy'),
+              h('button', {
+                class: 'text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-border hover:border-slate-500 transition-colors',
+                onClick: downloadCode,
+              }, 'Download .go'),
+            ]),
+            h('pre', {
+              class: 'bg-surface-0 border border-border rounded p-2.5 text-[10px] font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-64 whitespace-pre leading-relaxed',
+            }, scaffoldCode.value),
+          ]),
+        ]),
       ] : []
 
       return h('div', { class: 'p-4 space-y-2.5 flex-1 overflow-y-auto' }, [
@@ -836,12 +1130,17 @@ export const StatePanel = defineComponent({
         // Agent name field (hidden for script states)
         ...(form.type !== 'script' ? [
           field('Agent',
-            h('input', {
-              class:       'input font-mono',
-              value:       form.agent,
-              placeholder: 'agent_name (optional)',
-              onInput:     e => form.agent = e.target.value,
-            })
+            h('div', { class: 'space-y-1.5' }, [
+              h('input', {
+                class:       'input font-mono',
+                value:       form.agent,
+                placeholder: 'agent_name (required for automation)',
+                onInput:     e => form.agent = e.target.value,
+              }),
+              (form.type === 'initial' || form.type === 'intermediate') && !form.agent && h('p', { class: 'text-[10px] text-amber-500 font-medium' }, 
+                '⚠ Agent required for automated reasoning.'
+              ),
+            ])
           ),
         ] : []),
 
@@ -865,6 +1164,7 @@ export const StatePanel = defineComponent({
         ] : []),
 
         ...scriptSection,
+        transitionSection,
         ...agentSection,
 
         h('button', { class: 'btn-primary w-full mt-1', onClick: onApply }, 'Apply'),
@@ -966,6 +1266,183 @@ export const AddStateModal = defineComponent({
             onClick: () => name.value && emit('add', { name: name.value, type: type.value }),
           }, 'Add'),
         ]),
+      ]),
+    ])
+  },
+})
+
+// ── AIChatPanel ─────────────────────────────────────────────────────────────
+// Chat-like AI assistant sidebar for generating and refining workflows.
+export const AIChatPanel = defineComponent({
+  props: {
+    yamlSource:           { type: String, default: '' },
+    workflowName:         { type: String, default: '' },
+    workflowDescription:  { type: String, default: '' },
+  },
+  emits: ['apply'],
+  setup(p, { emit }) {
+    const messages = ref([])   // { role: 'user'|'assistant', content: string, yaml?: string, definition?: object }
+    const input = ref('')
+    const loading = ref(false)
+    const error = ref('')
+
+    async function send() {
+      const text = input.value.trim()
+      if (!text || loading.value) return
+
+      messages.value.push({ role: 'user', content: text })
+      input.value = ''
+      loading.value = true
+      error.value = ''
+
+      try {
+        const payload = { description: text }
+
+        // Always send the current YAML so the LLM sees the latest state
+        if (p.yamlSource && p.yamlSource.trim()) {
+          payload.existing_yaml = p.yamlSource
+        }
+
+        // Send the workflow's verbal description for additional context
+        if (p.workflowDescription) {
+          payload.workflow_description = p.workflowDescription
+        }
+
+        // Send conversation history (exclude the message we just pushed —
+        // it becomes the Description on the server side). For assistant
+        // messages, include the YAML they generated so the LLM sees the
+        // correct output pattern (system prompt says "respond with ONLY YAML").
+        const history = messages.value.slice(0, -1).map(m => ({
+          role: m.role,
+          content: m.role === 'assistant' && m.yaml
+            ? '```yaml\n' + m.yaml + '\n```'
+            : m.content,
+        }))
+        if (history.length) {
+          payload.history = history
+        }
+
+        const { data } = await api.post('/designer/generate', payload)
+
+        if (data.error) {
+          error.value = data.error
+          messages.value.push({ role: 'assistant', content: 'Error: ' + data.error })
+        } else {
+          messages.value.push({
+            role: 'assistant',
+            content: p.yamlSource ? 'I\'ve updated the workflow based on your request.' : 'I\'ve generated a workflow based on your description.',
+            yaml: data.yaml,
+            definition: data.definition,
+          })
+        }
+      } catch (e) {
+        const msg = e.response?.data?.error ?? e.message
+        error.value = msg
+        messages.value.push({ role: 'assistant', content: 'Error: ' + msg })
+      } finally {
+        loading.value = false
+      }
+    }
+
+    function applyResult(msg) {
+      emit('apply', { yamlStr: msg.yaml, definition: msg.definition })
+    }
+
+    // Auto-scroll to bottom
+    function scrollContainer(el) {
+      if (el) el.scrollTop = el.scrollHeight
+    }
+
+    return () => h('div', { class: 'flex flex-col flex-1 min-h-0' }, [
+
+      // Messages area
+      h('div', {
+        class: 'flex-1 overflow-y-auto p-3 space-y-3',
+        ref: el => { if (el) setTimeout(() => scrollContainer(el), 50) },
+      }, [
+        // Welcome message when empty
+        !messages.value.length && h('div', { class: 'text-center py-8 space-y-3' }, [
+          h('svg', { width: '32', height: '32', viewBox: '0 0 24 24', fill: 'none', stroke: '#8b5cf6', 'stroke-width': '1.5', class: 'mx-auto' }, [
+            h('path', { d: 'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z' }),
+          ]),
+          h('p', { class: 'text-sm text-slate-400' }, 'AI Workflow Assistant'),
+          h('p', { class: 'text-xs text-slate-600 leading-relaxed max-w-[220px] mx-auto' },
+            p.yamlSource
+              ? 'Describe changes to make to this workflow. The AI will modify the existing definition.'
+              : 'Describe a business process and the AI will generate a workflow for you.'
+          ),
+        ]),
+
+        // Message list
+        ...messages.value.map((msg, i) =>
+          h('div', { key: i, class: 'space-y-1.5' }, [
+            // Role label
+            h('div', { class: 'flex items-center gap-1.5' }, [
+              msg.role === 'user'
+                ? h('span', { class: 'text-[10px] font-medium text-slate-500 uppercase' }, 'You')
+                : h('span', { class: 'text-[10px] font-medium text-violet-500 uppercase' }, 'AI'),
+            ]),
+            // Content
+            h('div', {
+              class: msg.role === 'user'
+                ? 'text-xs text-slate-300 bg-surface-0 rounded-lg px-3 py-2 border border-border'
+                : 'text-xs text-slate-400 bg-violet-500/5 rounded-lg px-3 py-2 border border-violet-500/20',
+            }, msg.content),
+            // Apply button for assistant messages with YAML
+            msg.yaml && h('button', {
+              class: 'btn-primary text-xs gap-1.5 w-full',
+              onClick: () => applyResult(msg),
+            }, [
+              h('svg', { width: '12', height: '12', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5' }, [
+                h('polyline', { points: '20 6 9 17 4 12' }),
+              ]),
+              'Apply to Workflow',
+            ]),
+          ])
+        ),
+
+        // Loading indicator
+        loading.value && h('div', { class: 'flex items-center gap-2 text-xs text-violet-400 animate-pulse py-2' }, [
+          h('svg', { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', class: 'animate-spin' }, [
+            h('circle', { cx: '12', cy: '12', r: '10', opacity: '0.25' }),
+            h('path', { d: 'M12 2a10 10 0 0 1 10 10', opacity: '0.75' }),
+          ]),
+          'Thinking...',
+        ]),
+      ]),
+
+      // Input area
+      h('div', { class: 'shrink-0 border-t border-border p-3' }, [
+        h('div', { class: 'flex gap-2' }, [
+          h('textarea', {
+            class: 'input flex-1 text-xs resize-none min-h-[36px] max-h-[100px]',
+            value: input.value,
+            placeholder: p.yamlSource ? 'Describe a change...' : 'Describe a workflow...',
+            rows: 1,
+            onInput: e => {
+              input.value = e.target.value
+              // Auto-resize
+              e.target.style.height = 'auto'
+              e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'
+            },
+            onKeydown: e => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+            },
+            disabled: loading.value,
+          }),
+          h('button', {
+            class: 'btn-primary p-2 shrink-0 self-end',
+            onClick: send,
+            disabled: !input.value.trim() || loading.value,
+            title: 'Send (Enter)',
+          }, [
+            h('svg', { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5' }, [
+              h('line', { x1: '22', y1: '2', x2: '11', y2: '13' }),
+              h('polygon', { points: '22 2 15 22 11 13 2 9 22 2' }),
+            ]),
+          ]),
+        ]),
+        h('p', { class: 'text-[10px] text-slate-600 mt-1.5' }, 'Press Enter to send, Shift+Enter for new line'),
       ]),
     ])
   },

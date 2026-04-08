@@ -11,15 +11,16 @@ import (
 type Role string
 
 const (
-	RoleAdmin    Role = "admin"
-	RoleOperator Role = "operator"
-	RoleViewer   Role = "viewer"
+	RoleSuperAdmin Role = "super_admin" // platform operator; can manage tenants
+	RoleAdmin      Role = "admin"       // tenant administrator
+	RoleOperator   Role = "operator"    // can start/trigger runs
+	RoleViewer     Role = "viewer"      // read-only
 )
 
 // ValidRole returns true when r is one of the recognised roles.
 func ValidRole(r string) bool {
 	switch Role(r) {
-	case RoleAdmin, RoleOperator, RoleViewer:
+	case RoleSuperAdmin, RoleAdmin, RoleOperator, RoleViewer:
 		return true
 	}
 	return false
@@ -34,6 +35,7 @@ const (
 // Claims is the JWT payload for access tokens.
 type Claims struct {
 	UserID   string `json:"uid"`
+	TenantID string `json:"tid"`
 	Username string `json:"sub"` // reuse "sub" for username
 	Role     string `json:"role"`
 	jwt.RegisteredClaims
@@ -50,10 +52,11 @@ func NewJWTService(secret string) *JWTService {
 }
 
 // GenerateAccessToken creates a signed JWT for the given user.
-func (j *JWTService) GenerateAccessToken(userID, username, role string) (string, error) {
+func (j *JWTService) GenerateAccessToken(userID, tenantID, username, role string) (string, error) {
 	now := time.Now()
 	claims := Claims{
 		UserID:   userID,
+		TenantID: tenantID,
 		Username: username,
 		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{

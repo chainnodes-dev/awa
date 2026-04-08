@@ -12,17 +12,32 @@ import (
 
 // Login authenticates a user and returns an access token + refresh token.
 // POST /api/v1/auth/login
+// Body: { "username": "...", "password": "...", "tenant_slug": "..." }
+// tenant_slug defaults to "default" if omitted, for backward compatibility.
 func (h *Handlers) Login(c *gin.Context) {
 	var body struct {
-		Username string `json:"username" binding:"required"`
-		Password string `json:"password" binding:"required"`
+		Username   string `json:"username" binding:"required"`
+		Password   string `json:"password" binding:"required"`
+		TenantSlug string `json:"tenant_slug"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := h.store.GetUserByUsername(c.Request.Context(), body.Username)
+	if body.TenantSlug == "" {
+		body.TenantSlug = "default"
+	}
+
+	tenant, err := h.store.GetTenantBySlug(c.Request.Context(), body.TenantSlug)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+
+	// Scope the user lookup to this tenant.
+	tenantCtx := store.WithTenantID(c.Request.Context(), tenant.ID)
+	user, err := h.store.GetUserByUsername(tenantCtx, body.Username)
 	if err != nil {
 		// Keep the error message generic to prevent username enumeration.
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
@@ -34,7 +49,7 @@ func (h *Handlers) Login(c *gin.Context) {
 		return
 	}
 
-	accessToken, err := h.jwtSvc.GenerateAccessToken(user.ID, user.Username, user.Role)
+	accessToken, err := h.jwtSvc.GenerateAccessToken(user.ID, user.TenantID, user.Username, user.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
 		return
@@ -62,9 +77,10 @@ func (h *Handlers) Login(c *gin.Context) {
 		"token_type":    "Bearer",
 		"expires_in":    int(auth.AccessTokenTTL().Seconds()),
 		"user": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"role":     user.Role,
+			"id":        user.ID,
+			"username":  user.Username,
+			"role":      user.Role,
+			"tenant_id": user.TenantID,
 		},
 	})
 }
@@ -96,7 +112,7 @@ func (h *Handlers) RefreshToken(c *gin.Context) {
 	// Revoke the used refresh token (rotation: issue a new one).
 	_ = h.store.RevokeRefreshToken(c.Request.Context(), rt.ID)
 
-	accessToken, err := h.jwtSvc.GenerateAccessToken(user.ID, user.Username, user.Role)
+	accessToken, err := h.jwtSvc.GenerateAccessToken(user.ID, user.TenantID, user.Username, user.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
 		return

@@ -2,6 +2,7 @@ package temporal
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,8 +54,17 @@ func (a *Activities) RecordTransition(ctx context.Context, p RecordTransitionPar
 }
 
 // PublishEvent publishes a single event to the event bus.
+//
+// p.Data arrives from Temporal's JSON serialization as map[string]interface{},
+// losing the original concrete type. We re-marshal it to json.RawMessage before
+// constructing the event so that the payload is embedded as typed JSON bytes —
+// consistent with events created directly via events.New in the direct executor.
 func (a *Activities) PublishEvent(ctx context.Context, p PublishEventParams) error {
-	return a.Bus.Publish(ctx, events.New(p.EventType, p.Data))
+	raw, err := json.Marshal(p.Data)
+	if err != nil {
+		return err
+	}
+	return a.Bus.Publish(ctx, events.New(p.EventType, json.RawMessage(raw)))
 }
 
 // CreateHITL persists a new HITL request to the store.

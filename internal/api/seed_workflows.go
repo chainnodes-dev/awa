@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -11,9 +11,9 @@ import (
 // seedWorkflows loads built-in example workflows into the store on first boot.
 // It is a no-op if any workflow definitions already exist.
 func seedWorkflows(s store.Store) {
-	ctx := context.Background()
+	ctx := store.WithTenantID(context.Background(), store.DefaultTenantID)
 
-	existing, err := s.ListDefinitions(ctx)
+	existing, err := s.ListDefinitions(ctx, store.DefinitionFilter{Limit: 1})
 	if err != nil || len(existing) > 0 {
 		return
 	}
@@ -21,14 +21,14 @@ func seedWorkflows(s store.Store) {
 	for _, wf := range builtinWorkflows {
 		def, yamlSource, err := asmtypes.LoadFromYAML([]byte(wf))
 		if err != nil {
-			log.Printf("[server] failed to parse built-in workflow: %v", err)
+			slog.Error("Failed to parse built-in workflow", "error", err)
 			continue
 		}
 		if err := s.SaveDefinition(ctx, def, yamlSource); err != nil {
-			log.Printf("[server] failed to seed workflow '%s': %v", def.Metadata.Name, err)
+			slog.Error("Failed to seed workflow", "name", def.Metadata.Name, "error", err)
 			continue
 		}
-		log.Printf("[server] seeded workflow '%s' v%s", def.Metadata.Name, def.Metadata.Version)
+		slog.Info("Seeded workflow", "name", def.Metadata.Name, "version", def.Metadata.Version)
 	}
 }
 

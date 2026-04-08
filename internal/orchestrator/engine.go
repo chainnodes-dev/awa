@@ -3,7 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/asm-platform/asm/internal/events"
+	"github.com/asm-platform/asm/internal/metrics"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
@@ -86,6 +87,7 @@ func (e *Engine) StartRun(ctx context.Context, workflowName, version string, inp
 
 	run := &asmtypes.WorkflowRun{
 		ID:              uuid.NewString(),
+		TenantID:        store.TenantIDFromContext(ctx),
 		WorkflowName:    workflowName,
 		WorkflowVersion: version,
 		Status:          asmtypes.RunRunning,
@@ -102,6 +104,9 @@ func (e *Engine) StartRun(ctx context.Context, workflowName, version string, inp
 		return nil, fmt.Errorf("persist run: %w", err)
 	}
 
+	metrics.RunsStartedTotal.WithLabelValues(workflowName, version).Inc()
+	metrics.RunsActive.WithLabelValues(workflowName).Inc()
+
 	_ = e.bus.Publish(ctx, events.New(events.RunCreated, events.RunCreatedPayload{Run: run}))
 
 	// --- Temporal mode ---
@@ -112,7 +117,7 @@ func (e *Engine) StartRun(ctx context.Context, workflowName, version string, inp
 		}
 		run.TemporalID = temporalID
 		if err := e.store.UpdateRun(ctx, run); err != nil {
-			log.Printf("[engine] failed to persist temporal ID for run %s: %v", run.ID, err)
+			slog.Warn("Failed to persist temporal ID", "run_id", run.ID, "error", err)
 		}
 		return run, nil
 	}
@@ -147,13 +152,13 @@ func (e *Engine) driveRun(ctx context.Context, runID string, rc *runContext) {
 	for {
 		run, err := e.store.GetRun(ctx, runID)
 		if err != nil {
-			log.Printf("[engine] cannot load run %s: %v", runID, err)
+			slog.Error("Cannot load run", "run_id", runID, "error", err)
 			return
 		}
 
 		state := rc.def.StateByName(run.CurrentState)
 		if state == nil {
-			log.Printf("[engine] unknown state '%s' in run %s", run.CurrentState, runID)
+			slog.Error("Unknown state in run", "state", run.CurrentState, "run_id", runID)
 			return
 		}
 
@@ -166,7 +171,7 @@ func (e *Engine) driveRun(ctx context.Context, runID string, rc *runContext) {
 		// HITL — park and wait for a signal.
 		if state.Type == asmtypes.StateHITL {
 			if err := e.handleHITL(ctx, run, state, rc); err != nil {
-				log.Printf("[engine] HITL error for run %s: %v", runID, err)
+				slog.Error("HITL error", "run_id", runID, "error", err)
 				return
 			}
 			continue
@@ -178,13 +183,13 @@ func (e *Engine) driveRun(ctx context.Context, runID string, rc *runContext) {
 		if state.Script != nil {
 			output, err := e.evalScript(ctx, state, rc.blackboard.Read())
 			if err != nil {
-				log.Printf("[engine] script error in run %s state '%s': %v", runID, state.Name, err)
+				slog.Error("Script error", "run_id", runID, "state", state.Name, "error", err)
 				e.failRun(ctx, run, rc, err)
 				return
 			}
 			if len(output.BlackboardUpdates) > 0 {
 				if err := rc.blackboard.Write(output.BlackboardUpdates); err != nil {
-					log.Printf("[engine] blackboard write error: %v", err)
+					slog.Error("Blackboard write error", "run_id", runID, "error", err)
 				}
 				for k, v := range output.BlackboardUpdates {
 					_ = e.bus.Publish(ctx, events.New(events.BlackboardUpdated, events.BlackboardUpdatedPayload{
@@ -194,7 +199,7 @@ func (e *Engine) driveRun(ctx context.Context, runID string, rc *runContext) {
 			}
 			if output.Trigger != "" {
 				if err := e.applyTrigger(ctx, run, rc, output.Trigger, output); err != nil {
-					log.Printf("[engine] trigger error: %v", err)
+					slog.Error("Trigger error", "run_id", runID, "error", err)
 					e.failRun(ctx, run, rc, err)
 					return
 				}
@@ -206,7 +211,7 @@ func (e *Engine) driveRun(ctx context.Context, runID string, rc *runContext) {
 		if state.Agent != "" {
 			agentDef := rc.def.AgentByName(state.Agent)
 			if agentDef == nil {
-				log.Printf("[engine] agent '%s' not found in workflow", state.Agent)
+				slog.Error("Agent not found in workflow", "agent", state.Agent, "run_id", runID)
 				e.failRun(ctx, run, rc, fmt.Errorf("agent '%s' not defined", state.Agent))
 				return
 			}
@@ -218,7 +223,7 @@ func (e *Engine) driveRun(ctx context.Context, runID string, rc *runContext) {
 				Blackboard: rc.blackboard.Read(),
 			})
 			if err != nil {
-				log.Printf("[engine] executor error in run %s: %v", runID, err)
+				slog.Error("Executor error", "run_id", runID, "error", err)
 				e.failRun(ctx, run, rc, err)
 				return
 			}
@@ -226,7 +231,7 @@ func (e *Engine) driveRun(ctx context.Context, runID string, rc *runContext) {
 			// Apply blackboard updates from agent output.
 			if len(output.BlackboardUpdates) > 0 {
 				if err := rc.blackboard.Write(output.BlackboardUpdates); err != nil {
-					log.Printf("[engine] blackboard write error: %v", err)
+					slog.Error("Blackboard write error", "run_id", runID, "error", err)
 				}
 				for k, v := range output.BlackboardUpdates {
 					_ = e.bus.Publish(ctx, events.New(events.BlackboardUpdated, events.BlackboardUpdatedPayload{
@@ -238,7 +243,7 @@ func (e *Engine) driveRun(ctx context.Context, runID string, rc *runContext) {
 			// Fire the trigger returned by the agent.
 			if output.Trigger != "" {
 				if err := e.applyTrigger(ctx, run, rc, output.Trigger, output); err != nil {
-					log.Printf("[engine] trigger error: %v", err)
+					slog.Error("Trigger error", "run_id", runID, "error", err)
 					e.failRun(ctx, run, rc, err)
 					return
 				}
@@ -393,6 +398,8 @@ func (e *Engine) transitionTo(ctx context.Context, run *asmtypes.WorkflowRun, rc
 		Blackboard: run.Blackboard,
 	}))
 
+	metrics.StateTransitionsTotal.WithLabelValues(run.WorkflowName, fromState, toState, trigger).Inc()
+
 	return nil
 }
 
@@ -416,6 +423,9 @@ func (e *Engine) handleHITL(ctx context.Context, run *asmtypes.WorkflowRun, stat
 	}
 	_ = e.store.CreateHITL(ctx, hitlReq)
 
+	metrics.HITLRequestsTotal.WithLabelValues(run.WorkflowName, state.Name).Inc()
+	hitlCreatedAt := time.Now()
+
 	_ = e.bus.Publish(ctx, events.New(events.HITLWaiting, events.HITLWaitingPayload{
 		RunID:     run.ID,
 		StateName: state.Name,
@@ -432,6 +442,8 @@ func (e *Engine) handleHITL(ctx context.Context, run *asmtypes.WorkflowRun, stat
 
 	select {
 	case trigger := <-rc.hitlCh:
+		metrics.HITLResolutionDurationSeconds.WithLabelValues(run.WorkflowName, trigger).
+			Observe(time.Since(hitlCreatedAt).Seconds())
 		run.Status = asmtypes.RunRunning
 		return e.applyTrigger(ctx, run, rc, trigger, nil)
 	case <-time.After(waitDur):
@@ -451,6 +463,13 @@ func (e *Engine) completeRun(ctx context.Context, run *asmtypes.WorkflowRun, _ *
 	run.UpdatedAt = now
 	_ = e.store.UpdateRun(ctx, run)
 	_ = e.bus.Publish(ctx, events.New(events.RunCompleted, events.RunCreatedPayload{Run: run}))
+
+	metrics.RunsCompletedTotal.WithLabelValues(run.WorkflowName, run.WorkflowVersion, run.CurrentState).Inc()
+	metrics.RunsActive.WithLabelValues(run.WorkflowName).Dec()
+	if !run.StartedAt.IsZero() {
+		metrics.RunDurationSeconds.WithLabelValues(run.WorkflowName, run.WorkflowVersion, "complete").
+			Observe(now.Sub(run.StartedAt).Seconds())
+	}
 }
 
 func (e *Engine) failRun(ctx context.Context, run *asmtypes.WorkflowRun, _ *runContext, cause error) {
@@ -463,11 +482,23 @@ func (e *Engine) failRun(ctx context.Context, run *asmtypes.WorkflowRun, _ *runC
 	}
 	_ = e.store.UpdateRun(ctx, run)
 	_ = e.bus.Publish(ctx, events.New(events.RunFailed, events.RunCreatedPayload{Run: run}))
+
+	metrics.RunsFailedTotal.WithLabelValues(run.WorkflowName, run.WorkflowVersion).Inc()
+	metrics.RunsActive.WithLabelValues(run.WorkflowName).Dec()
+	if !run.StartedAt.IsZero() {
+		metrics.RunDurationSeconds.WithLabelValues(run.WorkflowName, run.WorkflowVersion, "failed").
+			Observe(now.Sub(run.StartedAt).Seconds())
+	}
 }
 
 // GetRun returns a run from the store.
 func (e *Engine) GetRun(ctx context.Context, id string) (*asmtypes.WorkflowRun, error) {
 	return e.store.GetRun(ctx, id)
+}
+
+// DeleteRun removes a run and its associated transitions and HITL requests.
+func (e *Engine) DeleteRun(ctx context.Context, id string) error {
+	return e.store.DeleteRun(ctx, id)
 }
 
 // ListRuns returns runs matching the filter.
@@ -501,6 +532,47 @@ func (e *Engine) evalScript(ctx context.Context, state *asmtypes.StateDef, bb ma
 	}
 
 	// Evaluate each blackboard update expression.
+	updates := make(map[string]interface{})
+	for field, exprStr := range script.Updates {
+		prog, err := expr.Compile(exprStr, expr.Env(bb))
+		if err != nil {
+			return nil, fmt.Errorf("compile update expr for '%s': %w", field, err)
+		}
+		val, err := expr.Run(prog, bb)
+		if err != nil {
+			return nil, fmt.Errorf("run update expr for '%s': %w", field, err)
+		}
+		updates[field] = val
+	}
+
+	return &asmtypes.AgentOutput{
+		Trigger:           trigger,
+		BlackboardUpdates: updates,
+		Reasoning:         fmt.Sprintf("script: %s", script.Trigger),
+	}, nil
+}
+
+// EvalScript evaluates a state's ScriptDef against the blackboard.
+// It is a pure deterministic function; safe to call inline in Temporal workflows.
+func EvalScript(state *asmtypes.StateDef, bb map[string]interface{}) (*asmtypes.AgentOutput, error) {
+	if state.Script == nil {
+		return nil, fmt.Errorf("state '%s' has no script definition", state.Name)
+	}
+	script := state.Script
+
+	triggerProg, err := expr.Compile(script.Trigger, expr.Env(bb))
+	if err != nil {
+		return nil, fmt.Errorf("compile trigger expr '%s': %w", script.Trigger, err)
+	}
+	triggerResult, err := expr.Run(triggerProg, bb)
+	if err != nil {
+		return nil, fmt.Errorf("run trigger expr '%s': %w", script.Trigger, err)
+	}
+	trigger, ok := triggerResult.(string)
+	if !ok {
+		return nil, fmt.Errorf("trigger expr '%s' must evaluate to string, got %T", script.Trigger, triggerResult)
+	}
+
 	updates := make(map[string]interface{})
 	for field, exprStr := range script.Updates {
 		prog, err := expr.Compile(exprStr, expr.Env(bb))

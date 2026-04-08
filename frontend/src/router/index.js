@@ -35,6 +35,18 @@ const routes = [
     name: 'Monitor',
     component: () => import('@/views/Monitor.vue'),
     meta: { title: 'Monitor' }
+  },
+  {
+    path: '/mcp-servers',
+    name: 'MCPServers',
+    component: () => import('@/views/MCPServers.vue'),
+    meta: { title: 'MCP Servers' }
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: () => import('@/views/Settings.vue'),
+    meta: { title: 'Settings' }
   }
 ]
 

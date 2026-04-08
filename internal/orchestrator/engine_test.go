@@ -130,10 +130,10 @@ transitions:
     trigger: submitted
   - from: human_review
     to: approved
-    trigger: human_approved
+    trigger: approved
   - from: human_review
     to: rejected
-    trigger: human_rejected
+    trigger: rejected
 `
 
 // helpers

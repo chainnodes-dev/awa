@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
 // Provider is the LLM-agnostic interface for all language model calls.
@@ -23,8 +24,8 @@ type CompletionRequest struct {
 }
 
 type Message struct {
-	Role       string      `json:"role"`                  // "user" | "assistant" | "tool"
-	Content    interface{} `json:"content"`               // string or []ContentBlock
+	Role       string      `json:"role"`                   // "user" | "assistant" | "tool"
+	Content    interface{} `json:"content"`                // string or []ContentBlock
 	ToolCallID string      `json:"tool_call_id,omitempty"` // OpenAI: identifies the tool call being responded to
 	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`   // OpenAI: assistant-side tool invocations
 }
@@ -36,7 +37,7 @@ type ContentBlock struct {
 	ToolUseID string      `json:"tool_use_id,omitempty"` // tool_result: references the tool_use ID (Anthropic)
 	Name      string      `json:"name,omitempty"`
 	Input     interface{} `json:"input,omitempty"`
-	Output    interface{} `json:"content,omitempty"`     // tool_result content
+	Output    interface{} `json:"content,omitempty"` // tool_result content
 }
 
 type Tool struct {
@@ -46,10 +47,10 @@ type Tool struct {
 }
 
 type CompletionResponse struct {
-	Content    string       `json:"content"`
-	ToolCalls  []ToolCall   `json:"tool_calls,omitempty"`
-	StopReason string       `json:"stop_reason"`
-	Usage      *TokenUsage  `json:"usage,omitempty"`
+	Content    string      `json:"content"`
+	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`
+	StopReason string      `json:"stop_reason"`
+	Usage      *TokenUsage `json:"usage,omitempty"`
 }
 
 type ToolCall struct {
@@ -63,9 +64,12 @@ type TokenUsage struct {
 	OutputTokens int `json:"output_tokens"`
 }
 
-// Registry holds registered LLM providers.
+// Registry holds registered LLM providers. All methods are thread-safe so the
+// registry can be hot-reloaded at runtime when the UI saves new LLM config.
 type Registry struct {
-	providers map[string]Provider
+	mu              sync.RWMutex
+	providers       map[string]Provider
+	defaultProvider string
 }
 
 func NewRegistry() *Registry {
@@ -73,10 +77,14 @@ func NewRegistry() *Registry {
 }
 
 func (r *Registry) Register(p Provider) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.providers[p.Name()] = p
 }
 
 func (r *Registry) Get(name string) (Provider, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	p, ok := r.providers[name]
 	if !ok {
 		return nil, fmt.Errorf("LLM provider '%s' not registered", name)
@@ -85,10 +93,45 @@ func (r *Registry) Get(name string) (Provider, error) {
 }
 
 // First returns an arbitrary registered provider, or nil if none are registered.
-// Used as a fallback when no explicit provider is configured.
 func (r *Registry) First() Provider {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	for _, p := range r.providers {
 		return p
 	}
 	return nil
+}
+
+// Default returns the name of the global default provider.
+func (r *Registry) Default() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.defaultProvider
+}
+
+// SetDefault sets the global default provider name.
+func (r *Registry) SetDefault(name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.defaultProvider = name
+}
+
+// Snapshot returns a shallow copy of the current providers map.
+func (r *Registry) Snapshot() map[string]Provider {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[string]Provider, len(r.providers))
+	for k, v := range r.providers {
+		out[k] = v
+	}
+	return out
+}
+
+// Reload atomically replaces the entire provider map and default name.
+// Safe to call concurrently with Get/Default.
+func (r *Registry) Reload(providers map[string]Provider, defaultName string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.providers = providers
+	r.defaultProvider = defaultName
 }

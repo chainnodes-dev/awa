@@ -2,15 +2,57 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
+// DefaultTenantID is the fixed UUID of the built-in "default" tenant.
+// Used for first-boot seeding and single-tenant deployments.
+const DefaultTenantID = "00000000-0000-0000-0000-000000000001"
+
+// contextKey is an unexported type for context keys in this package.
+type contextKey string
+
+const tenantIDKey contextKey = "tenant_id"
+
+// WithTenantID returns a new context carrying the given tenant ID.
+// Store methods extract it to scope queries to the correct tenant.
+func WithTenantID(ctx context.Context, tenantID string) context.Context {
+	return context.WithValue(ctx, tenantIDKey, tenantID)
+}
+
+// TenantIDFromContext extracts the tenant ID set by WithTenantID.
+// Returns "" if no tenant ID has been set (e.g. internal engine goroutines).
+func TenantIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(tenantIDKey).(string)
+	return v
+}
+
+// DefinitionFilter controls which workflow definitions are returned by ListDefinitions.
+type DefinitionFilter struct {
+	Limit  int // 0 = no limit
+	Offset int
+}
+
+// VersionSummary is a lightweight record returned by ListDefinitionVersions.
+type VersionSummary struct {
+	VersionNumber int       `json:"version_number"`
+	Version       string    `json:"version"`       // original text version tag
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 // WorkflowStore manages workflow definitions.
 type WorkflowStore interface {
+	// SaveDefinition creates a new version (auto-incremented version_number).
 	SaveDefinition(ctx context.Context, def *asmtypes.WorkflowDef, yamlSource string) error
+	// UpdateDefinition overwrites an existing version in place (no new version created).
+	UpdateDefinition(ctx context.Context, def *asmtypes.WorkflowDef, yamlSource string) error
 	GetDefinition(ctx context.Context, name, version string) (*asmtypes.WorkflowDef, string, error)
-	ListDefinitions(ctx context.Context) ([]*asmtypes.WorkflowDef, error)
+	GetDefinitionByVersion(ctx context.Context, name string, versionNumber int) (*asmtypes.WorkflowDef, string, error)
+	GetLatestDefinition(ctx context.Context, name string) (*asmtypes.WorkflowDef, string, error)
+	ListDefinitions(ctx context.Context, filter DefinitionFilter) ([]*asmtypes.WorkflowDef, error)
+	ListDefinitionVersions(ctx context.Context, name string) ([]VersionSummary, error)
 	DeleteDefinition(ctx context.Context, name, version string) error
 }
 
@@ -19,6 +61,7 @@ type RunStore interface {
 	CreateRun(ctx context.Context, run *asmtypes.WorkflowRun) error
 	GetRun(ctx context.Context, id string) (*asmtypes.WorkflowRun, error)
 	UpdateRun(ctx context.Context, run *asmtypes.WorkflowRun) error
+	DeleteRun(ctx context.Context, id string) error
 	ListRuns(ctx context.Context, filter RunFilter) ([]*asmtypes.WorkflowRun, error)
 
 	RecordTransition(ctx context.Context, record *asmtypes.TransitionRecord) error
@@ -40,12 +83,22 @@ type Store interface {
 	HITLStore
 	UserStore
 	RefreshTokenStore
+	TenantStore
+	MCPServerStore
+	LLMConfigStore
 	Close() error
 }
 
+// RunFilter controls which runs are returned by ListRuns.
+// TenantID is required for tenant-scoped queries; leave empty only for
+// internal/administrative operations that need cross-tenant access.
 type RunFilter struct {
+	TenantID     string
 	WorkflowName string
 	Status       asmtypes.RunStatus
+	CurrentState string
+	StartedFrom  *time.Time // inclusive lower bound on started_at
+	StartedTo    *time.Time // inclusive upper bound on started_at
 	Limit        int
 	Offset       int
 }

@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -20,10 +21,16 @@ const (
 )
 
 // Event is the envelope for all platform events.
+//
+// Data is stored as json.RawMessage so that the payload type is preserved
+// through Redis round-trips. When Event is deserialized from JSON (e.g. after
+// being carried through RedisBus), Data stays as raw bytes rather than being
+// converted to map[string]interface{} — callers can unmarshal into the
+// concrete payload struct for their event type.
 type Event struct {
-	Type      string      `json:"type"`
-	Timestamp time.Time   `json:"timestamp"`
-	Data      interface{} `json:"data"`
+	Type      string          `json:"type"`
+	Timestamp time.Time       `json:"timestamp"`
+	Data      json.RawMessage `json:"data"`
 }
 
 // Payloads
@@ -66,11 +73,24 @@ type HITLWaitingPayload struct {
 	Assignee  string `json:"assignee,omitempty"`
 }
 
-// New creates a typed Event.
+// New creates a typed Event, marshalling data to json.RawMessage immediately.
+// Using json.RawMessage for Data means the payload type survives JSON
+// round-trips (e.g. through Redis) without degrading to map[string]interface{}.
 func New(eventType string, data interface{}) Event {
+	raw, _ := json.Marshal(data)
 	return Event{
 		Type:      eventType,
 		Timestamp: time.Now(),
-		Data:      data,
+		Data:      json.RawMessage(raw),
 	}
+}
+
+// Decode unmarshals the event's Data into the provided value.
+// Use this instead of a type assertion when the Event may have come
+// from a Redis subscriber (where concrete types are not preserved).
+//
+//	var p events.HITLWaitingPayload
+//	if err := event.Decode(&p); err != nil { ... }
+func (e Event) Decode(v interface{}) error {
+	return json.Unmarshal(e.Data, v)
 }

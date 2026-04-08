@@ -2,28 +2,35 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/joho/godotenv"
 
 	"github.com/asm-platform/asm/internal/config"
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor"
 	"github.com/asm-platform/asm/internal/executor/llm"
+	"github.com/asm-platform/asm/internal/logger"
 	"github.com/asm-platform/asm/internal/store"
 	temporalpkg "github.com/asm-platform/asm/internal/temporal"
 )
 
 func main() {
+	_ = godotenv.Load()
+
 	cfg := config.Load()
+	logger.Init(cfg.LogLevel)
 
 	// -- Event Bus --
 	var bus events.Bus
 	if cfg.RedisURL != "" {
 		redisBus, err := events.NewRedisBus(cfg.RedisURL)
 		if err != nil {
-			log.Printf("[worker] Redis unavailable (%v), using local bus", err)
+			slog.Warn("Redis unavailable, using local bus", "error", err)
 			bus = events.NewLocalBus()
 		} else {
 			bus = redisBus
@@ -38,30 +45,55 @@ func main() {
 	if cfg.DatabaseURL != "" {
 		pgStore, err := store.NewPostgresStore(ctx, cfg.DatabaseURL)
 		if err != nil {
-			log.Fatalf("[worker] Postgres unavailable: %v", err)
+			slog.Error("Postgres unavailable", "error", err)
+			os.Exit(1)
 		}
 		s = pgStore
 	} else {
-		log.Fatal("[worker] DATABASE_URL is required in temporal mode")
+		slog.Error("DATABASE_URL is required in temporal mode")
+		os.Exit(1)
 	}
 	defer s.Close()
 
-	// -- LLM Registry --
-	llmRegistry := llm.NewRegistry()
-	if cfg.AnthropicKey != "" {
-		llmRegistry.Register(llm.NewAnthropicProvider(cfg.AnthropicKey, cfg.DefaultModel))
+	// -- LLM Registry (loaded from DB) --
+	workerTenantCtx := store.WithTenantID(ctx, store.DefaultTenantID)
+	llmRegistry, activeLLMProvider, llmErr := llm.BuildRegistryFromDB(workerTenantCtx, s)
+	if llmErr != nil {
+		slog.Warn("Failed to build LLM registry from DB", "error", llmErr)
+		llmRegistry = llm.NewRegistry()
 	}
-	if cfg.OpenAIKey != "" {
-		llmRegistry.Register(llm.NewOpenAIProvider(cfg.OpenAIKey, cfg.DefaultModel))
+	if activeLLMProvider == "" {
+		if first := llmRegistry.First(); first != nil {
+			activeLLMProvider = first.Name()
+			slog.Info("LLM default provider", "provider", activeLLMProvider)
+		} else {
+			slog.Warn("No LLM providers configured — agent activities will fail")
+		}
 	}
 
 	// -- Executor (runs LLM calls inside Temporal activities) --
-	exec := executor.NewDirectExecutor(llmRegistry, bus, cfg.LLMProvider)
+	exec := executor.NewDirectExecutor(llmRegistry, bus, activeLLMProvider)
+
+	// Reload LLM registry from DB periodically to pick up UI config changes.
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			reg, defaultName, err := llm.BuildRegistryFromDB(workerTenantCtx, s)
+			if err != nil {
+				slog.Warn("LLM registry reload failed", "error", err)
+				continue
+			}
+			llmRegistry.Reload(reg.Snapshot(), defaultName)
+			slog.Debug("LLM registry reloaded from DB", "default", defaultName)
+		}
+	}()
 
 	// -- Temporal client --
 	temporalClient, err := temporalpkg.NewClient(cfg.TemporalAddress, cfg.TemporalNamespace)
 	if err != nil {
-		log.Fatalf("[worker] failed to connect to Temporal: %v", err)
+		slog.Error("Failed to connect to Temporal", "error", err)
+		os.Exit(1)
 	}
 	defer temporalClient.Close()
 
@@ -80,9 +112,10 @@ func main() {
 		interruptCh <- struct{}{}
 	}()
 
-	log.Printf("[worker] starting on task queue '%s' (temporal: %s)", cfg.TemporalTaskQueue, cfg.TemporalAddress)
+	slog.Info("Worker starting", "queue", cfg.TemporalTaskQueue, "temporal", cfg.TemporalAddress)
 	if err := w.Run(interruptCh); err != nil {
-		log.Fatalf("[worker] run error: %v", err)
+		slog.Error("Worker run error", "error", err)
+		os.Exit(1)
 	}
-	log.Println("[worker] stopped")
+	slog.Info("Worker stopped")
 }

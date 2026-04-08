@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: asm-worker
+  namespace: asm
+  labels:
+    app: asm-worker
+    app.kubernetes.io/part-of: asm-platform
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: asm-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: asm-worker
+        app.kubernetes.io/part-of: asm-platform
+        app.kubernetes.io/component: worker
+    spec:
+      # Spread across nodes for HA.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: asm-worker
+
+      # Temporal workers hold long-polling connections; give them time to drain.
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: worker
+          image: asm/worker:latest
+          imagePullPolicy: Always
+
+          envFrom:
+            - configMapRef:
+                name: asm-config
+            - secretRef:
+                name: asm-secret
+
+          # Workers always run in temporal executor mode.
+          env:
+            - name: EXECUTOR_MODE
+              value: temporal
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 1Gi
+
+          # Workers have no HTTP server; use a process-level liveness check.
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "kill -0 1"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop: ["ALL"]
+
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

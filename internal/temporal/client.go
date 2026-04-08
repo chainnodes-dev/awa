@@ -11,6 +11,8 @@ import (
 )
 
 // NewClient dials Temporal and returns a ready client.
+// Note: client.Dial establishes a lazy gRPC connection — it succeeds even when
+// the Temporal server is unreachable. Call CheckHealth to verify liveness.
 func NewClient(address, namespace string) (client.Client, error) {
 	c, err := client.Dial(client.Options{
 		HostPort:  address,
@@ -20,6 +22,16 @@ func NewClient(address, namespace string) (client.Client, error) {
 		return nil, fmt.Errorf("dial temporal at %s: %w", address, err)
 	}
 	return c, nil
+}
+
+// CheckHealth pings the Temporal server to verify the connection is live.
+// Use a context with a short deadline (e.g. 5 s) to avoid blocking at startup.
+func CheckHealth(ctx context.Context, c client.Client) error {
+	_, err := c.CheckHealth(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("temporal health check: %w", err)
+	}
+	return nil
 }
 
 // EngineClient implements orchestrator.TemporalEngineClient using the Temporal SDK.

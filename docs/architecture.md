@@ -186,13 +186,14 @@ transitions:
 **API call to resolve:**
 ```http
 POST /api/v1/runs/{id}/signal
-{ "resolution": "approve", "resolver": "alice@acme.com" }
+{ "resolution": "approved", "resolver": "alice@acme.com" }
 ```
 
 **Constraints:**
 - `agent` is ignored when type is `hitl`.
+- The `resolution` value is used **directly as the trigger name** — the workflow YAML must declare outgoing transitions whose `trigger` fields match the expected resolution values (e.g. `approved`, `rejected`).
 - The resolver identity is stored in the transition history for audit purposes.
-- Multiple outgoing transitions are supported (approve / reject / escalate / etc.).
+- Multiple outgoing transitions are supported (approved / rejected / escalate / etc.).
 
 ---
 
@@ -328,13 +329,14 @@ Workers are the execution units that perform the actual work for each state. A w
 
 That's it. The worker does not know which state comes next. It does not know what other workers exist. It fires a trigger and returns.
 
-**Worker types:**
+**Worker / execution types:**
 
 | Type | Description | When to use |
 |---|---|---|
-| LLM Agent | Calls Claude or GPT with a prompt template. Can use MCP tools. | Ambiguous decisions, natural language, unstructured data |
-| Specialist Worker | Hand-coded logic, API integrations, database queries | Well-defined deterministic tasks |
+| Script state | expr-lang expressions evaluated inline by the engine; no worker | Threshold checks, field derivations, deterministic routing |
+| LLM Agent | Calls Claude, GPT, or a local Ollama model. Can use MCP tools. | Ambiguous decisions, natural language, unstructured data |
 | MCP-enabled Agent | LLM with access to MCP servers (validation APIs, ERP, etc.) | Structured operations with LLM decision-making on top |
+| Specialist Worker | Hand-coded Go logic; API integrations, database queries | Well-defined, stable business rules that no longer need an LLM |
 
 ### Task Queues
 
@@ -359,10 +361,13 @@ This powers the live monitoring UI — you can watch 1,000 invoices move through
 
 All durable state lives in PostgreSQL:
 
-- `workflow_definitions` — versioned workflow YAML + parsed definition
-- `workflow_runs` — one row per run, current state + blackboard + status
+- `tenants` — one row per customer/tenant (id, name, slug, created_at)
+- `workflow_definitions` — versioned workflow YAML + parsed definition, scoped to a tenant
+- `workflow_runs` — one row per run, current state + blackboard + status, scoped to a tenant
 - `state_transitions` — append-only history of every transition with blackboard snapshot
 - `hitl_requests` — pending and resolved human review requests
+- `users` — user accounts scoped to a tenant; username unique per-tenant
+- `refresh_tokens` — opaque tokens for JWT refresh rotation
 
 The transition history is immutable. Every run has a complete, auditable record of every decision made, which agent made it, and what the blackboard contained at that moment.
 
@@ -395,9 +400,22 @@ MCP tools available could include:
 - Tax rate APIs
 - Internal databases
 
-### Stage 3 — Specialist Workers
+### Stage 3 — Script States
 
-Once a path is fully understood and deterministic, replace the LLM with a specialist worker that implements the logic directly. The workflow definition does not change — only the worker assigned to that state changes.
+For purely deterministic logic (threshold checks, field derivations, routing decisions), use a `script` state. No worker, no LLM, no external call — the engine evaluates [expr-lang](https://github.com/expr-lang/expr) expressions inline in microseconds.
+
+```yaml
+- name: ROUTE_BY_AMOUNT
+  type: script
+  script:
+    trigger: 'amount > 10000 ? "needs_review" : "auto_approve"'
+    updates:
+      tier: 'amount > 50000 ? "large" : "small"'
+```
+
+### Stage 4 — Specialist Workers
+
+Once a path is fully understood but too complex for a one-line expression, replace the LLM with a specialist worker that implements the logic directly in Go. The workflow definition does not change — only the worker assigned to that state changes.
 
 ```
 validate state → Specialist worker runs schema check + duplicate detection
@@ -405,7 +423,7 @@ validate state → Specialist worker runs schema check + duplicate detection
                → 10x faster, 100x cheaper than LLM
 ```
 
-LLMs remain for states where genuine judgement is needed — edge cases, natural language, novel situations. Specialist workers handle everything that can be codified.
+LLMs remain for states where genuine judgement is needed — edge cases, natural language, novel situations. Script states and specialist workers handle everything that can be codified.
 
 ---
 
@@ -434,12 +452,74 @@ LLMs remain for states where genuine judgement is needed — edge cases, natural
 
 7.  POST /api/v1/runs/{id}/signal  {resolution: "approved", resolver: "alice"}
 
-8.  Temporal signal fires "human_approved"
+8.  Engine fires the resolution value ("approved") directly as the trigger
     → State machine transitions to "done"
     → Run status = complete
 
 9.  Full transition history stored in DB with blackboard snapshots at each step
 ```
+
+---
+
+---
+
+## Multi-Tenancy
+
+The platform is built for multi-tenant SaaS deployment. Every customer is a **tenant**. Workflow definitions, runs, and users are all scoped to a tenant — one tenant cannot see or affect another's data.
+
+### Tenant Isolation Model
+
+```
+tenants
+  └── users          (login scoped to tenant slug)
+  └── workflow_definitions  (YAML + parsed def, per-tenant uniqueness)
+  └── workflow_runs         (each run belongs to one tenant)
+        └── state_transitions  (accessed via run_id; isolation inherited)
+        └── hitl_requests      (accessed via run_id; isolation inherited)
+```
+
+`state_transitions` and `hitl_requests` are not tenant-scoped directly — they are always accessed via a `run_id` FK, so tenant isolation is inherited through the owning run.
+
+### Context-Based Propagation
+
+Tenant identity flows through the system without any method signature changes:
+
+```
+POST /api/v1/auth/login  { "username": "alice", "password": "...", "tenant_slug": "acme-corp" }
+  → Resolve tenant by slug
+  → Look up user within that tenant
+  → Issue JWT with { "tid": "<tenant_id>", "uid": "<user_id>", "role": "admin" }
+
+Every subsequent API call:
+  RequireAuth middleware
+    → validates JWT
+    → calls store.WithTenantID(ctx, claims.TenantID)
+    → store methods read tenant from context via TenantIDFromContext(ctx)
+```
+
+### Roles
+
+| Role | Scope | Permissions |
+|---|---|---|
+| `super_admin` | Platform-wide | Manage tenants; bypass all role checks; reserved for platform operators |
+| `admin` | Tenant | Full access within tenant: user management, workflow CRUD, run control |
+| `operator` | Tenant | Start runs, trigger transitions, resolve HITL, read workflows |
+| `viewer` | Tenant | Read-only: runs, workflows, HITL pending list |
+
+`super_admin` is created at first boot and cannot be assigned via the user management API. Tenant admins can create `admin`, `operator`, and `viewer` accounts for their team.
+
+### Tenant Management API
+
+```
+POST   /api/v1/tenants          — create tenant (super_admin only)
+GET    /api/v1/tenants          — list all tenants (super_admin only)
+GET    /api/v1/tenants/:id      — get tenant (super_admin only)
+DELETE /api/v1/tenants/:id      — delete tenant (super_admin only; default tenant protected)
+```
+
+### First-Boot Seeding
+
+On startup, if no tenants exist, the server creates the **default tenant** (`slug: "default"`, fixed UUID `00000000-0000-0000-0000-000000000001`) and seeds the initial `super_admin` user from the `ADMIN_USERNAME` / `ADMIN_PASSWORD` environment variables. This is idempotent — safe to run on every restart.
 
 ---
 
@@ -455,4 +535,35 @@ LLMs remain for states where genuine judgement is needed — edge cases, natural
 
 5. **Observable by default.** Every transition, every blackboard update, every HITL event is published in real time. The full history is always queryable.
 
-6. **Evolutionary.** Start with LLM agents, add MCP tools for structure, promote to specialist workers when logic is stable. No rewrites — only replacements at the state level.
+6. **Evolutionary.** Start with LLM agents, add MCP tools for structure, promote to script states or specialist workers when logic is stable. No rewrites — only replacements at the state level.
+
+---
+
+## LLM Provider Support
+
+The platform abstracts LLM providers behind a **DB-backed, hot-reloadable** registry. Providers are configured via the Settings UI (or seeded from env vars on first boot). Any combination can be enabled; the active default is stored in the `llm_configs` table.
+
+| Provider | Notes |
+|---|---|
+| Anthropic (Claude) | Cloud; best reasoning quality |
+| OpenAI (GPT) | Cloud; wide model selection |
+| Ollama | Local / self-hosted; no API key — uses `base_url` field |
+| Grok (xAI) | Cloud; OpenAI-compatible API at `api.x.ai`; default model `grok-3` |
+| Deepseek | Cloud; OpenAI-compatible API; default model `deepseek-chat` |
+| Gemini (Google AI Studio) | Cloud; OpenAI-compatible endpoint; default model `gemini-2.0-flash` |
+
+### Provider resolution order (per agent execution)
+1. Per-agent `config.provider` override (set in workflow YAML or Designer)
+2. Global default provider (configured in Settings UI, stored in `llm_configs`)
+3. Ollama fallback (if a configured provider is not available)
+4. Hard error with a descriptive message
+
+### DB-backed configuration
+- `llm_configs` table: one row per `(tenant_id, provider)` pair
+- Env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_URL`, `OLLAMA_MODEL`, etc.) are read **once at first boot** and inserted if the table is empty; from that point the DB is authoritative
+- API keys are masked as `"***"` in list responses; sending `"***"` or empty string on upsert preserves the existing key
+- The **server** hot-reloads the registry on every Settings save
+- The **worker** polls the DB every 15 seconds and calls `Registry.Reload()` atomically
+
+### Settings UI
+Route `/settings` (admin only). Per-provider cards with enable toggle, API key input, model override, base URL (Ollama), and a Test/Save button. A global default provider dropdown applies to all agent states that do not declare a per-agent provider override.

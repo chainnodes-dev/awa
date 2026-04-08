@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: asm-server
+  namespace: asm
+  labels:
+    app: asm-server
+    app.kubernetes.io/part-of: asm-platform
+    app.kubernetes.io/component: server
+spec:
+  type: ClusterIP
+  selector:
+    app: asm-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# ── Optional: expose externally via LoadBalancer ─────────────────────────────
+# Uncomment if you are not using an Ingress controller.
+#
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: asm-server-lb
+#   namespace: asm
+# spec:
+#   type: LoadBalancer
+#   selector:
+#     app: asm-server
+#   ports:
+#     - name: http
+#       port: 80
+#       targetPort: http
+---
+# ── Ingress (nginx example) ───────────────────────────────────────────────────
+# Uncomment and customise for your ingress controller.
+#
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: asm-server
+#   namespace: asm
+#   annotations:
+#     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+#     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+#     nginx.ingress.kubernetes.io/proxy-buffering: "off"   # required for SSE / WebSocket
+# spec:
+#   rules:
+#     - host: asm.example.com
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: asm-server
+#                 port:
+#                   name: http
+#   tls:
+#     - hosts:
+#         - asm.example.com
+#       secretName: asm-tls

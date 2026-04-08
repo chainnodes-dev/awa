@@ -104,3 +104,8 @@ func (b *RedisBus) Subscribe(ctx context.Context) (<-chan Event, func()) {
 	}
 	return ch, cancel
 }
+
+// Ping checks that the Redis connection is healthy.
+func (b *RedisBus) Ping(ctx context.Context) error {
+	return b.client.Ping(ctx).Err()
+}

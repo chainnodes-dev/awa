@@ -41,6 +41,14 @@
       <span class="font-semibold">Run failed:</span> {{ run.failure_reason }}
     </div>
 
+    <!-- HITL resolve error banner -->
+    <div v-if="resolveError"
+         class="mx-4 mt-3 mb-1 px-4 py-3 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-mono shrink-0 flex items-start gap-2">
+      <span class="font-semibold shrink-0">HITL signal failed:</span>
+      <span class="break-all">{{ resolveError }}</span>
+      <button @click="resolveError = ''" class="ml-auto shrink-0 opacity-60 hover:opacity-100">✕</button>
+    </div>
+
     <div class="flex flex-1 overflow-hidden">
 
       <!-- ── Canvas + thinking + event log ────────────────────────────── -->
@@ -268,9 +276,19 @@ const thinkingText = computed(() => execStore.thinkingTokens[route.params.id] ??
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 
+const resolveError = ref('')
+
 async function resolve(resolution) {
-  await execStore.resolveHITL(route.params.id, resolution, 'user')
-  await loadRun()
+  resolveError.value = ''
+  try {
+    await execStore.resolveHITL(route.params.id, resolution, 'user')
+    await loadRun()
+  } catch (err) {
+    const msg = err?.response?.data?.error ?? err?.message ?? 'Unknown error'
+    resolveError.value = msg
+    // Roll back optimistic status update so HITL buttons reappear
+    await loadRun()
+  }
 }
 
 async function fireTrigger() {

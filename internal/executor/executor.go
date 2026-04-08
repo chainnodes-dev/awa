@@ -3,15 +3,18 @@ package executor
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor/llm"
+	"github.com/asm-platform/asm/internal/metrics"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/tools"
 	"github.com/asm-platform/asm/internal/tools/mcp"
@@ -45,27 +48,52 @@ func (e *DirectExecutor) RegisterTool(t tools.Tool) {
 
 func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTask) (*asmtypes.AgentOutput, error) {
 	agent := task.AgentDef
+	start := time.Now()
 
-	// Resolve LLM provider.
-	providerName := e.defaultProv
+	result := func(err error) {
+		dur := time.Since(start).Seconds()
+		metrics.AgentDurationSeconds.WithLabelValues(task.StateDef.Name, agent.Name).Observe(dur)
+		lbl := "success"
+		if err != nil {
+			lbl = "error"
+		}
+		metrics.AgentExecutionsTotal.WithLabelValues(task.StateDef.Name, agent.Name, lbl).Inc()
+	}
+
+	// Resolve LLM provider: per-agent config → registry default → env default → ollama fallback.
+	providerName := e.llmRegistry.Default()
+	if providerName == "" {
+		providerName = e.defaultProv
+	}
 	if agent.Config["provider"] != "" {
 		providerName = agent.Config["provider"]
 	}
 	provider, err := e.llmRegistry.Get(providerName)
 	if err != nil {
-		return nil, fmt.Errorf("get LLM provider: %w", err)
+		// Fallback to Ollama before giving up.
+		if ollamaProv, ollamaErr := e.llmRegistry.Get("ollama"); ollamaErr == nil {
+			slog.Warn("LLM provider unavailable, falling back to ollama",
+				"requested", providerName, "error", err)
+			provider = ollamaProv
+		} else {
+			err = fmt.Errorf("LLM provider %q not available (ollama fallback also failed): %w", providerName, err)
+			result(err)
+			return nil, err
+		}
 	}
 
 	// Build system prompt.
 	system, err := e.buildSystemPrompt(agent, task)
 	if err != nil {
-		return nil, fmt.Errorf("build system prompt: %w", err)
+		err = fmt.Errorf("build system prompt: %w", err)
+		result(err)
+		return nil, err
 	}
 
 	// Load agent-specific MCP tools and merge with global tools.
 	agentRegistry, err := e.loadAgentTools(ctx, agent)
 	if err != nil {
-		log.Printf("[executor] warn: failed to load MCP tools for agent %s: %v", agent.Name, err)
+		slog.Warn("Failed to load MCP tools", "agent", agent.Name, "error", err)
 		agentRegistry = tools.NewRegistry()
 	}
 	activeRegistry := e.globalTools.Merge(agentRegistry)
@@ -81,6 +109,16 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 	)
 
 	messages := []llm.Message{{Role: "user", Content: userMsg}}
+
+	// toolCallCache deduplicates within a single Execute call.
+	// Key: "toolName|sha256(inputJSON)". When the LLM requests the same tool
+	// with identical inputs more than once in a conversation turn, we return
+	// the cached result instead of re-executing the tool.
+	//
+	// Note: this cache is local to one Execute invocation and does NOT survive
+	// Temporal activity retries. Tool implementations must be idempotent so
+	// that a retried activity produces the same observable outcome.
+	toolCallCache := make(map[string]json.RawMessage)
 
 	// ── Tool-calling loop ────────────────────────────────────────────────────
 	for iteration := 0; iteration < maxToolIterations; iteration++ {
@@ -107,18 +145,22 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 		resp, err := provider.Stream(ctx, req, tokenCh)
 		close(tokenCh)
 		if err != nil {
-			return nil, fmt.Errorf("LLM call failed (iteration %d): %w", iteration+1, err)
+			err = fmt.Errorf("LLM call failed (iteration %d): %w", iteration+1, err)
+			result(err)
+			return nil, err
 		}
 
 		// No tool calls → final response; extract AgentOutput JSON.
 		if len(resp.ToolCalls) == 0 {
-			output, err := parseAgentOutput(resp.Content)
-			if err != nil {
+			output, parseErr := parseAgentOutput(resp.Content)
+			if parseErr != nil {
+				result(nil)
 				return &asmtypes.AgentOutput{
 					Reasoning: resp.Content,
-					Error:     fmt.Sprintf("failed to parse structured output: %v", err),
+					Error:     fmt.Sprintf("failed to parse structured output: %v", parseErr),
 				}, nil
 			}
+			result(nil)
 			return output, nil
 		}
 
@@ -129,6 +171,10 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 		for _, tc := range resp.ToolCalls {
 			inputJSON, _ := json.Marshal(tc.Input)
 
+			// Build a deduplication key: tool name + SHA-256 of the input.
+			h := sha256.Sum256(inputJSON)
+			cacheKey := fmt.Sprintf("%s|%x", tc.Name, h)
+
 			_ = e.bus.Publish(ctx, events.New(events.AgentToolCall, events.AgentToolCallPayload{
 				RunID:     task.RunID,
 				AgentName: agent.Name,
@@ -136,11 +182,18 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 				Input:     tc.Input,
 			}))
 
-			resultJSON, toolErr := e.executeTool(ctx, activeRegistry, tc.Name, inputJSON)
-			if toolErr != nil {
-				log.Printf("[executor] tool '%s' error: %v", tc.Name, toolErr)
-				errMsg, _ := json.Marshal(fmt.Sprintf("error: %v", toolErr))
-				resultJSON = errMsg
+			var resultJSON json.RawMessage
+			if cached, hit := toolCallCache[cacheKey]; hit {
+				slog.Debug("Tool call cache hit", "tool", tc.Name)
+				resultJSON = cached
+			} else {
+				raw, toolErr := e.executeTool(ctx, activeRegistry, tc.Name, inputJSON)
+				if toolErr != nil {
+					slog.Warn("Tool error", "tool", tc.Name, "error", toolErr)
+					raw, _ = json.Marshal(fmt.Sprintf("error: %v", toolErr))
+				}
+				resultJSON = json.RawMessage(raw)
+				toolCallCache[cacheKey] = resultJSON
 			}
 
 			var resultVal interface{}
@@ -168,7 +221,9 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 		)
 	}
 
-	return nil, fmt.Errorf("agent '%s' exceeded maximum tool iterations (%d)", agent.Name, maxToolIterations)
+	err = fmt.Errorf("agent '%s' exceeded maximum tool iterations (%d)", agent.Name, maxToolIterations)
+	result(err)
+	return nil, err
 }
 
 // loadAgentTools connects to any MCP servers declared in the agent's config and

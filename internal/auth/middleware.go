@@ -5,12 +5,15 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/asm-platform/asm/internal/store"
 )
 
 const claimsKey = "auth_claims"
 
 // RequireAuth validates the Bearer token in the Authorization header.
-// On success it sets the parsed Claims in the gin context.
+// On success it sets the parsed Claims in the gin context AND propagates
+// the tenant ID into the request context so store methods can scope queries.
 // On failure it aborts the request with HTTP 401.
 func RequireAuth(svc *JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -26,12 +29,17 @@ func RequireAuth(svc *JWTService) gin.HandlerFunc {
 			return
 		}
 		c.Set(claimsKey, claims)
+		// Propagate tenant_id into the standard request context so store
+		// methods called with c.Request.Context() are automatically scoped.
+		ctx := store.WithTenantID(c.Request.Context(), claims.TenantID)
+		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
 }
 
 // RequireRole aborts with HTTP 403 if the caller's role is not in the allowed set.
 // Must be placed after RequireAuth in the middleware chain.
+// super_admin bypasses all role checks — it is implicitly allowed everywhere.
 func RequireRole(roles ...Role) gin.HandlerFunc {
 	allowed := make(map[Role]bool, len(roles))
 	for _, r := range roles {
@@ -39,7 +47,16 @@ func RequireRole(roles ...Role) gin.HandlerFunc {
 	}
 	return func(c *gin.Context) {
 		claims := ClaimsFrom(c)
-		if claims == nil || !allowed[Role(claims.Role)] {
+		if claims == nil {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+			return
+		}
+		// super_admin has platform-wide access.
+		if Role(claims.Role) == RoleSuperAdmin {
+			c.Next()
+			return
+		}
+		if !allowed[Role(claims.Role)] {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 			return
 		}

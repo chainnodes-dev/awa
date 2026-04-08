@@ -24,12 +24,12 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 
 	// Activity options: short timeout for store/bus operations.
 	shortOpts := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Second,
+		StartToCloseTimeout: 30 * time.Second,
 		RetryPolicy: &temporalsdk.RetryPolicy{
-			InitialInterval:    time.Second,
+			InitialInterval:    2 * time.Second,
 			BackoffCoefficient: 2.0,
 			MaximumInterval:    30 * time.Second,
-			MaximumAttempts:    5,
+			MaximumAttempts:    3,
 		},
 	})
 
@@ -132,10 +132,10 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				AddReceive(hitlCh, func(c workflow.ReceiveChannel, _ bool) {
 					var sig HITLResolutionPayload
 					c.Receive(ctx, &sig)
-					trigger = "human_approved"
-					if sig.Resolution == "rejected" {
-						trigger = "human_rejected"
-					}
+					// Use the resolution value directly as the trigger so it matches
+					// whatever trigger names the workflow definition declares (e.g.
+					// "approved"/"rejected"), mirroring direct-mode behaviour.
+					trigger = sig.Resolution
 				}).
 				AddFuture(workflow.NewTimer(ctx, waitDur), func(_ workflow.Future) {
 					timerFired = true
@@ -208,20 +208,79 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 			continue
 		}
 
+		// ── Script state ─────────────────────────────────────────────────────
+		// Deterministic inline evaluation; safe in workflow context (no I/O).
+		if state.Script != nil {
+			output, err := orchestrator.EvalScript(state, bb)
+			if err != nil {
+				return failWorkflow(ctx, shortOpts, p, fmt.Errorf("script eval failed in state '%s': %w", state.Name, err))
+			}
+			for k, v := range output.BlackboardUpdates {
+				bb[k] = v
+				_ = workflow.ExecuteActivity(shortOpts, (*Activities).PublishEvent, PublishEventParams{
+					EventType: events.BlackboardUpdated,
+					Data:      events.BlackboardUpdatedPayload{RunID: p.RunID, Key: k, Value: v},
+				}).Get(ctx, nil)
+			}
+			nextState, err := applyTransition(p.Def, currentState, output.Trigger, bb)
+			if err != nil {
+				return failWorkflow(ctx, shortOpts, p, err)
+			}
+			if err := persistTransition(shortOpts, ctx, p.RunID, currentState, nextState, output.Trigger, bb, output); err != nil {
+				return err
+			}
+			_ = workflow.ExecuteActivity(shortOpts, (*Activities).UpdateRun, UpdateRunParams{
+				RunID:        p.RunID,
+				CurrentState: nextState,
+				Status:       asmtypes.RunRunning,
+				Blackboard:   bb,
+				IsTerminal:   p.Def.StateByName(nextState) != nil && p.Def.StateByName(nextState).Type == asmtypes.StateTerminal,
+			}).Get(ctx, nil)
+			currentState = nextState
+			continue
+		}
+
 		// ── External trigger state ────────────────────────────────────────────
 		// No agent: park and wait for a trigger signal from the API.
-		var sig TriggerSignalPayload
-		triggerCh.Receive(ctx, &sig)
+		var (
+			sig     TriggerSignalPayload
+			trigger string
+		)
+
+		waitDur := 0 * time.Second
+		if state.Timeout != "" {
+			if d, err := time.ParseDuration(state.Timeout); err == nil {
+				waitDur = d
+			}
+		}
+
+		if waitDur > 0 {
+			selector := workflow.NewSelector(ctx)
+			selector.AddReceive(triggerCh, func(c workflow.ReceiveChannel, _ bool) {
+				c.Receive(ctx, &sig)
+				trigger = sig.Trigger
+			})
+			selector.AddFuture(workflow.NewTimer(ctx, waitDur), func(_ workflow.Future) {
+				trigger = state.OnTimeout
+				if trigger == "" {
+					trigger = "timeout"
+				}
+			})
+			selector.Select(ctx)
+		} else {
+			triggerCh.Receive(ctx, &sig)
+			trigger = sig.Trigger
+		}
 
 		for k, v := range sig.Payload {
 			bb[k] = v
 		}
 
-		nextState, err := applyTransition(p.Def, currentState, sig.Trigger, bb)
+		nextState, err := applyTransition(p.Def, currentState, trigger, bb)
 		if err != nil {
 			return failWorkflow(ctx, shortOpts, p, err)
 		}
-		if err := persistTransition(shortOpts, ctx, p.RunID, currentState, nextState, sig.Trigger, bb, nil); err != nil {
+		if err := persistTransition(shortOpts, ctx, p.RunID, currentState, nextState, trigger, bb, nil); err != nil {
 			return err
 		}
 		_ = workflow.ExecuteActivity(shortOpts, (*Activities).UpdateRun, UpdateRunParams{

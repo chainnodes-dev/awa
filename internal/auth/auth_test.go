@@ -9,7 +9,7 @@ import (
 
 func TestGenerateAndValidateToken_RoundTrip(t *testing.T) {
 	svc := NewJWTService("test-secret")
-	token, err := svc.GenerateAccessToken("user-1", "alice", string(RoleAdmin))
+	token, err := svc.GenerateAccessToken("user-1", "tenant-1", "alice", string(RoleAdmin))
 	if err != nil {
 		t.Fatalf("GenerateAccessToken: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestValidateToken_WrongSecret(t *testing.T) {
 	svc1 := NewJWTService("secret-a")
 	svc2 := NewJWTService("secret-b")
 
-	token, _ := svc1.GenerateAccessToken("u", "u", string(RoleViewer))
+	token, _ := svc1.GenerateAccessToken("u", "t", "u", string(RoleViewer))
 	_, err := svc2.ValidateToken(token)
 	if err == nil {
 		t.Fatal("expected error for wrong secret, got nil")
@@ -59,7 +59,7 @@ func TestValidateToken_EmptyString(t *testing.T) {
 func TestGenerateToken_AllRoles(t *testing.T) {
 	svc := NewJWTService("secret")
 	for _, role := range []Role{RoleAdmin, RoleOperator, RoleViewer} {
-		tok, err := svc.GenerateAccessToken("u", "u", string(role))
+		tok, err := svc.GenerateAccessToken("u", "t", "u", string(role))
 		if err != nil {
 			t.Fatalf("role %q: GenerateAccessToken error: %v", role, err)
 		}
@@ -88,7 +88,7 @@ func TestRefreshTokenTTL(t *testing.T) {
 // ── ValidRole tests ───────────────────────────────────────────────────────────
 
 func TestValidRole(t *testing.T) {
-	valid := []string{"admin", "operator", "viewer"}
+	valid := []string{"super_admin", "admin", "operator", "viewer"}
 	for _, r := range valid {
 		if !ValidRole(r) {
 			t.Errorf("ValidRole(%q) = false, want true", r)

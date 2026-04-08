@@ -1,4 +1,4 @@
-.PHONY: dev infra stop server worker frontend migrate tidy build docker-build stack stack-down
+.PHONY: dev infra stop server worker frontend migrate tidy build docker-build stack stack-down k8s-apply k8s-delete k8s-status specialist
 
 # Start infrastructure (postgres, redis, temporal)
 infra:
@@ -63,3 +63,46 @@ stack-down:
 # Install frontend deps
 frontend-install:
 	cd frontend && npm install
+
+# ── Kubernetes ────────────────────────────────────────────────────────────────
+K8S_DIR := deploy/k8s
+
+# Apply all manifests in dependency order.
+# Edit secret.yaml (or use external-secrets) before running this.
+k8s-apply:
+	kubectl apply -f $(K8S_DIR)/namespace.yaml
+	kubectl apply -f $(K8S_DIR)/configmap.yaml
+	kubectl apply -f $(K8S_DIR)/secret.yaml
+	kubectl apply -f $(K8S_DIR)/server-deployment.yaml
+	kubectl apply -f $(K8S_DIR)/server-service.yaml
+	kubectl apply -f $(K8S_DIR)/worker-deployment.yaml
+	kubectl apply -f $(K8S_DIR)/specialist-worker-deployment.yaml
+	kubectl apply -f $(K8S_DIR)/hpa.yaml
+
+# Delete all ASM resources (leaves the namespace intact by default).
+k8s-delete:
+	kubectl delete -f $(K8S_DIR)/hpa.yaml --ignore-not-found
+	kubectl delete -f $(K8S_DIR)/specialist-worker-deployment.yaml --ignore-not-found
+	kubectl delete -f $(K8S_DIR)/worker-deployment.yaml --ignore-not-found
+	kubectl delete -f $(K8S_DIR)/server-service.yaml --ignore-not-found
+	kubectl delete -f $(K8S_DIR)/server-deployment.yaml --ignore-not-found
+	kubectl delete -f $(K8S_DIR)/secret.yaml --ignore-not-found
+	kubectl delete -f $(K8S_DIR)/configmap.yaml --ignore-not-found
+
+# Show pod / deployment status in the asm namespace.
+k8s-status:
+	kubectl get deployments,pods,services,hpa -n asm
+
+# Scaffold a new specialist worker binary from the template.
+# Usage: make specialist name=invoice-worker queue=invoice-workers
+specialist:
+	@test -n "$(name)" || (echo "Usage: make specialist name=<binary-name> queue=<task-queue>"; exit 1)
+	@test -n "$(queue)" || (echo "Usage: make specialist name=<binary-name> queue=<task-queue>"; exit 1)
+	cp -r cmd/specialist-worker-template cmd/$(name)
+	@echo "Created cmd/$(name)/"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Edit cmd/$(name)/main.go — set SPECIALIST_TASK_QUEUE default to '$(queue)'"
+	@echo "  2. Rename 'my-agent-name' → your agent name and 'myAgentHandler' → your func name"
+	@echo "  3. Add the agent to your workflow YAML with task_queue: $(queue)"
+	@echo "  4. Run: go run ./cmd/$(name)"

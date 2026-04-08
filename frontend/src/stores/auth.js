@@ -50,8 +50,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   function hasRole(r) {
     if (r === 'viewer') return isAuthenticated.value
-    if (r === 'operator') return ['operator', 'admin'].includes(role.value)
-    if (r === 'admin') return role.value === 'admin'
+    if (r === 'operator') return ['operator', 'admin', 'super_admin'].includes(role.value)
+    if (r === 'admin') return ['admin', 'super_admin'].includes(role.value)
     return false
   }
 

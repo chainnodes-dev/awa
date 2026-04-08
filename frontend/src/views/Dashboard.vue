@@ -4,12 +4,6 @@
     <header class="flex items-center gap-4 px-6 py-4 border-b border-border shrink-0">
       <h1 class="text-base font-semibold text-slate-200">Dashboard</h1>
       <div class="flex-1"/>
-      <button @click="showGenerateDialog = true" class="btn-ghost text-xs gap-1.5 border border-border">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-        </svg>
-        Generate with AI
-      </button>
       <RouterLink to="/designer" class="btn-primary">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -75,8 +69,40 @@
           <span class="badge bg-white/5 text-slate-500">{{ execStore.runs.length }}</span>
         </div>
 
+        <!-- Filters -->
+        <div class="flex flex-wrap items-end gap-3 mb-3">
+          <div class="space-y-1.5">
+            <label class="text-[10px] text-slate-500 uppercase tracking-wider">Workflow</label>
+            <select v-model="runFilters.workflow" @change="applyFilters" class="input text-xs py-1.5 w-40">
+              <option value="">All</option>
+              <option v-for="d in wfStore.definitions" :key="d.metadata.name" :value="d.metadata.name">{{ d.metadata.name }}</option>
+            </select>
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-[10px] text-slate-500 uppercase tracking-wider">Status</label>
+            <select v-model="runFilters.status" @change="applyFilters" class="input text-xs py-1.5 w-32">
+              <option value="">All</option>
+              <option value="pending">pending</option>
+              <option value="running">running</option>
+              <option value="waiting">waiting</option>
+              <option value="complete">complete</option>
+              <option value="failed">failed</option>
+            </select>
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-[10px] text-slate-500 uppercase tracking-wider">Started from</label>
+            <input type="date" v-model="runFilters.startedFrom" @change="applyFilters" class="input text-xs py-1.5 w-36" />
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-[10px] text-slate-500 uppercase tracking-wider">Started to</label>
+            <input type="date" v-model="runFilters.startedTo" @change="applyFilters" class="input text-xs py-1.5 w-36" />
+          </div>
+          <button @click="resetFilters" class="btn-ghost text-xs py-1.5 px-2 text-slate-500">Reset</button>
+          <button v-if="authStore.hasRole('admin') && execStore.runs.length" @click="confirmDeleteAll" class="btn-danger text-xs py-1.5 px-2 ml-auto">Delete All</button>
+        </div>
+
         <div v-if="!execStore.runs.length" class="text-slate-600 text-sm py-4 text-center">
-          No runs yet.
+          No runs match the current filters.
         </div>
         <div v-else class="card overflow-hidden">
           <table class="w-full text-sm">
@@ -102,8 +128,9 @@
                   <span :class="`status-${run.status}`">{{ run.status }}</span>
                 </td>
                 <td class="px-4 py-2.5 text-xs text-slate-500">{{ relativeTime(run.started_at) }}</td>
-                <td class="px-4 py-2.5 text-right">
+                <td class="px-4 py-2.5 text-right flex gap-1 justify-end">
                   <button @click="openMonitor(run.id)" class="btn-ghost text-xs py-1 px-2">Monitor</button>
+                  <button v-if="authStore.hasRole('admin')" @click="confirmDeleteRun(run)" class="btn-danger text-xs py-1 px-2">Delete</button>
                 </td>
               </tr>
             </tbody>
@@ -115,26 +142,76 @@
     <!-- Start Run Modal -->
     <StartRunModal v-if="selectedDef" :definition="selectedDef" @close="selectedDef = null" @started="onRunStarted" />
 
-    <!-- Generate Workflow Modal -->
-    <GenerateWorkflowModal v-if="showGenerateDialog" @close="showGenerateDialog = false" @generated="onGenerated" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useWorkflowStore } from '@/stores/workflows'
 import { useExecutionStore } from '@/stores/execution'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const wfStore = useWorkflowStore()
 const execStore = useExecutionStore()
+const authStore = useAuthStore()
 const selectedDef = ref(null)
-const showGenerateDialog = ref(false)
+
+// Run filters — default "Started from" to today
+const today = new Date().toISOString().slice(0, 10)
+const runFilters = reactive({
+  workflow: '',
+  status: '',
+  startedFrom: today,
+  startedTo: '',
+})
+
+function buildFilterParams() {
+  const params = {}
+  if (runFilters.workflow) params.workflow = runFilters.workflow
+  if (runFilters.status)   params.status = runFilters.status
+  if (runFilters.startedFrom) params.started_from = new Date(runFilters.startedFrom).toISOString()
+  if (runFilters.startedTo)   params.started_to = new Date(runFilters.startedTo + 'T23:59:59').toISOString()
+  return params
+}
+
+function applyFilters() {
+  execStore.fetchRuns(buildFilterParams())
+}
+
+function resetFilters() {
+  runFilters.workflow = ''
+  runFilters.status = ''
+  runFilters.startedFrom = today
+  runFilters.startedTo = ''
+  applyFilters()
+}
+
+async function confirmDeleteRun(run) {
+  if (!confirm('Delete run ' + run.id.slice(0, 8) + '? This cannot be undone.')) return
+  try {
+    await execStore.deleteRun(run.id)
+  } catch (e) {
+    alert(e.response?.data?.error ?? e.message)
+  }
+}
+
+async function confirmDeleteAll() {
+  const count = execStore.runs.length
+  if (!confirm('Delete all ' + count + ' visible runs? This cannot be undone.')) return
+  const deletingRuns = true
+  try {
+    const ids = execStore.runs.map(r => r.id)
+    await Promise.all(ids.map(id => execStore.deleteRun(id)))
+  } catch (e) {
+    alert(e.response?.data?.error ?? e.message)
+  }
+}
 
 onMounted(() => {
   wfStore.fetchAll()
-  execStore.fetchRuns()
+  applyFilters()
   execStore.fetchPendingHITL()
 })
 
@@ -156,12 +233,6 @@ async function deleteWorkflow(def) {
 }
 function openMonitor(id) { router.push(`/monitor/${id}`) }
 function onRunStarted(run) { execStore.runs.unshift(run); router.push(`/monitor/${run.id}`) }
-
-function onGenerated({ name, version }) {
-  showGenerateDialog.value = false
-  wfStore.fetchAll()
-  router.push(`/designer/${name}/${version}`)
-}
 
 function relativeTime(ts) {
   const d = Math.floor((Date.now() - new Date(ts)) / 1000)
@@ -256,151 +327,4 @@ export const StartRunModal = defineComponent({
   }
 })
 
-import { useWorkflowStore } from '@/stores/workflows'
-import { api } from '@/stores/auth'
-
-// ── GenerateWorkflowModal ─────────────────────────────────────────────────────
-// Shown when user clicks "Generate with AI".
-// 1. Loads available MCP servers from the registry.
-// 2. User writes a description and selects MCP servers.
-// 3. Calls POST /api/v1/designer/generate, then saves the result via POST /api/v1/workflows.
-// 4. Emits 'generated' so the parent can open the designer.
-export const GenerateWorkflowModal = defineComponent({
-  emits: ['close', 'generated'],
-  setup(_, { emit }) {
-    const description  = ref('')
-    const mcpServers   = ref([])      // list of { name, description }
-    const selectedMCP  = ref([])      // selected names
-    const loading      = ref(false)
-    const loadingMCP   = ref(true)
-    const error        = ref('')
-    const statusMsg    = ref('')
-
-    // Load available MCP servers.
-    api.get('/mcp-servers').then(res => {
-      mcpServers.value = res.data
-    }).catch(() => {
-      // Non-fatal — just skip the server picker.
-    }).finally(() => {
-      loadingMCP.value = false
-    })
-
-    function toggleMCP(name) {
-      const idx = selectedMCP.value.indexOf(name)
-      if (idx !== -1) selectedMCP.value.splice(idx, 1)
-      else selectedMCP.value.push(name)
-    }
-
-    async function generate() {
-      if (!description.value.trim()) return
-      loading.value = true
-      error.value   = ''
-      statusMsg.value = 'Asking Claude to design your workflow…'
-      try {
-        // 1. Generate the workflow.
-        const genRes = await api.post('/designer/generate', {
-          description: description.value.trim(),
-          mcp_servers: selectedMCP.value,
-        })
-        const { yaml, definition } = genRes.data
-        statusMsg.value = 'Saving workflow…'
-
-        // 2. Save it.
-        await api.post('/workflows', { yaml })
-
-        emit('generated', {
-          name:    definition.metadata.name,
-          version: definition.metadata.version,
-        })
-      } catch (e) {
-        error.value = e.response?.data?.error ?? e.message
-        statusMsg.value = ''
-      } finally {
-        loading.value = false
-      }
-    }
-
-    return () => h('div', {
-      class: 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50',
-      onClick: e => e.target === e.currentTarget && !loading.value && emit('close'),
-    }, [
-      h('div', { class: 'card w-[560px] max-h-[80vh] flex flex-col p-0 overflow-hidden' }, [
-
-        // Header
-        h('div', { class: 'flex items-center gap-3 px-5 py-4 border-b border-border shrink-0' }, [
-          h('svg', { width: '16', height: '16', viewBox: '0 0 24 24', fill: 'none', stroke: '#a78bfa', 'stroke-width': '2' }, [
-            h('path', { d: 'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z' }),
-          ]),
-          h('h3', { class: 'font-semibold text-slate-200 flex-1' }, 'Generate Workflow with AI'),
-          h('button', {
-            class: 'text-slate-600 hover:text-slate-300 text-lg leading-none p-1',
-            onClick: () => !loading.value && emit('close'),
-          }, '✕'),
-        ]),
-
-        // Body
-        h('div', { class: 'flex-1 overflow-y-auto p-5 space-y-4' }, [
-
-          h('div', { class: 'space-y-1' }, [
-            h('label', { class: 'text-xs text-slate-400 font-medium' }, 'Describe your business process *'),
-            h('textarea', {
-              class: 'input h-28 resize-none text-sm leading-relaxed',
-              value: description.value,
-              placeholder: 'e.g. Process customer invoices from email receipt through validation, enrichment, human review, and final posting to the ERP. Flag items over €10,000 for extra approval.',
-              onInput: e => description.value = e.target.value,
-              disabled: loading.value,
-              autofocus: true,
-            }),
-          ]),
-
-          // MCP server picker
-          !loadingMCP.value && mcpServers.value.length ? h('div', { class: 'space-y-2' }, [
-            h('label', { class: 'text-xs text-slate-400 font-medium' }, 'Available MCP Servers (optional)'),
-            h('p', { class: 'text-[10px] text-slate-600' }, 'Select servers whose tools your agents should be able to use. Claude will decide which agents need which servers.'),
-            h('div', { class: 'grid grid-cols-2 gap-1.5' }, mcpServers.value.map(s =>
-              h('button', {
-                key: s.name,
-                class: `text-left px-2.5 py-2 rounded-lg border text-xs transition-colors ${
-                  selectedMCP.value.includes(s.name)
-                    ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
-                    : 'border-border bg-surface-0 text-slate-500 hover:border-border/80'
-                }`,
-                onClick: () => toggleMCP(s.name),
-                disabled: loading.value,
-              }, [
-                h('div', { class: 'font-medium mb-0.5 font-mono' }, s.name),
-                h('div', { class: 'text-[10px] opacity-70 leading-tight line-clamp-2' }, s.description),
-              ])
-            )),
-          ]) : null,
-
-          // Status / error
-          loading.value && statusMsg.value
-            ? h('div', { class: 'flex items-center gap-2 text-xs text-violet-400 animate-pulse' }, [
-                h('span', {}, statusMsg.value),
-              ])
-            : null,
-
-          error.value
-            ? h('div', { class: 'px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs' }, error.value)
-            : null,
-        ]),
-
-        // Footer
-        h('div', { class: 'flex gap-3 justify-end px-5 py-4 border-t border-border shrink-0' }, [
-          h('button', {
-            class: 'btn-ghost text-sm',
-            onClick: () => emit('close'),
-            disabled: loading.value,
-          }, 'Cancel'),
-          h('button', {
-            class: `btn-primary text-sm gap-2 ${!description.value.trim() || loading.value ? 'opacity-40 cursor-not-allowed' : ''}`,
-            onClick: generate,
-            disabled: !description.value.trim() || loading.value,
-          }, loading.value ? 'Generating…' : 'Generate'),
-        ]),
-      ]),
-    ])
-  },
-})
 </script>

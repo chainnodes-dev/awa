@@ -10,9 +10,13 @@ import (
 )
 
 // ListUsers returns all users. Admin only.
-// GET /api/v1/users
+// GET /api/v1/users?limit=100&offset=0
 func (h *Handlers) ListUsers(c *gin.Context) {
-	users, err := h.store.ListUsers(c.Request.Context())
+	filter := store.UserFilter{
+		Limit:  queryInt(c, "limit", 100),
+		Offset: queryInt(c, "offset", 0),
+	}
+	users, err := h.store.ListUsers(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -32,6 +36,11 @@ func (h *Handlers) CreateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// Prevent non-super_admin callers from creating super_admin accounts.
+	if auth.Role(body.Role) == auth.RoleSuperAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "cannot create super_admin via user API"})
+		return
+	}
 	if !auth.ValidRole(body.Role) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be admin, operator, or viewer"})
 		return
@@ -43,7 +52,9 @@ func (h *Handlers) CreateUser(c *gin.Context) {
 		return
 	}
 
+	claims := auth.ClaimsFrom(c)
 	u := &store.User{
+		TenantID:     claims.TenantID,
 		Username:     body.Username,
 		PasswordHash: hash,
 		Role:         body.Role,

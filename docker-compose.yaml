@@ -6,10 +6,12 @@ services:
       POSTGRES_USER: asm
       POSTGRES_PASSWORD: asm_secret
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
+      # Migrations are applied at startup by golang-migrate (cmd/server/main.go).
+      # Do NOT mount ./migrations here — initdb.d runs both .up.sql and .down.sql
+      # files alphabetically, causing migrations to fight each other.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U asm"]
       interval: 5s

@@ -13,7 +13,7 @@
       >
         <span class="text-slate-600 shrink-0 w-[72px]">{{ formatTime(ev.timestamp) }}</span>
         <span :class="['shrink-0 w-32 truncate', eventColor(ev.type)]">{{ ev.type }}</span>
-        <span class="text-slate-500 truncate group-hover:whitespace-normal">{{ summarise(ev) }}</span>
+        <span :class="['text-slate-500', ev.type === 'run.failed' ? 'break-all' : 'truncate group-hover:whitespace-normal']">{{ summarise(ev) }}</span>
       </div>
 
       <div v-if="!events.length" class="text-slate-600 text-center py-8">
@@ -70,7 +70,14 @@ function summarise(ev) {
     case 'agent.thinking':     return `[${d.agent_name}] ${(d.token ?? '').slice(0, 60)}`
     case 'run.created':        return `run ${d.run?.id?.slice(0, 8)}`
     case 'hitl.waiting':       return `${d.state_name}${d.assignee ? ` → ${d.assignee}` : ''}`
-    default:                   return JSON.stringify(d).slice(0, 80)
+    case 'run.failed': {
+      const reason = d.run?.failure_reason ?? d.error ?? 'unknown error'
+      // Strip Temporal activity envelope — keep only the innermost cause
+      const clean = reason.replace(/^.*?: /g, '').replace(/\(type:.*?\)/g, '').trim()
+      return clean || reason
+    }
+    case 'run.completed':      return d.run?.id ? `run ${d.run.id.slice(0, 8)} completed` : 'completed'
+    default:                   return JSON.stringify(d).slice(0, 120)
   }
 }
 </script>

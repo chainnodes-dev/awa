@@ -12,10 +12,17 @@ type WorkflowDef struct {
 }
 
 type WorkflowMeta struct {
-	Name        string            `yaml:"name"                  json:"name"`
-	Version     string            `yaml:"version"               json:"version"`
-	Description string            `yaml:"description,omitempty" json:"description,omitempty"`
-	Labels      map[string]string `yaml:"labels,omitempty"      json:"labels,omitempty"`
+	Name          string            `yaml:"name"                  json:"name"`
+	Version       string            `yaml:"version"               json:"version"`
+	VersionNumber int               `yaml:"-"                     json:"version_number,omitempty"`
+	Description   string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Labels        map[string]string `yaml:"labels,omitempty"      json:"labels,omitempty"`
+	// Schedule is an optional cron expression that auto-starts the workflow on a
+	// fixed cadence.  Uses 6-field format with seconds first (robfig/cron v3):
+	//   "0 0 9 * * *"  — daily at 09:00:00
+	//   "0 */15 * * * *" — every 15 minutes
+	// Leave empty to disable.
+	Schedule string `yaml:"schedule,omitempty" json:"schedule,omitempty"`
 }
 
 // BlackboardDef defines the typed schema of the shared blackboard.

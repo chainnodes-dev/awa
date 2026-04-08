@@ -1,0 +1,91 @@
+package store
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// MCPServerStore methods on MemoryStore.
+
+func (s *MemoryStore) CreateMCPServer(_ context.Context, srv *MCPServer) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if srv.ID == "" {
+		srv.ID = uuid.NewString()
+	}
+	if srv.CreatedAt.IsZero() {
+		srv.CreatedAt = time.Now()
+	}
+	// Check unique name within tenant
+	for _, existing := range s.mcpServers {
+		if existing.TenantID == srv.TenantID && existing.Name == srv.Name {
+			return fmt.Errorf("MCP server with name %q already exists", srv.Name)
+		}
+	}
+	cp := *srv
+	s.mcpServers[srv.ID] = &cp
+	return nil
+}
+
+func (s *MemoryStore) GetMCPServer(_ context.Context, id string) (*MCPServer, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	srv, ok := s.mcpServers[id]
+	if !ok {
+		return nil, fmt.Errorf("MCP server %q not found", id)
+	}
+	cp := *srv
+	return &cp, nil
+}
+
+func (s *MemoryStore) ListMCPServers(ctx context.Context) ([]*MCPServer, error) {
+	tenantID := TenantIDFromContext(ctx)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*MCPServer
+	for _, srv := range s.mcpServers {
+		if tenantID == "" || srv.TenantID == tenantID {
+			cp := *srv
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
+func (s *MemoryStore) UpdateMCPServer(_ context.Context, srv *MCPServer) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	existing, ok := s.mcpServers[srv.ID]
+	if !ok {
+		return fmt.Errorf("MCP server %q not found", srv.ID)
+	}
+	existing.URL = srv.URL
+	existing.EnvVar = srv.EnvVar
+	existing.Description = srv.Description
+	return nil
+}
+
+func (s *MemoryStore) DeleteMCPServer(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.mcpServers[id]; !ok {
+		return fmt.Errorf("MCP server %q not found", id)
+	}
+	delete(s.mcpServers, id)
+	return nil
+}
+
+func (s *MemoryStore) HasAnyMCPServer(ctx context.Context) (bool, error) {
+	tenantID := TenantIDFromContext(ctx)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, srv := range s.mcpServers {
+		if tenantID == "" || srv.TenantID == tenantID {
+			return true, nil
+		}
+	}
+	return false, nil
+}

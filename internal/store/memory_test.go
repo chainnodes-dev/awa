@@ -76,7 +76,7 @@ func TestMemoryStore_ListDefinitions(t *testing.T) {
 	_ = s.SaveDefinition(ctx, testDef("wf-a", "v1"), "")
 	_ = s.SaveDefinition(ctx, testDef("wf-b", "v1"), "")
 
-	defs, err := s.ListDefinitions(ctx)
+	defs, err := s.ListDefinitions(ctx, DefinitionFilter{})
 	if err != nil {
 		t.Fatalf("ListDefinitions: %v", err)
 	}

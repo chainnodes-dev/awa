@@ -15,12 +15,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/asm-platform/asm/internal/config"
+	"github.com/asm-platform/asm/internal/logger"
 	"github.com/asm-platform/asm/internal/specialist"
 	temporalpkg "github.com/asm-platform/asm/internal/temporal"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -28,6 +29,7 @@ import (
 
 func main() {
 	cfg := config.Load()
+	logger.Init(cfg.LogLevel)
 
 	// The task queue this worker polls. Override via env var.
 	taskQueue := os.Getenv("SPECIALIST_TASK_QUEUE")
@@ -50,7 +52,8 @@ func main() {
 
 	temporalClient, err := temporalpkg.NewClient(cfg.TemporalAddress, cfg.TemporalNamespace)
 	if err != nil {
-		log.Fatalf("[specialist-worker] failed to connect to Temporal: %v", err)
+		slog.Error("Failed to connect to Temporal", "error", err)
+		os.Exit(1)
 	}
 	defer temporalClient.Close()
 
@@ -65,12 +68,13 @@ func main() {
 		interruptCh <- struct{}{}
 	}()
 
-	log.Printf("[specialist-worker] starting on queue %q (temporal: %s, handlers: %v)",
-		taskQueue, cfg.TemporalAddress, sw.Handlers())
+	slog.Info("Specialist worker starting", "queue", taskQueue,
+		"temporal", cfg.TemporalAddress, "handlers", sw.Handlers())
 	if err := w.Run(interruptCh); err != nil {
-		log.Fatalf("[specialist-worker] run error: %v", err)
+		slog.Error("Worker run error", "error", err)
+		os.Exit(1)
 	}
-	log.Println("[specialist-worker] stopped")
+	slog.Info("Specialist worker stopped")
 }
 
 // ── Example handler: invoice validation ──────────────────────────────────────
