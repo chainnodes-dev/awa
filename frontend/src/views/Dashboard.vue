@@ -152,6 +152,8 @@ import { useWorkflowStore } from '@/stores/workflows'
 import { useExecutionStore } from '@/stores/execution'
 import { useAuthStore } from '@/stores/auth'
 
+import StartRunModal from '@/components/shared/StartRunModal.vue'
+
 const router = useRouter()
 const wfStore = useWorkflowStore()
 const execStore = useExecutionStore()
@@ -279,52 +281,5 @@ export const WorkflowCard = defineComponent({
   }
 })
 
-export const StartRunModal = defineComponent({
-  props: { definition: Object },
-  emits: ['close', 'started'],
-  setup(p, { emit }) {
-    const input = ref('{}')
-    const loading = ref(false)
-    const error = ref('')
-    const { startRun } = useWorkflowStore()
-
-    async function run() {
-      loading.value = true; error.value = ''
-      try {
-        const parsed = JSON.parse(input.value)
-        const runData = await startRun(p.definition.metadata.name, p.definition.metadata.version, parsed)
-        emit('started', runData)
-        emit('close')
-      } catch(e) {
-        error.value = e.message
-      } finally { loading.value = false }
-    }
-
-    return () => h('div', {
-      class: 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50',
-      onClick: (e) => e.target === e.currentTarget && emit('close')
-    }, [
-      h('div', { class: 'card w-[480px] p-6 space-y-4' }, [
-        h('h3', { class: 'font-semibold text-slate-200' }, `Run: ${p.definition.metadata.name}`),
-        h('div', [
-          h('label', { class: 'text-xs text-slate-500 mb-1 block' }, 'Initial blackboard input (JSON)'),
-          h('textarea', {
-            class: 'input font-mono h-32 resize-none',
-            value: input.value,
-            onInput: e => input.value = e.target.value,
-            spellcheck: false
-          }),
-        ]),
-        error.value && h('p', { class: 'text-red-400 text-xs' }, error.value),
-        h('div', { class: 'flex gap-3 justify-end' }, [
-          h('button', { class: 'btn-ghost', onClick: () => emit('close') }, 'Cancel'),
-          h('button', { class: 'btn-primary', onClick: run, disabled: loading.value },
-            loading.value ? 'Starting…' : 'Start Run'
-          ),
-        ])
-      ])
-    ])
-  }
-})
 
 </script>

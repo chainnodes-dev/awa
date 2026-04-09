@@ -150,10 +150,11 @@ func loadWorkflow(t *testing.T, s store.Store, yamlSrc string) *asmtypes.Workflo
 	return def
 }
 
-func newEngine(exec Executor) (*Engine, store.Store) {
+func newEngine() (*Engine, store.Store, *MockTemporalClient) {
 	s := store.NewMemoryStore()
 	bus := events.NewLocalBus()
-	return NewEngine(s, bus, exec), s
+	mock := &MockTemporalClient{}
+	return NewEngine(s, bus, mock), s, mock
 }
 
 func waitForStatus(t *testing.T, s store.Store, runID string, want asmtypes.RunStatus, timeout time.Duration) *asmtypes.WorkflowRun {
@@ -187,266 +188,103 @@ func waitForState(t *testing.T, s store.Store, runID, want string, timeout time.
 
 // --- tests ---
 
-func TestEngine_StartRun_InitialState(t *testing.T) {
-	eng, s := newEngine(fixedOutput("", nil))
+func TestEngine_StartRun(t *testing.T) {
+	eng, s, mock := newEngine()
 	loadWorkflow(t, s, twoStateYAML)
+
+	var startCalled bool
+	mock.OnStartWorkflow = func(run *asmtypes.WorkflowRun, def *asmtypes.WorkflowDef) (string, error) {
+		startCalled = true
+		return "temporal-id-123", nil
+	}
 
 	run, err := eng.StartRun(context.Background(), "two-state", "v1", nil)
 	if err != nil {
 		t.Fatalf("StartRun: %v", err)
 	}
-	if run.CurrentState != "start" {
-		t.Errorf("current_state: got %q, want %q", run.CurrentState, "start")
+
+	if !startCalled {
+		t.Errorf("StartWorkflow was not called")
 	}
-	if run.Status != asmtypes.RunRunning {
-		t.Errorf("status: got %q, want %q", run.Status, asmtypes.RunRunning)
-	}
-	if run.ID == "" {
-		t.Error("expected non-empty run ID")
+	if run.TemporalID != "temporal-id-123" {
+		t.Errorf("TemporalID: got %q, want %q", run.TemporalID, "temporal-id-123")
 	}
 }
 
 func TestEngine_StartRun_UnknownWorkflow(t *testing.T) {
-	eng, _ := newEngine(fixedOutput("", nil))
+	eng, _, _ := newEngine()
 	_, err := eng.StartRun(context.Background(), "no-such", "v1", nil)
 	if err == nil {
 		t.Fatal("expected error for unknown workflow, got nil")
 	}
 }
 
-func TestEngine_ExternalTrigger_AdvancesToTerminal(t *testing.T) {
-	eng, s := newEngine(fixedOutput("", nil))
+func TestEngine_Trigger(t *testing.T) {
+	eng, s, mock := newEngine()
 	loadWorkflow(t, s, twoStateYAML)
 
-	run, _ := eng.StartRun(context.Background(), "two-state", "v1", nil)
+	// Mock run with Temporal ID
+	runID := "run-123"
+	_ = s.CreateRun(context.Background(), &asmtypes.WorkflowRun{
+		ID:         runID,
+		TemporalID: "temporal-123",
+		Status:     asmtypes.RunRunning,
+	})
 
-	// The engine is parked at "start" (no agent), waiting for an external trigger.
+	var triggerCalled bool
+	mock.OnSendTriggerSignal = func(temporalID, trigger string, payload map[string]interface{}) error {
+		triggerCalled = true
+		if temporalID != "temporal-123" {
+			t.Errorf("temporalID: got %q, want %q", temporalID, "temporal-123")
+		}
+		if trigger != "finish" {
+			t.Errorf("trigger: got %q, want %q", trigger, "finish")
+		}
+		return nil
+	}
+
 	err := eng.Trigger(context.Background(), asmtypes.TriggerRequest{
-		RunID:   run.ID,
+		RunID:   runID,
 		Trigger: "finish",
 	})
 	if err != nil {
 		t.Fatalf("Trigger: %v", err)
 	}
 
-	waitForStatus(t, s, run.ID, asmtypes.RunComplete, 2*time.Second)
-
-	final, _ := s.GetRun(context.Background(), run.ID)
-	if final.CurrentState != "done" {
-		t.Errorf("current_state: got %q, want %q", final.CurrentState, "done")
+	if !triggerCalled {
+		t.Errorf("SendTriggerSignal was not called")
 	}
 }
 
-func TestEngine_ExternalTrigger_WithPayload(t *testing.T) {
-	eng, s := newEngine(fixedOutput("", nil))
-	loadWorkflow(t, s, twoStateYAML)
-
-	run, _ := eng.StartRun(context.Background(), "two-state", "v1", nil)
-
-	err := eng.Trigger(context.Background(), asmtypes.TriggerRequest{
-		RunID:   run.ID,
-		Trigger: "finish",
-		Payload: map[string]interface{}{"note": "manual approval"},
-	})
-	if err != nil {
-		t.Fatalf("Trigger with payload: %v", err)
-	}
-
-	waitForStatus(t, s, run.ID, asmtypes.RunComplete, 2*time.Second)
-}
-
-func TestEngine_ExternalTrigger_UnknownTrigger(t *testing.T) {
-	eng, s := newEngine(fixedOutput("", nil))
-	loadWorkflow(t, s, twoStateYAML)
-
-	run, _ := eng.StartRun(context.Background(), "two-state", "v1", nil)
-	err := eng.Trigger(context.Background(), asmtypes.TriggerRequest{
-		RunID:   run.ID,
-		Trigger: "no-such-trigger",
-	})
-	if err == nil {
-		t.Fatal("expected error for unknown trigger, got nil")
-	}
-}
-
-func TestEngine_Trigger_InactiveRun(t *testing.T) {
-	eng, _ := newEngine(fixedOutput("", nil))
-	err := eng.Trigger(context.Background(), asmtypes.TriggerRequest{
-		RunID:   "ghost-run",
-		Trigger: "finish",
-	})
-	if err == nil {
-		t.Fatal("expected error for inactive run, got nil")
-	}
-}
-
-func TestEngine_AgentState_FiresTrigger(t *testing.T) {
-	exec := fixedOutput("next", map[string]interface{}{"classified": true})
-	eng, s := newEngine(exec)
-	loadWorkflow(t, s, agentWorkflowYAML)
-
-	run, err := eng.StartRun(context.Background(), "agent-wf", "v1", nil)
-	if err != nil {
-		t.Fatalf("StartRun: %v", err)
-	}
-
-	// Agent should run automatically and advance to "review".
-	waitForState(t, s, run.ID, "review", 2*time.Second)
-
-	updated, _ := s.GetRun(context.Background(), run.ID)
-	if updated.CurrentState != "review" {
-		t.Errorf("current_state: got %q, want %q", updated.CurrentState, "review")
-	}
-	// Blackboard update from agent should be persisted.
-	if updated.Blackboard["classified"] != true {
-		t.Errorf("blackboard[classified]: got %v, want true", updated.Blackboard["classified"])
-	}
-}
-
-func TestEngine_AgentState_BlackboardUpdated(t *testing.T) {
-	exec := fixedOutput("next", map[string]interface{}{"result": "ok", "confidence": float64(0.95)})
-	eng, s := newEngine(exec)
-	loadWorkflow(t, s, agentWorkflowYAML)
-
-	run, _ := eng.StartRun(context.Background(), "agent-wf", "v1", nil)
-	waitForState(t, s, run.ID, "review", 2*time.Second)
-
-	updated, _ := s.GetRun(context.Background(), run.ID)
-	if updated.Blackboard["result"] != "ok" {
-		t.Errorf("blackboard[result]: got %v, want 'ok'", updated.Blackboard["result"])
-	}
-}
-
-func TestEngine_TransitionRecorded(t *testing.T) {
-	eng, s := newEngine(fixedOutput("", nil))
-	loadWorkflow(t, s, twoStateYAML)
-
-	run, _ := eng.StartRun(context.Background(), "two-state", "v1", nil)
-	_ = eng.Trigger(context.Background(), asmtypes.TriggerRequest{RunID: run.ID, Trigger: "finish"})
-	waitForStatus(t, s, run.ID, asmtypes.RunComplete, 2*time.Second)
-
-	transitions, err := s.ListTransitions(context.Background(), run.ID)
-	if err != nil {
-		t.Fatalf("ListTransitions: %v", err)
-	}
-	if len(transitions) == 0 {
-		t.Fatal("expected at least one transition record")
-	}
-	last := transitions[len(transitions)-1]
-	if last.ToState != "done" {
-		t.Errorf("last transition to_state: got %q, want %q", last.ToState, "done")
-	}
-	if last.Trigger != "finish" {
-		t.Errorf("last transition trigger: got %q, want %q", last.Trigger, "finish")
-	}
-}
-
-func TestEngine_GuardedTransition_Pass(t *testing.T) {
-	exec := fixedOutput("evaluated", map[string]interface{}{"score": float64(90)})
-	eng, s := newEngine(exec)
-	loadWorkflow(t, s, guardedWorkflowYAML)
-
-	run, _ := eng.StartRun(context.Background(), "guarded-wf", "v1", map[string]interface{}{"score": float64(0)})
-	waitForStatus(t, s, run.ID, asmtypes.RunComplete, 2*time.Second)
-
-	final, _ := s.GetRun(context.Background(), run.ID)
-	if final.CurrentState != "approved" {
-		t.Errorf("expected 'approved', got %q", final.CurrentState)
-	}
-}
-
-func TestEngine_GuardedTransition_Fail(t *testing.T) {
-	exec := fixedOutput("evaluated", map[string]interface{}{"score": float64(50)})
-	eng, s := newEngine(exec)
-	loadWorkflow(t, s, guardedWorkflowYAML)
-
-	run, _ := eng.StartRun(context.Background(), "guarded-wf", "v1", map[string]interface{}{"score": float64(0)})
-	waitForStatus(t, s, run.ID, asmtypes.RunComplete, 2*time.Second)
-
-	final, _ := s.GetRun(context.Background(), run.ID)
-	if final.CurrentState != "rejected" {
-		t.Errorf("expected 'rejected', got %q", final.CurrentState)
-	}
-}
-
-func TestEngine_HITL_ApprovesAndCompletes(t *testing.T) {
-	eng, s := newEngine(fixedOutput("", nil))
+func TestEngine_SignalHITL(t *testing.T) {
+	eng, s, mock := newEngine()
 	loadWorkflow(t, s, hitlWorkflowYAML)
 
-	run, _ := eng.StartRun(context.Background(), "hitl-wf", "v1", nil)
+	runID := "run-hitl"
+	_ = s.CreateRun(context.Background(), &asmtypes.WorkflowRun{
+		ID:         runID,
+		TemporalID: "temporal-hitl",
+		Status:     asmtypes.RunWaiting,
+	})
+	_ = s.CreateHITL(context.Background(), &asmtypes.HITLRequest{
+		RunID: runID, StateName: "human_review",
+	})
 
-	// Advance to HITL state.
-	_ = eng.Trigger(context.Background(), asmtypes.TriggerRequest{RunID: run.ID, Trigger: "submitted"})
-	waitForStatus(t, s, run.ID, asmtypes.RunWaiting, 2*time.Second)
-
-	// Verify HITL request was created.
-	pending, _ := s.ListPendingHITL(context.Background())
-	if len(pending) == 0 {
-		t.Fatal("expected a pending HITL request")
+	var signalCalled bool
+	mock.OnSendHITLSignal = func(temporalID string, sig asmtypes.HITLSignal) error {
+		signalCalled = true
+		return nil
 	}
 
-	// Signal approval.
 	err := eng.SignalHITL(context.Background(), asmtypes.HITLSignal{
-		RunID:      run.ID,
+		RunID:      runID,
 		Resolution: "approved",
-		Resolver:   "alice",
 	})
 	if err != nil {
 		t.Fatalf("SignalHITL: %v", err)
 	}
 
-	waitForStatus(t, s, run.ID, asmtypes.RunComplete, 2*time.Second)
-
-	final, _ := s.GetRun(context.Background(), run.ID)
-	if final.CurrentState != "approved" {
-		t.Errorf("current_state: got %q, want %q", final.CurrentState, "approved")
-	}
-}
-
-func TestEngine_HITL_RejectsAndCompletes(t *testing.T) {
-	eng, s := newEngine(fixedOutput("", nil))
-	loadWorkflow(t, s, hitlWorkflowYAML)
-
-	run, _ := eng.StartRun(context.Background(), "hitl-wf", "v1", nil)
-	_ = eng.Trigger(context.Background(), asmtypes.TriggerRequest{RunID: run.ID, Trigger: "submitted"})
-	waitForStatus(t, s, run.ID, asmtypes.RunWaiting, 2*time.Second)
-
-	_ = eng.SignalHITL(context.Background(), asmtypes.HITLSignal{
-		RunID:      run.ID,
-		Resolution: "rejected",
-		Resolver:   "bob",
-	})
-
-	waitForStatus(t, s, run.ID, asmtypes.RunComplete, 2*time.Second)
-
-	final, _ := s.GetRun(context.Background(), run.ID)
-	if final.CurrentState != "rejected" {
-		t.Errorf("current_state: got %q, want %q", final.CurrentState, "rejected")
-	}
-}
-
-func TestEngine_HITL_SignalInactiveRun(t *testing.T) {
-	eng, _ := newEngine(fixedOutput("", nil))
-	err := eng.SignalHITL(context.Background(), asmtypes.HITLSignal{
-		RunID:      "ghost",
-		Resolution: "approved",
-		Resolver:   "alice",
-	})
-	if err == nil {
-		t.Fatal("expected error signalling inactive run, got nil")
-	}
-}
-
-func TestEngine_InputPropagatedToBlackboard(t *testing.T) {
-	eng, s := newEngine(fixedOutput("", nil))
-	loadWorkflow(t, s, twoStateYAML)
-
-	run, _ := eng.StartRun(context.Background(), "two-state", "v1", map[string]interface{}{
-		"invoice_id": "INV-123",
-	})
-
-	stored, _ := s.GetRun(context.Background(), run.ID)
-	if stored.Blackboard["invoice_id"] != "INV-123" {
-		t.Errorf("blackboard[invoice_id]: got %v, want 'INV-123'", stored.Blackboard["invoice_id"])
+	if !signalCalled {
+		t.Errorf("SendHITLSignal was not called")
 	}
 }

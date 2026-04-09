@@ -16,7 +16,6 @@ import (
 	"github.com/asm-platform/asm/internal/config"
 	"github.com/asm-platform/asm/internal/designer"
 	"github.com/asm-platform/asm/internal/events"
-	"github.com/asm-platform/asm/internal/executor"
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/health"
 	"github.com/asm-platform/asm/internal/logger"
@@ -148,38 +147,29 @@ func main() {
 		}
 	}
 
-	// -- Executor --
-	exec := executor.NewDirectExecutor(llmRegistry, bus, activeLLMProvider)
+	// -- Temporal client (Mandatory) --
+	temporalClient, err := temporalpkg.NewClient(cfg.TemporalAddress, cfg.TemporalNamespace)
+	if err != nil {
+		slog.Error("Failed to connect to Temporal", "address", cfg.TemporalAddress, "error", err)
+		os.Exit(1)
+	}
+	defer temporalClient.Close()
+
+	healthCtx, healthCancel := context.WithTimeout(ctx, 5*time.Second)
+	if err := temporalpkg.CheckHealth(healthCtx, temporalClient); err != nil {
+		slog.Error("Temporal health check failed", "address", cfg.TemporalAddress, "error", err)
+		os.Exit(1)
+	}
+	healthCancel()
+
+	temporalEngine := temporalpkg.NewEngineClient(temporalClient, cfg.TemporalTaskQueue)
 
 	// -- Engine --
-	engine := orchestrator.NewEngine(s, bus, exec)
-
-	// -- Temporal client (optional) --
-	// client.Dial is lazy (no TCP handshake), so we CheckHealth with a short
-	// deadline to detect an unreachable server before committing to temporal mode.
-	// If Temporal is down, we warn and continue in direct mode rather than
-	// crashing — operators can re-deploy when Temporal recovers.
-	if cfg.ExecutorMode == "temporal" {
-		temporalClient, err := temporalpkg.NewClient(cfg.TemporalAddress, cfg.TemporalNamespace)
-		if err == nil {
-			healthCtx, healthCancel := context.WithTimeout(ctx, 5*time.Second)
-			err = temporalpkg.CheckHealth(healthCtx, temporalClient)
-			healthCancel()
-		}
-		if err != nil {
-			slog.Warn("Temporal unavailable, falling back to direct executor mode — durability guarantees reduced",
-				"address", cfg.TemporalAddress, "error", err)
-			slog.Info("Executor mode: direct (temporal fallback)")
-		} else {
-			engine.UseTemporalClient(temporalpkg.NewEngineClient(temporalClient, cfg.TemporalTaskQueue))
-			slog.Info("Executor mode: temporal",
-				"address", cfg.TemporalAddress,
-				"namespace", cfg.TemporalNamespace,
-				"queue", cfg.TemporalTaskQueue)
-		}
-	} else {
-		slog.Info("Executor mode: direct")
-	}
+	engine := orchestrator.NewEngine(s, bus, temporalEngine)
+	slog.Info("Executor mode: temporal",
+		"address", cfg.TemporalAddress,
+		"namespace", cfg.TemporalNamespace,
+		"queue", cfg.TemporalTaskQueue)
 
 	// -- AI Workflow Generator --
 	// Resolve mcp_registry.yaml relative to the project root.

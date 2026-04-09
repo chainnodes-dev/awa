@@ -1,10 +1,14 @@
 {
-  "invoice_id":     "INV-2024-001",
-  "vendor_name":    "Acme GmbH",
+  "invoice_id": "INV-2024-001",
+  "vendor_name": "Acme GmbH",
   "vendor_address": "Hauptstrasse 1, 10115 Berlin, Germany",
-  "amount":         15000,
+  "amount": 15000,
   "line_items": [
-    { "description": "Software development services Q1", "qty": 1, "unit_price": 15000 }
+    {
+      "description": "Software development services Q1",
+      "qty": 1,
+      "unit_price": 15000
+    }
   ]
 }
 
@@ -27,7 +31,7 @@ HITL Step (The "High-Value" Filter):
 Let Human reviewr approve or reject. If approved move to confirmed. If rejected move to state rejected with reason "HITL Rejection".
 
 {
-  "isin": "US0378331005",
+  "instrument_id": "US0378331005",
   "event_type": "Cash Dividend",
   "gross_amount": 2.25,
   "currency": "USD",

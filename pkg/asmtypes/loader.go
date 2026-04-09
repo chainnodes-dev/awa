@@ -102,11 +102,27 @@ func validate(def *WorkflowDef) error {
 		if !stateNames[t.From] {
 			return fmt.Errorf("transition references unknown state '%s'", t.From)
 		}
-		if !stateNames[t.To] {
-			return fmt.Errorf("transition references unknown state '%s'", t.To)
+		
+		// Validate single 'to' target
+		if t.To != "" {
+			if !stateNames[t.To] {
+				return fmt.Errorf("transition from '%s' references unknown state '%s'", t.From, t.To)
+			}
 		}
+
+		// Validate parallel 'to_nodes' targets
+		for _, target := range t.ToNodes {
+			if !stateNames[target] {
+				return fmt.Errorf("parallel transition from '%s' references unknown state '%s'", t.From, target)
+			}
+		}
+
+		if t.To == "" && len(t.ToNodes) == 0 {
+			return fmt.Errorf("transition from '%s' has no target states (neither 'to' nor 'to_nodes')", t.From)
+		}
+
 		if t.Trigger == "" {
-			return fmt.Errorf("transition from '%s' to '%s' has no trigger", t.From, t.To)
+			return fmt.Errorf("transition from '%s' has no trigger", t.From)
 		}
 	}
 

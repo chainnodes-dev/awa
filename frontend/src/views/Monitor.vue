@@ -16,6 +16,21 @@
 
       <div class="flex-1"/>
 
+      <div class="flex items-center gap-2 mr-4">
+        <button @click="onEditClick" class="btn-ghost text-xs gap-1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          Edit
+        </button>
+        <button @click="showRunModal = true" class="btn-ghost text-xs gap-1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+          Re-run
+        </button>
+      </div>
+
       <!-- HITL controls -->
       <template v-if="run?.status === 'waiting'">
         <button @click="resolve('approved')" class="btn bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs">✓ Approve</button>
@@ -180,12 +195,20 @@
         </div>
       </div>
     </div>
+    <!-- Start Run Modal -->
+    <StartRunModal
+      v-if="showRunModal && workflowDef"
+      :definition="workflowDef"
+      :initial-data="run?.blackboard"
+      @close="showRunModal = false"
+      @started="(newRun) => router.push(`/monitor/${newRun.id}`).then(() => location.reload())"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, shallowRef } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls }   from '@vue-flow/controls'
@@ -195,11 +218,13 @@ import '@vue-flow/controls/dist/style.css'
 import StateNode      from '@/components/designer/StateNode.vue'
 import BlackboardPanel from '@/components/monitor/BlackboardPanel.vue'
 import EventLog        from '@/components/monitor/EventLog.vue'
+import StartRunModal from '@/components/shared/StartRunModal.vue'
 import { useExecutionStore } from '@/stores/execution'
 import { useWorkflowStore }  from '@/stores/workflows'
 import { useLayout }         from '@/composables/useLayout'
 
 const route     = useRoute()
+const router    = useRouter()
 const execStore = useExecutionStore()
 const wfStore   = useWorkflowStore()
 const { layout } = useLayout()
@@ -208,6 +233,7 @@ const run          = computed(() => execStore.activeRun)
 const history      = computed(() => execStore.transitions)
 const activeTab    = ref('blackboard')
 const showTriggerModal = ref(false)
+const showRunModal = ref(false)
 const triggerName  = ref('')
 const workflowDef  = ref(null)
 const nodeTypes    = shallowRef({ stateNode: StateNode })
@@ -232,13 +258,23 @@ onMounted(loadRun)
 // Edges don't depend on node positions — compute separately so layout() can use them
 const flowEdges = computed(() => {
   if (!workflowDef.value) return []
-  return (workflowDef.value.transitions ?? []).map(t => ({
-    id:     `${t.from}__${t.trigger}__${t.to}`,
-    source:  t.from,
-    target:  t.to,
-    label:   t.trigger,
-    data:   { guard: t.guard },
-  }))
+  const edges = []
+  
+  for (const t of (workflowDef.value.transitions ?? [])) {
+    // Handle both single target ('to') and parallel targets ('to_nodes')
+    const targets = t.to_nodes ?? (t.to ? [t.to] : [])
+    
+    for (const target of targets) {
+      edges.push({
+        id:     `${t.from}__${t.trigger}__${target}`,
+        source:  t.from,
+        target:  target,
+        label:   t.trigger,
+        data:   { guard: t.guard },
+      })
+    }
+  }
+  return edges
 })
 
 const flowNodes = computed(() => {
@@ -296,6 +332,11 @@ async function fireTrigger() {
   await execStore.sendTrigger(route.params.id, triggerName.value)
   showTriggerModal.value = false
   triggerName.value = ''
+}
+
+function onEditClick() {
+  if (!run.value) return
+  router.push(`/designer/${run.value.workflow_name}/${run.value.workflow_version}`)
 }
 
 // ── Formatting ────────────────────────────────────────────────────────────────

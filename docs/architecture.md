@@ -8,7 +8,7 @@ The **Agentic State Machine (ASM) Platform** is a workflow orchestration system 
 
 Each worker's sole responsibility is to complete a task and return a result. It does not know what happens next. The workflow definition owns all routing logic — transitions, conditions, and branching. This clean separation means you can replace, upgrade, or specialise a worker without ever touching the workflow definition, and vice versa.
 
-The platform supports a **hybrid execution model**: start with LLM agents for everything (fast to build, zero domain code), then progressively replace individual states with specialist workers as the business logic stabilises. LLMs remain where judgement is genuinely needed.
+The platform is powered by **Temporal**, ensuring every workflow execution is durable, resumable, and auditable. While developer-friendly, durability is not an afterthought — it is mandatory. Every run survives server and worker restarts by default.
 
 ---
 
@@ -40,7 +40,7 @@ Workflow definitions are versioned. Multiple versions can coexist, allowing grad
 
 ### Run (Workflow Instance)
 
-A **run** is a single item moving through a workflow. When 1,000 invoices arrive, 1,000 runs are created — each independent, each carrying its own blackboard. Runs are durable: they survive server and worker restarts via Temporal.
+A **run** is a single item moving through a workflow. When 1,000 invoices arrive, 1,000 runs are created — each independent, each carrying its own blackboard. Runs are durable: they survive server and worker restarts via mandatory Temporal orchestration.
 
 A run has a lifecycle status:
 - `running` — actively progressing
@@ -61,7 +61,7 @@ Workers read the blackboard to understand what to do. They write their results b
 
 ### State Types
 
-Every state in a workflow has a `type` that determines how the engine processes it. There are five types. They form a natural progression from the structural (`initial`, `terminal`) to the operational (`intermediate`, `script`, `hitl`).
+Every state in a workflow has a `type` that determines how the engine processes it. There are **six** types. They form a natural progression from the structural (`initial`, `terminal`) to the operational (`intermediate`, `script`, `hitl`, `wait`).
 
 ---
 
@@ -197,6 +197,34 @@ POST /api/v1/runs/{id}/signal
 
 ---
 
+#### `wait`
+
+A join or conditional pause state. The run pauses here until a specific condition is met, an external trigger is received, or a timeout occurs.
+
+`wait` states are commonly used as **join points** in parallel workflows, or as "guards" that wait for background processes to finish before continuing.
+
+A `wait` state resolves when **any** of these occur:
+1. The `condition` expression evaluates to `true`.
+2. An external trigger is received via `POST /api/v1/runs/{id}/trigger`.
+3. The `timeout` duration is reached.
+
+**YAML example:**
+```yaml
+states:
+  - name: AWAIT_CLEANUP
+    type: wait
+    condition: 'cleanup_status == "done"'
+    timeout: 1h
+    on_timeout: cleanup_failed
+```
+
+**Constraints:**
+- `agent` is ignored when type is `wait`.
+- If the `condition` is met, the workflow takes the transition matching the trigger that originally brought the run to this state (or its default "continue" path).
+- If a `timeout` occurs and no signal was received, the `on_timeout` trigger is fired.
+
+---
+
 #### `terminal`
 
 The end of a run. When the engine enters a `terminal` state it marks the run as `complete` and shuts down its execution context. No further transitions are possible.
@@ -233,13 +261,14 @@ states:
 | Run an LLM agent or specialist worker | `intermediate` |
 | Make a deterministic decision without an LLM | `script` |
 | Pause and wait for a human decision | `hitl` |
+| Wait for a condition or join parallel branches | `wait` |
 | Mark the run as finished | `terminal` |
 
 A typical workflow follows this spine: `initial → intermediate(s) → hitl (optional) → terminal`
 
 ### Transitions & Guards
 
-A transition connects a `from` state to a `to` state and is activated by a named trigger. Guards are optional boolean expressions evaluated against the blackboard:
+A transition connects a `from` state to one or more target states and is activated by a named trigger. Guards are optional boolean expressions evaluated against the blackboard:
 
 ```yaml
 transitions:
@@ -255,6 +284,19 @@ transitions:
 ```
 
 The worker fires the trigger `decision_made`. The state machine evaluates both guards against the current blackboard and takes the matching path. The worker had no knowledge of this branching.
+
+### Parallel Execution
+
+ASM supports parallel execution via the `to_nodes` field in a transition. When a trigger matches a transition with `to_nodes`, the engine splits the run into multiple parallel branches.
+
+```yaml
+transitions:
+  - from: INTAKE
+    to_nodes: [VALIDATE, ENRICH]
+    trigger: start_parallel
+```
+
+Each branch executes independently. To synchronize parallel branches (a "join"), use a `wait` state with a completion condition.
 
 ---
 
@@ -299,13 +341,13 @@ The server does **not** execute any business logic. It delegates everything to t
 
 ### The Engine
 
-The engine is the state machine runtime. In **direct mode** (development/single-process) it drives runs in-process via goroutines. In **Temporal mode** (production) it delegates to Temporal workflows.
+The engine is the state machine runtime. It drives runs via Temporal workflows, ensuring high availability and durability.
 
 Responsibilities:
-- Validating and starting runs
-- Routing external triggers to the correct run
-- Passing HITL resolutions to waiting runs
+- Validating and starting runs via Temporal
+- Routing external triggers and signals to the correct workflow instance
 - Loading workflow definitions from the store
+- Managing HITL resolutions
 
 The engine intentionally has no knowledge of what a worker does. It only knows: current state → activity completes → trigger returned → evaluate guards → next state.
 
@@ -567,3 +609,10 @@ The platform abstracts LLM providers behind a **DB-backed, hot-reloadable** regi
 
 ### Settings UI
 Route `/settings` (admin only). Per-provider cards with enable toggle, API key input, model override, base URL (Ollama), and a Test/Save button. A global default provider dropdown applies to all agent states that do not declare a per-agent provider override.
+#### Graceful degradation
+
+| Degraded component | Fallback | What you lose |
+|---|---|---|
+| **Redis** | `LocalBus` (in-process) | WebSocket events visible only to the process that generated them; separate server replicas don't share events |
+| **Postgres** | `MemoryStore` | Persistence across restarts; all run history is lost on shutdown |
+| **LLM provider** | Log warning; agent states fail at runtime | Agent states error with "no LLM providers registered" |

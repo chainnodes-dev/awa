@@ -45,7 +45,8 @@ const (
 	StateIntermediate StateType = "intermediate"
 	StateHITL         StateType = "hitl"      // Human-in-the-loop pause
 	StateTerminal     StateType = "terminal"
-	StateScript       StateType = "script"    // Deterministic expr-lang evaluation; no LLM
+	StateScript       StateType = "script" // Deterministic expr-lang evaluation; no LLM
+	StateWait         StateType = "wait"   // Pauses until a condition is met or timeout
 )
 
 type StateDef struct {
@@ -59,6 +60,8 @@ type StateDef struct {
 	OnEnter      []string   `yaml:"on_enter,omitempty"     json:"on_enter,omitempty"`
 	Assignee     string     `yaml:"assignee,omitempty"     json:"assignee,omitempty"` // HITL
 	Compensation string     `yaml:"compensation,omitempty" json:"compensation,omitempty"`
+	// Condition is an expr-lang expression used by StateWait nodes.
+	Condition string `yaml:"condition,omitempty" json:"condition,omitempty"`
 	// Layout hint for the designer canvas — not required at runtime.
 	Position *Position `yaml:"position,omitempty" json:"position,omitempty"`
 }
@@ -81,10 +84,11 @@ type Position struct {
 }
 
 type Transition struct {
-	From    string `yaml:"from"            json:"from"`
-	To      string `yaml:"to"              json:"to"`
-	Trigger string `yaml:"trigger"         json:"trigger"`
-	Guard   string `yaml:"guard,omitempty" json:"guard,omitempty"` // expr-lang expression
+	From    string   `yaml:"from"            json:"from"`
+	To      string   `yaml:"to"              json:"to"`                // Primary target (backward-compat)
+	ToNodes []string `yaml:"to_nodes"        json:"to_nodes,omitempty"` // Multiple targets for parallel dispatch
+	Trigger string   `yaml:"trigger"         json:"trigger"`
+	Guard   string   `yaml:"guard,omitempty" json:"guard,omitempty"` // expr-lang expression
 }
 
 type AgentDef struct {

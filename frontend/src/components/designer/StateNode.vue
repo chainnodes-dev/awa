@@ -6,13 +6,17 @@
       isActive && `glow-${data.type ?? 'intermediate'}`,
     ]"
   >
-    <!-- Type indicator dot -->
     <div class="flex items-center gap-2">
       <div :class="['w-2.5 h-2.5 rounded-full shrink-0', dotColor]"/>
       <span class="text-sm font-semibold text-slate-100 leading-tight truncate">{{ data.name }}</span>
       <span v-if="data.type === 'hitl'" class="ml-auto text-amber-400">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm0 8a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm9 11v-1a7 7 0 0 0-7-7h-4a7 7 0 0 0-7 7v1h2v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1z"/>
+        </svg>
+      </span>
+      <span v-if="data.type === 'wait'" class="ml-auto text-indigo-400">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
         </svg>
       </span>
     </div>
@@ -59,15 +63,17 @@ const TYPE_STYLES = {
   intermediate: 'border-indigo-500/60 bg-indigo-500/10',
   hitl:         'border-amber-500/60 bg-amber-500/10',
   terminal:     'border-slate-500/60 bg-slate-500/10',
+  wait:         'border-indigo-400/60 bg-indigo-500/5',
 }
 const TYPE_DOTS = {
   initial:      'bg-green-500',
   intermediate: 'bg-indigo-500',
   hitl:         'bg-amber-500',
   terminal:     'bg-slate-500',
+  wait:         'bg-indigo-400',
 }
 const TYPE_COLORS = {
-  initial: '#22c55e', intermediate: '#6366f1', hitl: '#f59e0b', terminal: '#64748b'
+  initial: '#22c55e', intermediate: '#6366f1', hitl: '#f59e0b', terminal: '#64748b', wait: '#818cf8'
 }
 
 const nodeStyle = computed(() => {

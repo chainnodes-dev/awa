@@ -33,6 +33,7 @@
 | M9 | Code generation — LLM-assisted specialist worker scaffolding | ✅ | Done |
 | M10 | Generated MCP servers — sharable deterministic logic as services | ✅ | Done |
 | M11 | LLM config UI — DB-backed provider management, hot-reload, HITL fixes | ✅ | Done |
+| M12 | Orchestration 2.0 — Wait node, Parallel execution, Mandatory Temporal | ✅ | Done |
 
 ---
 
@@ -47,8 +48,8 @@
 - [x] LocalBus — in-process event bus
 - [x] RedisBus — Redis Pub/Sub event bus for multi-process deployments
 - [x] Blackboard — thread-safe, schema-validated shared context
-- [x] Engine (direct mode) — driveRun goroutine, agent dispatch, HITL handling, guard evaluation
-- [x] DirectExecutor — LLM call, prompt building, streaming token events, structured output parsing
+- [x] Engine — activity dispatch, HITL handling, guard evaluation
+- [x] LLM Executor — call, prompt building, streaming token events, structured output parsing (replaces DirectExecutor)
 - [x] LLM providers — Anthropic (Claude), OpenAI
 - [x] REST API — workflows CRUD, runs lifecycle, HITL signal
 - [x] WebSocket hub — real-time event fan-out to browser clients
@@ -535,6 +536,25 @@ Make LLM provider selection observable and manageable without touching env vars 
 
 ---
 
+## M12 — Orchestration 2.0 ✅
+
+### Goal
+Enhance the workflow engine with advanced orchestration primitives: parallel execution, join points, and mandatory durability.
+
+### Completed
+- [x] **Mandatory Temporal** — `cmd/server/main.go` now enforces a successful Temporal connection at startup; `direct` mode paths removed from the engine to ensure guaranteed durability for all users.
+- [x] **`wait` State Type** — added to `pkg/asmtypes` and implemented in `internal/temporal/workflow.go`. Supports joins, conditional pauses via expr-lang, and timed waits.
+- [x] **Parallel Execution (`to_nodes`)** — `Transition` struct expanded to support multiple target nodes; Temporal workflow automatically spawns parallel goroutines for each branch.
+- [x] **`EvalScript` and `EvalGuard` exported** — deterministic evaluators made available to the Temporal workflow package for inline execution.
+- [x] **Designer support** — UI updated to support `wait` node configuration and visualising parallel transitions.
+
+### Architecture decisions made
+- **Mandatory Temporal for all** — eliminated the complex "dual-mode" engine maintenance. Every run is now a durable Temporal workflow by default, simplifying the mental model and the codebase.
+- **Parallelism via `workflow.Go`** — leverages Temporal's native support for parallel activities and child workflows; state is automatically managed by the framework.
+- **Join points via `wait` nodes** — provides a clean, visual way to synchronise multiple parallel branches before proceeding.
+
+---
+
 ## Technical Debt & Known Issues
 
 | Issue | Severity | Notes |
@@ -615,53 +635,40 @@ Make LLM provider selection observable and manageable without touching env vars 
 | 2026-04-04 | `sig.Resolution` used directly as HITL trigger (no internal mapping) | Removing `human_approved`/`human_rejected` indirection makes the contract explicit in the YAML; workflow authors choose their trigger names; direct mode already used this pattern; Temporal mode now consistent |
 | 2026-04-04 | HITL resolve errors displayed in orange banner (not swallowed) | `resolve()` previously had no try/catch; silent failures left the UI in an inconsistent state (buttons hidden, workflow stuck); banner makes the problem visible immediately and `loadRun()` on error restores correct state |
 | 2026-04-04 | Grok/Deepseek/Gemini implemented as OpenAI-compatible wrappers | All three providers expose OpenAI-compatible `/chat/completions` endpoints; `NewOpenAICompatibleProvider(endpoint, key, name, model)` handles them all; no per-provider request/response mapping code needed |
+| 2026-04-10 | Mandatory Temporal for all deployments | Removed 'direct mode' to ensure all runs are durable and auditable by default; simplifies engine maintenance and eliminates inconsistent execution behavior. |
+| 2026-04-10 | Parallel execution via `to_nodes` transition field | Transition targets can now be a list of state names; engine spawns parallel branches using `workflow.Go`; enables complex fork/join workflows. |
+| 2026-04-10 | `wait` state for join/synchronization points | New state type that pauses runs until a blackboard condition is met or a signal is received; essential for synchronizing parallel branches. |
 
 ---
 
 ## Running the Platform
 
-### Development (direct mode, no external dependencies)
-```bash
-cd asm-platform
-go run ./cmd/server
-# Server starts on :8080, uses in-memory store and local event bus
-```
+### Local Development (Full Stack)
 
-### With Postgres + Redis
-```bash
-# Start infrastructure
-docker compose up -d postgres redis
-
-# Run server
-source .env
-go run ./cmd/server
-```
-
-### With Temporal (full development mode)
-
-To run the API server and workers on your host while using Docker for infrastructure:
+The platform requires **Temporal**, **PostgreSQL**, and **Redis**.
 
 ```bash
-# 1. Start only the infrastructure (Postgres, Redis, Temporal)
+# 1. Start the infrastructure
 docker compose up -d postgres redis temporal temporal-ui
 
 # 2. Terminal 1 — API server
-EXECUTOR_MODE=temporal go run ./cmd/server
+go run ./cmd/server
 
-# 3. Terminal 2 — Temporal worker (handles LLM agents)
-EXECUTOR_MODE=temporal go run ./cmd/worker
+# 3. Terminal 2 — General worker (handles LLM agents)
+go run ./cmd/worker
 ```
 
 > [!IMPORTANT]
-> Do NOT run `docker compose up -d` without service names if you intend to run the server on your host, as the Dockerized server will bind to port 8080 first and cause a conflict.
+> The server will fail to start if it cannot connect to Temporal. Direct mode (in-process) is no longer supported for execution.
 
 ### With specialist workers (multi-queue mode)
+
 ```bash
-# Terminal 3 — specialist worker (validates invoices without LLM)
-SPECIALIST_TASK_QUEUE=validate-workers go run ./cmd/specialist-worker
+# Terminal 3 — specialist worker (e.g. data enrichment or ERP integration)
+SPECIALIST_TASK_QUEUE=enrich-workers go run ./cmd/specialist-worker
 ```
 
-The workflow YAML must declare `task_queue: validate-workers` on the agent that should route here.
+The workflow definition must declare `task_queue: enrich-workers` on the agent that should route to this worker pool.
 
 ### Frontend (dev server)
 ```bash

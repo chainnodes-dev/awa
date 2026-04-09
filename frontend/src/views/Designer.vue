@@ -68,7 +68,14 @@
         </svg>
         Add State
       </button>
-      <button @click="saveWorkflow" :disabled="saving" class="btn-primary text-xs">
+      <button @click="onRunClick" class="btn-ghost text-xs gap-1 border border-border/50 hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+        Run
+      </button>
+
+      <button @click="saveWorkflow" :disabled="saving" class="btn-primary text-xs px-4">
         {{ saving ? 'Saving…' : 'Save' }}
       </button>
     </header>
@@ -252,6 +259,13 @@
     <!-- ── Modals ──────────────────────────────────────────────────────── -->
     <BBFieldModal  v-if="showBBModal"   @close="showBBModal = false"   @add="addBBField" />
     <AddStateModal v-if="showAddState" @close="showAddState = false" @add="onAddState" />
+    <!-- Start Run Modal -->
+    <StartRunModal
+      v-if="showRunModal"
+      :definition="buildDefinition()"
+      @close="showRunModal = false"
+      @started="(run) => router.push(`/monitor/${run.id}`)"
+    />
   </div>
 </template>
 
@@ -271,6 +285,8 @@ import TransitionEdge  from '@/components/designer/TransitionEdge.vue'
 import { useWorkflowStore } from '@/stores/workflows'
 import { useLayout }   from '@/composables/useLayout'
 import yaml from 'js-yaml'
+
+import StartRunModal from '@/components/shared/StartRunModal.vue'
 
 const route  = useRoute()
 const router = useRouter()
@@ -293,6 +309,7 @@ const yamlSource    = ref('')
 const yamlError     = ref('')
 const saving        = ref(false)
 const isDirty       = ref(false)
+const showRunModal = ref(false)
 const selected      = ref(null)       // { type: 'node'|'edge', id, data }
 const pendingConnection = ref(null)   // { source, target } — drag completed, awaiting trigger
 
@@ -341,31 +358,58 @@ onMounted(async () => {
 })
 
 function loadDefinition(def, src, updateYaml = true) {
+  if (src && updateYaml) yamlSource.value = src
+
+  // Clear existing state to avoid pollution
   meta.name          = def.metadata?.name           ?? ''
   meta.version       = def.metadata?.version        ?? '1.0.0'
   meta.versionNumber = def.metadata?.version_number ?? 0
   meta.description   = def.metadata?.description    ?? ''
   meta.systemPrompt  = def.metadata?.system_prompt   ?? ''
 
-  // Clear and repopulate bbSchema
-  Object.keys(bbSchema).forEach(k => delete bbSchema[k])
-  Object.assign(bbSchema, def.blackboard?.schema ?? {})
+  // Reset blackboard
+  for (const k in bbSchema) delete bbSchema[k]
+  if (def.blackboard?.schema) {
+    Object.assign(bbSchema, def.blackboard.schema)
+  }
 
+  // Map nodes with "data washing" to ensure clean state
   nodes.value = (def.states ?? []).map(s => ({
     id:       s.name,
     type:     'stateNode',
     position: s.position ?? { x: 200, y: 100 },
-    data:     { ...s },   // instructions, script, agent, etc. all pass through
+    data:     { ...s },   // instructions, script, agent, wait condition, etc.
   }))
 
-  edges.value = (def.transitions ?? []).map(t => ({
-    id: `${t.from}__${t.trigger}__${t.to}`,
-    source:  t.from,
-    target:  t.to,
-    type:    'transitionEdge',
-    label:   t.trigger,
-    data:    { guard: t.guard ?? '' },
-  }))
+  // Collect transitions from top-level or nested in states
+  const rawTransitions = [...(def.transitions ?? [])]
+  if (def.states) {
+    def.states.forEach(s => {
+      if (s.transitions) rawTransitions.push(...s.transitions.map(t => ({ ...t, from: s.name })))
+    })
+  }
+
+  edges.value = rawTransitions.flatMap(t => {
+    if (t.to_nodes && t.to_nodes.length > 0) {
+      return t.to_nodes.map(target => ({
+        id: `${t.from}__${t.trigger}__${target}`,
+        source:  t.from,
+        target:  target,
+        type:    'transitionEdge',
+        label:   t.trigger,
+        data:    { guard: t.guard ?? '' },
+      }))
+    }
+    const target = (t.to || t.target || '')
+    return [{
+      id: `${t.from}__${t.trigger}__${target}`,
+      source:  t.from,
+      target:  target,
+      type:    'transitionEdge',
+      label:   t.trigger,
+      data:    { guard: t.guard ?? '' },
+    }]
+  })
 
   agents.value = def.agents ?? []
 
@@ -465,7 +509,7 @@ function updateNode({ node, agentDef }) {
   // but update the id and data.
   if (newId === oldId) {
     // If ID hasn't changed, just update the data property to maintain object reference
-    nodes.value[idx].data = { ...node }
+    nodes.value[idx] = { ...nodes.value[idx], data: { ...node } }
   } else {
     // If renaming, we must replace the object but we keep all other props
     const updatedNode = { 
@@ -607,16 +651,29 @@ function buildDefinition() {
       instructions: n.data.instructions || undefined,
       agent:        n.data.agent        || undefined,
       script:       n.data.script       || undefined,
+      condition:    n.data.condition    || undefined,
       timeout:      n.data.timeout      || undefined,
       on_timeout:   n.data.on_timeout   || undefined,
       position:     n.position,
     })),
-    transitions: edges.value.map(e => ({
-      from:    e.source,
-      to:      e.target,
-      trigger: e.label,
-      guard:   e.data?.guard || undefined,
-    })),
+    transitions: Array.from(edges.value.reduce((map, e) => {
+      const key = `${e.source}__${e.label}`
+      if (!map.has(key)) {
+        map.set(key, { 
+          from: e.source, 
+          trigger: e.label, 
+          guard: e.data?.guard || undefined,
+          to_nodes: [] 
+        })
+      }
+      map.get(key).to_nodes.push(e.target)
+      return map
+    }, new Map()).values()).map(t => {
+        if (t.to_nodes.length === 1) {
+            return { from: t.from, to: t.to_nodes[0], trigger: t.trigger, guard: t.guard }
+        }
+        return { from: t.from, to_nodes: t.to_nodes, trigger: t.trigger, guard: t.guard }
+    }),
     agents: cleanAgents,
   }
 }
@@ -651,11 +708,26 @@ async function saveWorkflow() {
     // Refresh version list
     try { versions.value = await wfStore.fetchVersions(meta.name) } catch { /* ignore */ }
     router.replace(`/designer/${meta.name}/${meta.version}`)
+    return result
   } catch (e) {
     alert(e.message)
+    throw e
   } finally {
     saving.value = false
   }
+}
+
+async function onRunClick() {
+  if (isDirty.value) {
+    if (confirm('You have unsaved changes. Save them before running?')) {
+      try {
+        await saveWorkflow()
+      } catch {
+        return // save failed or cancelled
+      }
+    }
+  }
+  showRunModal.value = true
 }
 
 async function switchVersion(vnum) {
@@ -691,10 +763,14 @@ function importYAML() {
   yamlError.value = ''
   try {
     const def = yaml.load(yamlSource.value)
+    if (!def) throw new Error('YAML is empty or invalid.')
     loadDefinition(def, null, false)
     view.value = 'canvas'
+    nextTick(() => { flowKey.value++ })
+    isDirty.value = true
   } catch (e) {
     yamlError.value = e.message
+    alert('Failed to import YAML: ' + e.message)
   }
 }
 
@@ -740,10 +816,22 @@ function onYamlInput() {
   }, 400)
 }
 
-// Switching views: snapshot YAML from current canvas state
-watch(view, v => {
+// Switching views: sync YAML <-> Canvas
+watch(view, (v, oldV) => {
   if (v === 'yaml' || v === 'split') {
+    // Canvas -> YAML
     yamlSource.value = yaml.dump(buildDefinition(), { lineWidth: 120 })
+  } else if (oldV === 'yaml' && v === 'canvas') {
+    // YAML -> Canvas (user might have edited the YAML)
+    try {
+      const def = yaml.load(yamlSource.value)
+      if (def) loadDefinition(def, null, false)
+      yamlError.value = ''
+    } catch (e) {
+      yamlError.value = e.message
+      alert('YAML Syntax Error: ' + e.message + '\n\nReturning to editor.')
+      view.value = 'yaml'
+    }
   }
 })
 </script>
@@ -835,13 +923,14 @@ export const StatePanel = defineComponent({
   },
   emits: ['update', 'delete'],
   setup(p, { emit }) {
-    const STATE_TYPES = ['initial', 'intermediate', 'hitl', 'terminal', 'script']
+    const STATE_TYPES = ['initial', 'intermediate', 'hitl', 'terminal', 'script', 'wait']
 
     const form = reactive({
       name:         p.node.name         ?? '',
       type:         p.node.type         ?? 'intermediate',
       instructions: p.node.instructions ?? '',
       agent:        p.node.agent        ?? '',
+      condition:    p.node.condition    ?? '',
       timeout:      p.node.timeout      ?? '',
       on_timeout:   p.node.on_timeout   ?? '',
       // Script state fields
@@ -912,9 +1001,9 @@ export const StatePanel = defineComponent({
     function onApply() {
       // Build script definition when type is 'script'
       let scriptDef = undefined
-      if (form.type === 'script' && form.script_trigger) {
+      if (form.type === 'script') {
         scriptDef = {
-          trigger: form.script_trigger,
+          trigger: form.script_trigger || '',
           updates: form.script_updates.length
             ? Object.fromEntries(form.script_updates.filter(r => r.key).map(r => [r.key, r.expr]))
             : undefined,
@@ -925,8 +1014,9 @@ export const StatePanel = defineComponent({
         name:         form.name,
         type:         form.type,
         instructions: form.instructions || undefined,
-        agent:        form.type !== 'script' ? (form.agent || undefined) : undefined,
+        agent:        form.type !== 'script' && form.type !== 'wait' ? (form.agent || undefined) : undefined,
         script:       scriptDef,
+        condition:    form.type === 'wait' ? (form.condition || undefined) : undefined,
         timeout:      form.timeout    || undefined,
         on_timeout:   form.on_timeout || undefined,
       }
@@ -1144,8 +1234,20 @@ export const StatePanel = defineComponent({
           })
         ),
 
-        // Agent name field (hidden for script states)
-        ...(form.type !== 'script' ? [
+        // Wait condition (only for wait states)
+        ...(form.type === 'wait' ? [
+          field('Condition (expr-lang)',
+            h('input', {
+              class:       'input font-mono text-xs',
+              value:       form.condition,
+              placeholder: 'e.g. blackboard.count >= 2',
+              onInput:     e => form.condition = e.target.value,
+            })
+          ),
+        ] : []),
+
+        // Agent name field (hidden for script/wait states)
+        ...(form.type !== 'script' && form.type !== 'wait' ? [
           field('Agent',
             h('div', { class: 'space-y-1.5' }, [
               h('input', {
@@ -1274,7 +1376,7 @@ export const AddStateModal = defineComponent({
           onKeydown:   e => e.key === 'Enter' && name.value && emit('add', { name: name.value, type: type.value }),
         }),
         h('select', { class: 'input', value: type.value, onChange: e => type.value = e.target.value },
-          ['initial', 'intermediate', 'hitl', 'terminal'].map(t => h('option', { value: t }, t))
+          ['initial', 'intermediate', 'hitl', 'terminal', 'script', 'wait'].map(t => h('option', { value: t }, t))
         ),
         h('div', { class: 'flex gap-2 justify-end' }, [
           h('button', { class: 'btn-ghost', onClick: () => emit('close') }, 'Cancel'),

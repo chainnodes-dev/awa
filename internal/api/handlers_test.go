@@ -41,12 +41,19 @@ transitions:
     trigger: finish
 `
 
-// stubExecutor never actually gets called in API tests (no agent states).
-type stubExecutor struct{}
+// stubTemporalClient satisfies orchestrator.TemporalEngineClient for API tests.
+type stubTemporalClient struct{}
 
-func (s *stubExecutor) Execute(_ context.Context, _ orchestrator.AgentTask) (*asmtypes.AgentOutput, error) {
-	return &asmtypes.AgentOutput{Trigger: ""}, nil
+func (s *stubTemporalClient) StartWorkflow(_ context.Context, _ *asmtypes.WorkflowRun, _ *asmtypes.WorkflowDef) (string, error) {
+	return "stub-temporal-id", nil
 }
+func (s *stubTemporalClient) SendTriggerSignal(_ context.Context, _, _ string, _ map[string]interface{}) error {
+	return nil
+}
+func (s *stubTemporalClient) SendHITLSignal(_ context.Context, _ string, _ asmtypes.HITLSignal) error {
+	return nil
+}
+func (s *stubTemporalClient) Close() {}
 
 // testEnv bundles all test dependencies together.
 type testEnv struct {
@@ -62,8 +69,8 @@ func testRouter(t *testing.T) testEnv {
 	t.Helper()
 	s := store.NewMemoryStore()
 	bus := events.NewLocalBus()
-	exec := &stubExecutor{}
-	eng := orchestrator.NewEngine(s, bus, exec)
+	temporal := &stubTemporalClient{}
+	eng := orchestrator.NewEngine(s, bus, temporal)
 
 	jwtSvc := auth.NewJWTService("test-secret-do-not-use-in-prod")
 	adminToken, err := jwtSvc.GenerateAccessToken("test-admin-id", store.DefaultTenantID, "testadmin", string(auth.RoleAdmin))
