@@ -52,9 +52,16 @@ docker-build:
 	docker build --build-arg CMD=worker           -t asm/worker:latest .
 	docker build --build-arg CMD=specialist-worker -t asm/specialist-worker:latest .
 
-# Start full stack (infra + app) via docker compose
+# Start full stack (infra + app + frontend) via docker compose.
+# This is the recommended way to run for demos / other machines.
 stack:
 	docker compose up --build -d
+	@echo ""
+	@echo "  ASM Platform is starting."
+	@echo "  Frontend  →  http://localhost:$${FRONTEND_PORT:-80}"
+	@echo "  Temporal  →  http://localhost:8088"
+	@echo ""
+	@echo "  Tip: docker compose logs -f"
 
 # Stop full stack
 stack-down:

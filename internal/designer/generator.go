@@ -188,7 +188,7 @@ blackboard:
 
 states:
   - name: STATE_NAME           # SCREAMING_SNAKE_CASE recommended
-    type: initial              # initial | intermediate | hitl | terminal | script
+    type: initial              # initial | intermediate | hitl | terminal | script | wait
     instructions: |            # optional: plain-language context for the LLM agent
       Describe what the agent should do in this state.
     agent: agent-name          # omit for HITL and script states
@@ -206,11 +206,23 @@ states:
       updates:
         vat: "amount * 0.2"
 
+  - name: JOIN_STATE
+    type: wait                 # pauses until a condition is met or timeout fires
+    condition: 'result_a != "" && result_b != ""'   # expr-lang boolean; optional
+    timeout: 5m
+    on_timeout: timed_out
+
 transitions:
+  # Standard single-target transition
   - from: SOURCE_STATE
     to:   TARGET_STATE
     trigger: trigger_name      # snake_case
     guard: "amount > 0"        # optional expr-lang boolean expression
+
+  # Parallel fan-out: use to_nodes instead of to to branch into multiple states
+  - from: SOURCE_STATE
+    to_nodes: [BRANCH_A, BRANCH_B]
+    trigger: start_parallel
 
 agents:
   - name: agent-name
@@ -227,30 +239,33 @@ agents:
 
 ## Rules
 
-1. Every workflow must have exactly ONE state of type "initial".
-2. Every workflow must have at least one state of type "terminal".
-3. Every transition trigger must be a non-empty string in snake_case.
-4. All state names referenced in transitions must exist in the states list.
-5. All agent names referenced in states must exist in the agents list.
-6. Use "hitl" for any step that requires a human decision or approval.
-7. Use "script" ONLY for purely deterministic computations (arithmetic, comparisons, field mapping) where no reasoning is needed. Scripts use expr-lang expressions, not code.
-8. Use "initial" or "intermediate" for ALL steps that require reasoning, validation, enrichment, classification, extraction, or any non-trivial logic. These are LLM-powered states.
-9. Every state of type "initial" or "intermediate" MUST have an "agent" field referencing an agent defined in the "agents:" list. **CRITICAL: Reasoning states cannot be automated without an agent.**
-10. The "agents:" list MUST contain a definition for every agent referenced by any state. At minimum include the agent name; model is optional (defaults to the platform default).
-11. The agent's "instructions" field on the state tells the LLM agent what to do. Write clear, specific instructions.
-12. **NEVER** omit the "agent" field for states that require analysis or automated processing. Empty agents are only valid if a state is explicitly intended to be resolved by an external API call (not a standard reasoning step).
-13. The LLM agent decides which trigger to fire based on its analysis. Mention the available trigger names in the instructions so the agent knows its options.
-14. The "initial" state should capture the input and start processing. **Assign an agent to the initial state to begin work immediately.**
-15. Keep the blackboard schema minimal — only fields that flow between states.
-16. **CRITICAL**: Define the agent's identity, tone, and global business logic in "metadata.system_prompt". This applies to all LLM agents in the workflow.
-17. **DO NOT** put prompts or instructions inside the "agents" list. Use the agent config only for "mcp_servers" or "model" overrides.
-18. The "instructions" field on each state should only contain the specific task for that state.
+1.  Every workflow must have exactly ONE state of type "initial".
+2.  Every workflow must have at least one state of type "terminal".
+3.  Every transition trigger must be a non-empty string in snake_case.
+4.  All state names referenced in transitions (both "to" and "to_nodes") must exist in the states list. **NEVER use wildcards like "*" as a state name — every state must be explicitly defined.**
+5.  All agent names referenced in states must exist in the agents list.
+6.  Use "hitl" for any step that requires a human decision or approval.
+7.  Use "script" ONLY for purely deterministic computations (arithmetic, comparisons, field mapping) where no reasoning is needed. Scripts use expr-lang expressions, not code.
+8.  Use "wait" for join points that synchronise parallel branches, or for any pause that resolves automatically when a blackboard condition is met or a timeout fires. A "wait" state does NOT require human input.
+9.  Use "initial" or "intermediate" for ALL steps that require reasoning, validation, enrichment, classification, extraction, or any non-trivial logic. These are LLM-powered states.
+10. Every state of type "initial" or "intermediate" MUST have an "agent" field referencing an agent defined in the "agents:" list. **CRITICAL: Reasoning states cannot be automated without an agent.**
+11. The "agents:" list MUST contain a definition for every agent referenced by any state. At minimum include the agent name; model is optional (defaults to the platform default).
+12. The agent's "instructions" field on the state tells the LLM agent what to do. Write clear, specific instructions.
+13. **NEVER** omit the "agent" field for states that require analysis or automated processing. Empty agents are only valid if a state is explicitly intended to be resolved by an external API call (not a standard reasoning step).
+14. The LLM agent decides which trigger to fire based on its analysis. Mention the available trigger names in the instructions so the agent knows its options.
+15. The "initial" state should capture the input and start processing. **Assign an agent to the initial state to begin work immediately.**
+16. Keep the blackboard schema minimal — only fields that flow between states.
+17. **CRITICAL**: Define the agent's identity, tone, and global business logic in "metadata.system_prompt". This applies to all LLM agents in the workflow.
+18. **DO NOT** put prompts or instructions inside the "agents" list. Use the agent config only for "mcp_servers" or "model" overrides.
+19. The "instructions" field on each state should only contain the specific task for that state.
+20. For parallel execution, use a transition with "to_nodes" (a list) to fan out to multiple states simultaneously, and a "wait" state with a "condition" expression to join them back.
 
 ## How Triggers Work
 
 - For "intermediate" and "initial" states: The LLM agent analyzes the blackboard, performs its task, updates blackboard fields, and returns a trigger name. The engine then follows the matching transition.
 - For "script" states: The script's trigger expression is evaluated against the blackboard and must return a trigger name string.
 - For "hitl" states: A human resolves the request with "approved" or "rejected" (or custom triggers).
+- For "wait" states: The engine automatically continues when the "condition" expression becomes true, an external trigger arrives, or the timeout fires. No human input needed.
 - For "terminal" states: No trigger — the workflow ends.
 
 Example: a state VALIDATE_DATA with instructions "Validate the invoice data. If valid emit 'valid', if there are issues emit 'invalid'" will have two transitions: VALIDATE_DATA→PROCESS (trigger: valid) and VALIDATE_DATA→REJECT (trigger: invalid).

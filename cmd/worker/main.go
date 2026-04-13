@@ -25,23 +25,36 @@ func main() {
 	cfg := config.Load()
 	logger.Init(cfg.LogLevel)
 
+	ctx := context.Background()
+
 	// -- Event Bus --
+	// Mirror the server's setup: ping Redis first so we fall back to a local bus
+	// rather than silently dropping events when Redis is unreachable.
+	// Without a shared bus (Redis), events published by the worker (agent.thinking,
+	// agent.prompt, agent.response, etc.) never reach the server's WebSocket Hub.
 	var bus events.Bus
 	if cfg.RedisURL != "" {
 		redisBus, err := events.NewRedisBus(cfg.RedisURL)
+		if err == nil {
+			pingCtx, pingCancel := context.WithTimeout(ctx, 3*time.Second)
+			err = redisBus.Ping(pingCtx)
+			pingCancel()
+		}
 		if err != nil {
-			slog.Warn("Redis unavailable, using local bus", "error", err)
+			slog.Warn("Redis unavailable, falling back to local bus — WebSocket events will NOT reach the API server",
+				"url", cfg.RedisURL, "error", err)
 			bus = events.NewLocalBus()
 		} else {
 			bus = redisBus
+			slog.Info("Event bus: Redis (events will reach the API server WebSocket hub)", "url", cfg.RedisURL)
 		}
 	} else {
+		slog.Warn("REDIS_URL not set — using local bus, WebSocket events will NOT reach the API server")
 		bus = events.NewLocalBus()
 	}
 
 	// -- Store --
 	var s store.Store
-	ctx := context.Background()
 	if cfg.DatabaseURL != "" {
 		pgStore, err := store.NewPostgresStore(ctx, cfg.DatabaseURL)
 		if err != nil {

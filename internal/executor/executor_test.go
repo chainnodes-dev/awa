@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/asm-platform/asm/internal/events"
@@ -295,8 +296,9 @@ func TestExecute_MaxIterationsExceeded(t *testing.T) {
 }
 
 // TestExecute_InvalidJSONFallback verifies that when the LLM emits non-JSON
-// content on the final (no-tool-call) response, Execute returns an AgentOutput
-// with an Error field rather than a hard error.
+// content on the final (no-tool-call) response, Execute returns a hard error
+// so the Temporal activity can be retried rather than silently propagating an
+// empty trigger into the workflow engine.
 func TestExecute_InvalidJSONFallback(t *testing.T) {
 	prov := &mockProvider{
 		name: "mock",
@@ -306,15 +308,12 @@ func TestExecute_InvalidJSONFallback(t *testing.T) {
 	}
 	exec := newExecutorWithProvider("mock", prov)
 
-	output, err := exec.Execute(context.Background(), makeTask("mock"))
-	if err != nil {
-		t.Fatalf("unexpected hard error: %v", err)
+	_, err := exec.Execute(context.Background(), makeTask("mock"))
+	if err == nil {
+		t.Fatal("expected a hard error when LLM returns non-JSON content, got nil")
 	}
-	if output.Error == "" {
-		t.Error("expected non-empty Error field when content is not valid JSON")
-	}
-	if output.Reasoning != "Sorry, I cannot help with that." {
-		t.Errorf("reasoning = %q, want raw content", output.Reasoning)
+	if !strings.Contains(err.Error(), "failed to parse agent JSON output") {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }
 

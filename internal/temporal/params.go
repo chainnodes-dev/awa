@@ -65,3 +65,11 @@ type ExecuteAgentParams struct {
 	Blackboard map[string]interface{}
 	Def        *asmtypes.WorkflowDef
 }
+
+// ExecuteCodeParams is the activity input for running a user JavaScript code node.
+type ExecuteCodeParams struct {
+	RunID         string
+	StateDef      asmtypes.StateDef
+	Blackboard    map[string]interface{}
+	ValidTriggers []string
+}

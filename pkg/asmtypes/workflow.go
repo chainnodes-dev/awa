@@ -47,6 +47,7 @@ const (
 	StateTerminal     StateType = "terminal"
 	StateScript       StateType = "script" // Deterministic expr-lang evaluation; no LLM
 	StateWait         StateType = "wait"   // Pauses until a condition is met or timeout
+	StateCode         StateType = "code"   // User-defined JavaScript executed via goja
 )
 
 type StateDef struct {
@@ -62,6 +63,10 @@ type StateDef struct {
 	Compensation string     `yaml:"compensation,omitempty" json:"compensation,omitempty"`
 	// Condition is an expr-lang expression used by StateWait nodes.
 	Condition string `yaml:"condition,omitempty" json:"condition,omitempty"`
+	// OnCondition is the trigger fired when Condition evaluates to true.
+	OnCondition string `yaml:"on_condition,omitempty" json:"on_condition,omitempty"`
+	// Code is set when type == "code" (JavaScript executed via goja).
+	Code *CodeDef `yaml:"code,omitempty" json:"code,omitempty"`
 	// Layout hint for the designer canvas — not required at runtime.
 	Position *Position `yaml:"position,omitempty" json:"position,omitempty"`
 }
@@ -76,6 +81,18 @@ type ScriptDef struct {
 	// Updates maps blackboard field names to expr-lang expressions that compute the
 	// new value.  Example: { "approved": "amount < 1000", "vat": "amount * 0.2" }
 	Updates map[string]string `yaml:"updates,omitempty" json:"updates,omitempty"`
+}
+
+// CodeDef defines user-written JavaScript for a state of type "code".
+// The script has access to a mutable `bb` object (the current blackboard) and
+// must either return { trigger, blackboard_updates?, reasoning? } or call the
+// injected trigger("name") function for early exit.
+// Execution is sandboxed: no network, no filesystem access.
+type CodeDef struct {
+	// Language is currently always "javascript". Reserved for future Starlark support.
+	Language string `yaml:"language,omitempty" json:"language,omitempty"`
+	// Code is the JavaScript source to execute.
+	Code string `yaml:"code" json:"code"`
 }
 
 type Position struct {

@@ -57,6 +57,9 @@ const EVENT_COLORS = {
   'state.changed':      'text-indigo-400',
   'blackboard.updated': 'text-blue-400',
   'agent.thinking':     'text-slate-500',
+  'agent.tool_call':    'text-cyan-600',
+  'agent.prompt':       'text-violet-400',
+  'agent.response':     'text-violet-300',
   'hitl.waiting':       'text-amber-400',
   'hitl.resolved':      'text-amber-300',
 }
@@ -68,6 +71,9 @@ function summarise(ev) {
     case 'state.changed':      return `${d.from_state} → ${d.to_state}  (${d.trigger})`
     case 'blackboard.updated': return `${d.key} = ${JSON.stringify(d.value)}`
     case 'agent.thinking':     return `[${d.agent_name}] ${(d.token ?? '').slice(0, 60)}`
+    case 'agent.tool_call':    return `[${d.agent_name}] ${d.tool_name}${d.output !== undefined ? ' → done' : ''}`
+    case 'agent.prompt':       return `[${d.agent_name}] → ${d.state_name} (${(d.system ?? '').length} chars system prompt)`
+    case 'agent.response':     return `[${d.agent_name}] trigger=${d.trigger}${d.reasoning ? ' — ' + d.reasoning : ''}`
     case 'run.created':        return `run ${d.run?.id?.slice(0, 8)}`
     case 'hitl.waiting':       return `${d.state_name}${d.assignee ? ` → ${d.assignee}` : ''}`
     case 'run.failed': {

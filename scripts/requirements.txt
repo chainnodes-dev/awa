@@ -1,0 +1,8 @@
+# Required
+requests>=2.31
+
+# Optional — auto-loads .env files
+python-dotenv>=1.0
+
+# Optional — shows a live progress bar
+tqdm>=4.66

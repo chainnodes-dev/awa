@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	temporalactivity "go.temporal.io/sdk/activity"
 
 	"github.com/asm-platform/asm/internal/events"
+	"github.com/asm-platform/asm/internal/executor/code"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -73,6 +75,20 @@ func (a *Activities) CreateHITL(ctx context.Context, p CreateHITLParams) error {
 		p.Request.ID = uuid.NewString()
 	}
 	return a.Store.CreateHITL(ctx, p.Request)
+}
+
+// ExecuteCode runs a user-written JavaScript code node via the goja sandbox
+// and returns its structured output. The activity heartbeats every 10 s so
+// Temporal can detect worker failures during long-running scripts.
+func (a *Activities) ExecuteCode(ctx context.Context, p ExecuteCodeParams) (*asmtypes.AgentOutput, error) {
+	timeout := 60 * time.Second
+	if p.StateDef.Timeout != "" {
+		if d, err := time.ParseDuration(p.StateDef.Timeout); err == nil {
+			timeout = d
+		}
+	}
+	heartbeat := func() { temporalactivity.RecordHeartbeat(ctx, "code running") }
+	return code.Execute(p.StateDef.Code.Code, p.Blackboard, p.ValidTriggers, timeout, heartbeat)
 }
 
 // ExecuteAgent runs an LLM agent and returns its structured output.

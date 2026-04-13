@@ -9,6 +9,8 @@ export const useExecutionStore = defineStore('execution', () => {
   const eventLog = ref([])         // all received events (capped at 200)
   const thinkingTokens = reactive({}) // runId → accumulated token string
   const pendingHITL = ref([])
+  // runId → array of { id, stateName, agentName, system, messages, response, timestamp }
+  const llmCalls = reactive({})
 
   async function fetchRuns(filter = {}) {
     const params = new URLSearchParams()
@@ -128,6 +130,42 @@ export const useExecutionStore = defineStore('execution', () => {
         break
       }
 
+      case 'agent.prompt': {
+        console.debug('[debug] agent.prompt received', data.run_id, data.agent_name, data.state_name)
+        if (!llmCalls[data.run_id]) llmCalls[data.run_id] = []
+        llmCalls[data.run_id].push({
+          id:        `${data.state_name}:${data.agent_name}:${Date.now()}`,
+          stateName: data.state_name,
+          agentName: data.agent_name,
+          system:    data.system,
+          messages:  data.messages,
+          response:  null,
+          timestamp: event.timestamp,
+        })
+        break
+      }
+
+      case 'agent.response': {
+        console.debug('[debug] agent.response received', data.run_id, data.agent_name, data.trigger)
+        const calls = llmCalls[data.run_id]
+        if (calls) {
+          // Find the most recent pending call for this state+agent
+          for (let i = calls.length - 1; i >= 0; i--) {
+            if (calls[i].stateName === data.state_name &&
+                calls[i].agentName === data.agent_name &&
+                calls[i].response === null) {
+              calls[i].response = {
+                content:   data.content,
+                trigger:   data.trigger,
+                reasoning: data.reasoning,
+              }
+              break
+            }
+          }
+        }
+        break
+      }
+
       case 'hitl.waiting': {
         pendingHITL.value.push({ run_id: data.run_id, state_name: data.state_name, assignee: data.assignee })
         // Update run status so HITL controls appear immediately without a manual refresh
@@ -153,7 +191,7 @@ export const useExecutionStore = defineStore('execution', () => {
   }
 
   return {
-    runs, activeRun, transitions, eventLog, thinkingTokens, pendingHITL,
+    runs, activeRun, transitions, eventLog, thinkingTokens, pendingHITL, llmCalls,
     fetchRuns, fetchRun, fetchHistory, fetchPendingHITL,
     deleteRun, sendTrigger, resolveHITL, handleEvent
   }

@@ -16,6 +16,8 @@ const (
 	BlackboardUpdated = "blackboard.updated"
 	AgentThinking     = "agent.thinking"     // LLM token stream
 	AgentToolCall     = "agent.tool_call"
+	AgentPrompt       = "agent.prompt"       // full request sent to the LLM (debug)
+	AgentResponse     = "agent.response"     // full response received from the LLM (debug)
 	HITLWaiting       = "hitl.waiting"
 	HITLResolved      = "hitl.resolved"
 )
@@ -65,6 +67,27 @@ type AgentToolCallPayload struct {
 	ToolName  string      `json:"tool_name"`
 	Input     interface{} `json:"input"`
 	Output    interface{} `json:"output,omitempty"`
+}
+
+// AgentPromptPayload carries the exact request sent to the LLM for one agent
+// invocation.  Only emitted when a run is active; intended for admin debug UIs.
+type AgentPromptPayload struct {
+	RunID      string        `json:"run_id"`
+	StateName  string        `json:"state_name"`
+	AgentName  string        `json:"agent_name"`
+	System     string        `json:"system"`
+	Messages   []interface{} `json:"messages"` // []llm.Message serialised as-is
+}
+
+// AgentResponsePayload carries the final (post-tool-loop) LLM response for one
+// agent invocation together with the parsed trigger and reasoning.
+type AgentResponsePayload struct {
+	RunID      string `json:"run_id"`
+	StateName  string `json:"state_name"`
+	AgentName  string `json:"agent_name"`
+	Content    string `json:"content"`    // raw text from the model
+	Trigger    string `json:"trigger"`
+	Reasoning  string `json:"reasoning"`
 }
 
 type HITLWaitingPayload struct {

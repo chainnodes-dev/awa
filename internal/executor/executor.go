@@ -82,8 +82,17 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 		}
 	}
 
+	// Derive valid triggers from the workflow definition so they can be injected
+	// into the system prompt AND validated against the LLM's final response.
+	outgoing := task.Def.TransitionsFrom(task.StateDef.Name)
+	validTriggers := make([]string, 0, len(outgoing))
+	for _, t := range outgoing {
+		validTriggers = append(validTriggers, t.Trigger)
+	}
+	validTriggersStr := strings.Join(validTriggers, ", ")
+
 	// Build system prompt.
-	system, err := e.buildSystemPrompt(agent, task)
+	system, err := e.buildSystemPrompt(agent, task, validTriggers, validTriggersStr)
 	if err != nil {
 		err = fmt.Errorf("build system prompt: %w", err)
 		result(err)
@@ -120,6 +129,20 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 	// that a retried activity produces the same observable outcome.
 	toolCallCache := make(map[string]json.RawMessage)
 
+	// Publish the full prompt once, before the first LLM call, so admins can
+	// inspect exactly what was sent regardless of how many tool iterations follow.
+	msgSlice := make([]interface{}, len(messages))
+	for i, m := range messages {
+		msgSlice[i] = m
+	}
+	_ = e.bus.Publish(ctx, events.New(events.AgentPrompt, events.AgentPromptPayload{
+		RunID:     task.RunID,
+		StateName: task.StateDef.Name,
+		AgentName: agent.Name,
+		System:    system,
+		Messages:  msgSlice,
+	}))
+
 	// ── Tool-calling loop ────────────────────────────────────────────────────
 	for iteration := 0; iteration < maxToolIterations; iteration++ {
 		req := llm.CompletionRequest{
@@ -154,12 +177,32 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 		if len(resp.ToolCalls) == 0 {
 			output, parseErr := parseAgentOutput(resp.Content)
 			if parseErr != nil {
-				result(nil)
-				return &asmtypes.AgentOutput{
-					Reasoning: resp.Content,
-					Error:     fmt.Sprintf("failed to parse structured output: %v", parseErr),
-				}, nil
+				err = fmt.Errorf("failed to parse agent JSON output: %w", parseErr)
+				result(err)
+				return nil, err
 			}
+			// Validate the trigger is non-empty and matches an outgoing transition.
+			if output.Trigger == "" {
+				err = fmt.Errorf("agent returned empty trigger; valid triggers for state %q are: [%s]",
+					task.StateDef.Name, validTriggersStr)
+				result(err)
+				return nil, err
+			}
+			if len(validTriggers) > 0 && !containsTrigger(validTriggers, output.Trigger) {
+				err = fmt.Errorf("agent returned unknown trigger %q; valid triggers for state %q are: [%s]",
+					output.Trigger, task.StateDef.Name, validTriggersStr)
+				result(err)
+				return nil, err
+			}
+			// Publish the full response so admins can see exactly what the model returned.
+			_ = e.bus.Publish(ctx, events.New(events.AgentResponse, events.AgentResponsePayload{
+				RunID:     task.RunID,
+				StateName: task.StateDef.Name,
+				AgentName: agent.Name,
+				Content:   resp.Content,
+				Trigger:   output.Trigger,
+				Reasoning: output.Reasoning,
+			}))
 			result(nil)
 			return output, nil
 		}
@@ -300,7 +343,7 @@ func toLLMTools(ts []tools.Tool) []llm.Tool {
 	return out
 }
 
-func (e *DirectExecutor) buildSystemPrompt(agent asmtypes.AgentDef, task orchestrator.AgentTask) (string, error) {
+func (e *DirectExecutor) buildSystemPrompt(agent asmtypes.AgentDef, task orchestrator.AgentTask, validTriggers []string, validTriggersStr string) (string, error) {
 	basePrompt := agentSystemPrompt
 
 	// File-based prompt template takes priority (complex, multi-paragraph prompts).
@@ -321,12 +364,14 @@ func (e *DirectExecutor) buildSystemPrompt(agent asmtypes.AgentDef, task orchest
 
 	var buf bytes.Buffer
 	_ = tmpl.Execute(&buf, map[string]interface{}{
-		"SystemPrompt": task.Def.Metadata.SystemPrompt,
-		"AgentName":    agent.Name,
-		"StateName":    task.StateDef.Name,
-		"Instructions": task.StateDef.Instructions,
-		"Blackboard":   task.Blackboard,
-		"Rules":        agent.Rules,
+		"SystemPrompt":     task.Def.Metadata.SystemPrompt,
+		"AgentName":        agent.Name,
+		"StateName":        task.StateDef.Name,
+		"Instructions":     task.StateDef.Instructions,
+		"Blackboard":       task.Blackboard,
+		"Rules":            agent.Rules,
+		"ValidTriggers":    validTriggers,
+		"ValidTriggersStr": validTriggersStr,
 	})
 	return buf.String(), nil
 }
@@ -381,17 +426,32 @@ Business rules you MUST enforce:
 You have access to tools. Use them as needed to complete your task, then produce your final response.
 {{end}}
 
+{{if .ValidTriggers}}
+VALID TRIGGERS — you MUST fire exactly one of these (no others are accepted):
+{{range .ValidTriggers}}  - {{.}}
+{{end}}
+{{end}}
 Your FINAL response (after any tool calls) MUST be a JSON object in exactly this format:
 {
   "blackboard_updates": {
     "field_name": "value"
   },
-  "trigger": "trigger_name",
+  "trigger": "{{.ValidTriggersStr}}",
   "reasoning": "Brief explanation of your decision"
 }
 
 - "blackboard_updates": fields to write to the shared blackboard (may be empty {})
-- "trigger": the exact trigger name to fire to advance the workflow
+- "trigger": MUST be exactly one of [{{.ValidTriggersStr}}] — any other value will break the workflow
 - "reasoning": brief explanation (for the audit trail)
 
 Do not include any text outside the final JSON object.`
+
+// containsTrigger reports whether name is present in the list.
+func containsTrigger(list []string, name string) bool {
+	for _, t := range list {
+		if t == name {
+			return true
+		}
+	}
+	return false
+}

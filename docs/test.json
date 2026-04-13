@@ -39,3 +39,8 @@ Let Human reviewr approve or reject. If approved move to confirmed. If rejected 
   "record_date": "2026-05-16",
   "payable_date": "2026-06-01"
 }
+
+#parallel run
+{
+  "symbol": "AAPL"
+}

@@ -1,7 +1,7 @@
 # ASM Platform — Implementation Plan
 
 > **Living document.** Update status, notes, and decisions as the project evolves.
-> Last updated: 2026-04-04 (M11 complete — DB-backed LLM config UI, multi-provider support, HITL fixes)
+> Last updated: 2026-04-11 (Bug fix — initial state auto-advance)
 
 ---
 
@@ -34,6 +34,13 @@
 | M10 | Generated MCP servers — sharable deterministic logic as services | ✅ | Done |
 | M11 | LLM config UI — DB-backed provider management, hot-reload, HITL fixes | ✅ | Done |
 | M12 | Orchestration 2.0 — Wait node, Parallel execution, Mandatory Temporal | ✅ | Done |
+
+---
+
+## Bug Fixes (post-M12)
+
+- [x] **Initial state auto-advance** — `initial` states with no agent and no script now auto-advance immediately using the first outgoing transition whose guard passes. Previously they fell through to the external-trigger fallback and blocked indefinitely. The act of starting a run is itself the trigger for the initial state.
+- [x] **Wait node `on_condition` trigger** — added `on_condition` field to `StateDef` and wired it in `workflow.go`. Previously, when a `wait` node's `condition` expression became true the trigger was left as `""`, causing a "no valid transition" error. The condition path now fires `on_condition` (defaults to `"condition_met"` if omitted), matching the existing `on_timeout` / `"timeout"` pattern.
 
 ---
 
@@ -559,17 +566,19 @@ Enhance the workflow engine with advanced orchestration primitives: parallel exe
 
 | Issue | Severity | Notes |
 |---|---|---|
-| ~~Tool call deduplication inside Temporal activity retries~~ | ~~Low~~ | ✅ Resolved — within-execution cache in `executor.go` (SHA-256 key); cross-retry deduplication requires idempotent tool implementations by design |
-| ~~No authentication on any endpoint~~ | ~~High~~ | ✅ Resolved in M5 |
-| ~~`internal/scheduler/scheduler.go` is a stub~~ | ~~Medium~~ | ✅ Resolved — full cron scheduler with `AddWorkflow`/`RemoveWorkflow`, per-definition `entries` map, graceful drain on shutdown |
-| ~~Frontend designer requires prompt to create edges (not drag)~~ | ~~Medium~~ | ✅ Resolved in M6 — `PendingConnectionPanel` replaces `window.prompt()` |
 | Worker binary requires Postgres — no memory store fallback | Low | Intentional: temporal mode needs DB |
-| ~~`PublishEventParams.Data` is `interface{}` — deserialises as map on replay~~ | ~~Low~~ | ✅ Resolved — `events.Event.Data` changed to `json.RawMessage`; `events.New()` marshals immediately; `Event.Decode()` helper added; `PublishEvent` activity re-marshals Temporal-deserialized data |
-| ~~No database migration tooling~~ | ~~Medium~~ | ✅ Resolved in M7.3 — golang-migrate with embedded SQL, applied at startup |
-| ~~HITL workflow stuck in Temporal mode~~ | ~~High~~ | ✅ Resolved in M11 — two root causes: trigger name mismatch (`human_approved` vs `approved`) and `temporal_workflow_id` never persisted by `UpdateRun` |
-| ~~Worker LLM registry stale after UI config changes~~ | ~~Medium~~ | ✅ Resolved in M11 — worker polls DB every 15s and calls `Registry.Reload()` atomically |
 | HITL `assignee` filtering — users should only see/resolve tasks assigned to them | Low | Needs user identity in HITL events and query filtering; tracked for future milestone |
 | Tenant deletion safety check | Low | Delete not blocked if tenant has active runs or users; safe for single-tenant deployments |
+
+### Resolved Issues
+- ✅ **Tool call deduplication** — within-execution cache in `executor.go` (SHA-256 key); cross-retry deduplication requires idempotent tool implementations by design.
+- ✅ **Authentication** — Full auth layer with JWT and RBAC implemented in M5.
+- ✅ **Scheduler** — Full cron scheduler with `AddWorkflow`/`RemoveWorkflow` implemented.
+- ✅ **Designer drag-to-connect** — `PendingConnectionPanel` replaces `window.prompt()`.
+- ✅ **Event deserialization** — `Event.Data` changed to `json.RawMessage` to preserve types through round-trips.
+- ✅ **Migration tooling** — `golang-migrate` with embedded SQL added in M7.3.
+- ✅ **HITL Temporal fixes** — Resolved trigger name mismatches and `temporal_workflow_id` persistence issues.
+- ✅ **Worker hot-reload** — Worker polls DB for LLM config changes every 15s.
 
 ---
 
@@ -648,27 +657,23 @@ Enhance the workflow engine with advanced orchestration primitives: parallel exe
 The platform requires **Temporal**, **PostgreSQL**, and **Redis**.
 
 ```bash
-# 1. Start the infrastructure
+# 1. Start the infrastructure (Docker)
 docker compose up -d postgres redis temporal temporal-ui
 
-# 2. Terminal 1 — API server
+# 2. Terminal 1 — API Server
 go run ./cmd/server
 
-# 3. Terminal 2 — General worker (handles LLM agents)
-go run ./cmd/worker
+# 3. Terminal 2 — General Worker (Handles LLM agents)
+# Must use EXECUTOR_MODE=temporal to enable durability
+EXECUTOR_MODE=temporal go run ./cmd/worker
+
+# 4. Terminal 3 — Specialist Worker (e.g. data enrichment)
+# Set the specific task queue this worker should poll
+SPECIALIST_TASK_QUEUE=specialist-workers go run ./cmd/specialist-worker
 ```
 
 > [!IMPORTANT]
 > The server will fail to start if it cannot connect to Temporal. Direct mode (in-process) is no longer supported for execution.
-
-### With specialist workers (multi-queue mode)
-
-```bash
-# Terminal 3 — specialist worker (e.g. data enrichment or ERP integration)
-SPECIALIST_TASK_QUEUE=enrich-workers go run ./cmd/specialist-worker
-```
-
-The workflow definition must declare `task_queue: enrich-workers` on the agent that should route to this worker pool.
 
 ### Frontend (dev server)
 ```bash

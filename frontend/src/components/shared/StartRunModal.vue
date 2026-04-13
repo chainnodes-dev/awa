@@ -121,6 +121,7 @@ async function start() {
       payload
     )
     emit('started', run)
+    emit('close')
   } catch (e) {
     error.value = e.message
   } finally {

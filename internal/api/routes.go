@@ -100,6 +100,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			designerGroup.POST("/generate", h.GenerateWorkflow)
 			designerGroup.POST("/scaffold", h.ScaffoldHandler)
 			designerGroup.POST("/scaffold-mcp", h.ScaffoldMCPHandler)
+			designerGroup.POST("/codegen", h.CodegenHandler)
 		}
 
 		// Tenant management — super_admin only.

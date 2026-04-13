@@ -31,11 +31,16 @@
         </button>
       </div>
 
-      <!-- HITL controls -->
-      <template v-if="run?.status === 'waiting'">
+      <!-- HITL controls (only for hitl-type states, not wait/join nodes) -->
+      <template v-if="run?.status === 'waiting' && currentStateType === 'hitl'">
         <button @click="resolve('approved')" class="btn bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs">✓ Approve</button>
         <button @click="resolve('rejected')" class="btn bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs">✕ Reject</button>
       </template>
+      <!-- Wait/join node indicator -->
+      <span v-else-if="run?.status === 'waiting' && currentStateType === 'wait'"
+            class="text-xs text-indigo-400/80 font-mono px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20">
+        ⏳ awaiting condition…
+      </span>
 
       <!-- Manual trigger -->
       <button v-if="run?.status === 'running'" @click="showTriggerModal = true" class="btn-ghost text-xs">
@@ -107,19 +112,39 @@
       <aside class="w-72 border-l border-border flex flex-col overflow-hidden bg-surface-1">
         <div class="flex border-b border-border">
           <button
-            v-for="tab in ['blackboard', 'timeline']" :key="tab"
-            @click="activeTab = tab"
+            v-for="tab in visibleTabs" :key="tab.id"
+            @click="activeTab = tab.id"
             :class="[
               'flex-1 py-2 text-xs font-medium transition-colors capitalize',
-              activeTab === tab ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300',
+              activeTab === tab.id ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300',
             ]"
-          >{{ tab }}</button>
+          >
+            <span v-if="tab.id === 'debug'" class="flex items-center justify-center gap-1">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
+                <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+                <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              Debug
+              <span
+                v-if="runLLMCalls.length"
+                class="text-[9px] bg-accent/20 text-accent px-1 rounded-full"
+              >{{ runLLMCalls.length }}</span>
+            </span>
+            <span v-else>{{ tab.label }}</span>
+          </button>
         </div>
 
         <!-- Blackboard tab -->
         <BlackboardPanel
           v-if="activeTab === 'blackboard'"
           :blackboard="run?.blackboard"
+          class="flex-1 overflow-hidden"
+        />
+
+        <!-- Debug tab (admin only) -->
+        <LLMDebugPanel
+          v-else-if="activeTab === 'debug'"
+          :calls="runLLMCalls"
           class="flex-1 overflow-hidden"
         />
 
@@ -157,8 +182,20 @@
                   <span class="text-[10px] font-mono text-slate-500">{{ t.from_state }}</span>
                 </div>
 
-                <!-- Timestamp -->
-                <div class="text-[10px] text-slate-600">{{ formatTime(t.timestamp) }}</div>
+                <!-- Timestamp + time spent in this state -->
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-[10px] text-slate-600">{{ formatTime(t.timestamp) }}</span>
+                  <span
+                    v-if="stateDuration(i) !== null"
+                    class="inline-flex items-center gap-1 text-[10px] font-mono text-amber-600/80"
+                    :title="`Time spent in ${t.to_state}`"
+                  >
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>
+                    </svg>
+                    {{ stateDuration(i) }}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -169,6 +206,14 @@
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-mono font-medium text-green-400">{{ run.current_state }}</span>
                   <span class="text-[10px] text-slate-600">← active</span>
+                </div>
+                <!-- Time spent in the current (still-active) state -->
+                <div v-if="history.length" class="flex items-center gap-1 text-[10px] font-mono text-amber-600/60">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>
+                  </svg>
+                  {{ activeStateDuration }}
+                  <span v-if="run.status === 'running'" class="text-slate-600 font-sans">and counting</span>
                 </div>
                 <div v-if="run.status !== 'running'" :class="`status-${run.status} text-[10px]`">
                   {{ run.status }}
@@ -218,19 +263,35 @@ import '@vue-flow/controls/dist/style.css'
 import StateNode      from '@/components/designer/StateNode.vue'
 import BlackboardPanel from '@/components/monitor/BlackboardPanel.vue'
 import EventLog        from '@/components/monitor/EventLog.vue'
+import LLMDebugPanel   from '@/components/monitor/LLMDebugPanel.vue'
 import StartRunModal from '@/components/shared/StartRunModal.vue'
 import { useExecutionStore } from '@/stores/execution'
 import { useWorkflowStore }  from '@/stores/workflows'
+import { useAuthStore }      from '@/stores/auth'
 import { useLayout }         from '@/composables/useLayout'
 
 const route     = useRoute()
 const router    = useRouter()
-const execStore = useExecutionStore()
-const wfStore   = useWorkflowStore()
+const execStore  = useExecutionStore()
+const wfStore    = useWorkflowStore()
+const authStore  = useAuthStore()
 const { layout } = useLayout()
 
 const run          = computed(() => execStore.activeRun)
 const history      = computed(() => execStore.transitions)
+const runLLMCalls  = computed(() => execStore.llmCalls[route.params.id] ?? [])
+const visibleTabs  = computed(() => {
+  const tabs = [
+    { id: 'blackboard', label: 'Blackboard' },
+    { id: 'timeline',   label: 'Timeline'   },
+  ]
+  if (authStore.hasRole('admin')) tabs.push({ id: 'debug', label: 'Debug' })
+  return tabs
+})
+const currentStateType = computed(() => {
+  if (!workflowDef.value || !run.value?.current_state) return null
+  return workflowDef.value.states?.find(s => s.name === run.value.current_state)?.type ?? null
+})
 const activeTab    = ref('blackboard')
 const showTriggerModal = ref(false)
 const showRunModal = ref(false)
@@ -353,4 +414,32 @@ function formatTime(ts) {
   }
   return d.toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit' })
 }
+
+function formatDuration(ms) {
+  if (ms < 1000)    return '< 1s'
+  const s = Math.floor(ms / 1000)
+  if (s < 60)       return `${s}s`
+  const m = Math.floor(s / 60)
+  const rs = s % 60
+  if (m < 60)       return rs ? `${m}m ${rs}s` : `${m}m`
+  const h = Math.floor(m / 60)
+  const rm = m % 60
+  return rm ? `${h}h ${rm}m` : `${h}h`
+}
+
+// Time spent in history[i].to_state = next transition timestamp − this timestamp.
+// Returns null for the very last completed entry (duration belongs to activeStateDuration).
+function stateDuration(i) {
+  const next = history.value[i + 1]
+  if (!next) return null   // last entry — shown separately as activeStateDuration
+  const ms = new Date(next.timestamp) - new Date(history.value[i].timestamp)
+  return formatDuration(ms)
+}
+
+// Duration the run has been in its current state (last transition → now).
+const activeStateDuration = computed(() => {
+  const last = history.value[history.value.length - 1]
+  if (!last) return null
+  return formatDuration(Date.now() - new Date(last.timestamp))
+})
 </script>

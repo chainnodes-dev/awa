@@ -19,36 +19,34 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 	// Apply schema defaults to the initial blackboard.
 	bb := applyDefaults(p.Def, p.Blackboard)
 
-	// Activity options: short timeout for store/bus operations.
-	shortOpts := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 30 * time.Second,
-		RetryPolicy: &temporalsdk.RetryPolicy{
-			InitialInterval:    2 * time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumInterval:    30 * time.Second,
-			MaximumAttempts:    3,
-		},
-	})
+	// Signal channels are workflow-level (not coroutine-level) — safe to share.
+	triggerCh := workflow.GetSignalChannel(ctx, SignalTrigger)
+	hitlCh := workflow.GetSignalChannel(ctx, SignalHITLResolution)
 
-	// Activity options: long timeout for LLM agent calls (default task queue).
-	agentOpts := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute,
-		HeartbeatTimeout:    30 * time.Second,
-		RetryPolicy: &temporalsdk.RetryPolicy{
-			InitialInterval:    2 * time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumInterval:    60 * time.Second,
-			MaximumAttempts:    3,
-		},
-	})
+	var (
+		wg             = workflow.NewWaitGroup(ctx)
+		processedJoins = make(map[string]bool)
+		workflowErr    error
+	)
 
-	// agentOptsFor returns activity options for a given AgentDef.
-	agentOptsFor := func(agentDef *asmtypes.AgentDef) workflow.Context {
-		if agentDef.TaskQueue == "" {
-			return agentOpts
-		}
-		return workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-			TaskQueue:           agentDef.TaskQueue,
+	// makeOpts builds branch-local activity options derived from the branch's own
+	// context. This is required because Temporal coroutines must only block on
+	// contexts that belong to the current coroutine — using a parent context inside
+	// a workflow.Go goroutine causes the "wrong Context" panic.
+	makeShortOpts := func(bCtx workflow.Context) workflow.Context {
+		return workflow.WithActivityOptions(bCtx, workflow.ActivityOptions{
+			StartToCloseTimeout: 30 * time.Second,
+			RetryPolicy: &temporalsdk.RetryPolicy{
+				InitialInterval:    2 * time.Second,
+				BackoffCoefficient: 2.0,
+				MaximumInterval:    30 * time.Second,
+				MaximumAttempts:    3,
+			},
+		})
+	}
+	makeAgentOpts := func(bCtx workflow.Context, taskQueue string) workflow.Context {
+		return workflow.WithActivityOptions(bCtx, workflow.ActivityOptions{
+			TaskQueue:           taskQueue, // empty string → default queue
 			StartToCloseTimeout: 10 * time.Minute,
 			HeartbeatTimeout:    30 * time.Second,
 			RetryPolicy: &temporalsdk.RetryPolicy{
@@ -60,26 +58,64 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 		})
 	}
 
-	// Signal channels.
-	triggerCh := workflow.GetSignalChannel(ctx, SignalTrigger)
-	hitlCh := workflow.GetSignalChannel(ctx, SignalHITLResolution)
-
-	var (
-		wg             = workflow.NewWaitGroup(ctx)
-		processedJoins = make(map[string]bool)
-		workflowErr    error
-	)
-
-	var execBranch func(string)
-	execBranch = func(currentState string) {
+	// execBranch drives one branch of the workflow starting from currentState.
+	// bCtx must be the context of the current coroutine (the root ctx for the
+	// initial branch; the gCtx passed by workflow.Go for parallel branches).
+	var execBranch func(bCtx workflow.Context, currentState string)
+	execBranch = func(bCtx workflow.Context, currentState string) {
 		wg.Add(1)
 		defer wg.Done()
+
+		// Build branch-local activity options from THIS coroutine's context.
+		shortOpts := makeShortOpts(bCtx)
 
 		for {
 			state := p.Def.StateByName(currentState)
 			if state == nil {
 				workflowErr = fmt.Errorf("unknown state '%s'", currentState)
 				return
+			}
+
+			// ── Initial (no agent / no script) ───────────────────────────────────
+			// The act of starting a run is itself the trigger for the initial state.
+			// If no agent or script is assigned we auto-advance immediately using the
+			// first outgoing transition whose guard passes — no external signal needed.
+			if state.Type == asmtypes.StateInitial && state.Agent == "" && state.Script == nil {
+				transitions := p.Def.TransitionsFrom(currentState)
+				if len(transitions) == 0 {
+					workflowErr = fmt.Errorf("initial state '%s' has no outgoing transitions", currentState)
+					return
+				}
+				var autoTrigger string
+				for _, t := range transitions {
+					if t.Guard == "" {
+						autoTrigger = t.Trigger
+						break
+					}
+					if ok, _ := orchestrator.EvalGuard(t.Guard, bb); ok {
+						autoTrigger = t.Trigger
+						break
+					}
+				}
+				if autoTrigger == "" {
+					workflowErr = fmt.Errorf("initial state '%s': no outgoing transition guard passed", currentState)
+					return
+				}
+				nextStates, err := applyTransition(p.Def, currentState, autoTrigger, bb)
+				if err != nil {
+					workflowErr = err
+					return
+				}
+				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], autoTrigger, bb, nil); err != nil {
+					workflowErr = err
+					return
+				}
+				for i := 1; i < len(nextStates); i++ {
+					target := nextStates[i]
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+				}
+				currentState = nextStates[0]
+				continue
 			}
 
 			// ── Terminal ─────────────────────────────────────────────────────────
@@ -90,11 +126,11 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					Status:       asmtypes.RunComplete,
 					Blackboard:   bb,
 					IsTerminal:   true,
-				}).Get(ctx, nil)
+				}).Get(bCtx, nil)
 				_ = workflow.ExecuteActivity(shortOpts, (*Activities).PublishEvent, PublishEventParams{
 					EventType: events.RunCompleted,
 					Data:      events.RunCreatedPayload{},
-				}).Get(ctx, nil)
+				}).Get(bCtx, nil)
 				return
 			}
 
@@ -105,7 +141,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					CurrentState: currentState,
 					Status:       asmtypes.RunWaiting,
 					Blackboard:   bb,
-				}).Get(ctx, nil)
+				}).Get(bCtx, nil)
 
 				waitDur := 24 * time.Hour
 				if state.Timeout != "" {
@@ -118,11 +154,11 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					trigger      string
 					timeoutFired bool
 					conditionMet bool
-					conditionCh  = workflow.NewChannel(ctx)
+					conditionCh  = workflow.NewChannel(bCtx)
 				)
 
 				// Helper goroutine to wait for the condition.
-				workflow.Go(ctx, func(gCtx workflow.Context) {
+				workflow.Go(bCtx, func(gCtx workflow.Context) {
 					_ = workflow.Await(gCtx, func() bool {
 						ok, _ := orchestrator.EvalGuard(state.Condition, bb)
 						return ok
@@ -130,24 +166,24 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					conditionCh.Send(gCtx, true)
 				})
 
-				selector := workflow.NewSelector(ctx)
+				selector := workflow.NewSelector(bCtx)
 				selector.AddReceive(conditionCh, func(c workflow.ReceiveChannel, _ bool) {
-					c.Receive(ctx, nil)
+					c.Receive(bCtx, nil)
 					conditionMet = true
 				})
 				selector.AddReceive(triggerCh, func(c workflow.ReceiveChannel, _ bool) {
 					var sig TriggerSignalPayload
-					c.Receive(ctx, &sig)
+					c.Receive(bCtx, &sig)
 					trigger = sig.Trigger
 					for k, v := range sig.Payload {
 						bb[k] = v
 					}
 				})
-				selector.AddFuture(workflow.NewTimer(ctx, waitDur), func(f workflow.Future) {
+				selector.AddFuture(workflow.NewTimer(bCtx, waitDur), func(f workflow.Future) {
 					timeoutFired = true
 				})
 
-				selector.Select(ctx)
+				selector.Select(bCtx)
 
 				if processedJoins[state.Name] {
 					return
@@ -155,6 +191,10 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 
 				if conditionMet {
 					processedJoins[state.Name] = true
+					trigger = state.OnCondition
+					if trigger == "" {
+						trigger = "condition_met"
+					}
 				} else if timeoutFired && trigger == "" {
 					trigger = state.OnTimeout
 					if trigger == "" {
@@ -169,7 +209,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				}
 				if len(nextStates) > 0 {
 					next := nextStates[0]
-					if err := persistTransition(shortOpts, ctx, p.RunID, currentState, next, trigger, bb, nil); err != nil {
+					if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, next, trigger, bb, nil); err != nil {
 						workflowErr = err
 						return
 					}
@@ -186,37 +226,37 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					CurrentState: currentState,
 					Status:       asmtypes.RunWaiting,
 					Blackboard:   bb,
-				}).Get(ctx, nil)
+				}).Get(bCtx, nil)
 
 				hitlReq := &asmtypes.HITLRequest{
 					RunID:     p.RunID,
 					StateName: state.Name,
 					Assignee:  state.Assignee,
-					CreatedAt: workflow.Now(ctx),
+					CreatedAt: workflow.Now(bCtx),
 				}
 				waitDur := 24 * time.Hour
 				if state.Timeout != "" {
 					if d, err := time.ParseDuration(state.Timeout); err == nil {
 						waitDur = d
-						t := workflow.Now(ctx).Add(d)
+						t := workflow.Now(bCtx).Add(d)
 						hitlReq.TimeoutAt = &t
 					}
 				}
 				_ = workflow.ExecuteActivity(shortOpts, (*Activities).CreateHITL, CreateHITLParams{
 					Request: hitlReq,
-				}).Get(ctx, nil)
+				}).Get(bCtx, nil)
 
 				var trigger string
-				selector := workflow.NewSelector(ctx)
+				selector := workflow.NewSelector(bCtx)
 				selector.AddReceive(hitlCh, func(c workflow.ReceiveChannel, _ bool) {
 					var sig HITLResolutionPayload
-					c.Receive(ctx, &sig)
+					c.Receive(bCtx, &sig)
 					trigger = sig.Resolution
 				})
-				selector.AddFuture(workflow.NewTimer(ctx, waitDur), func(f workflow.Future) {
+				selector.AddFuture(workflow.NewTimer(bCtx, waitDur), func(f workflow.Future) {
 					trigger = "timeout"
 				})
-				selector.Select(ctx)
+				selector.Select(bCtx)
 
 				nextStates, err := applyTransition(p.Def, currentState, trigger, bb)
 				if err != nil {
@@ -226,13 +266,13 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, ctx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}
 				for i := 1; i < len(nextStates); i++ {
 					target := nextStates[i]
-					workflow.Go(ctx, func(gCtx workflow.Context) { execBranch(target) })
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
 				}
 				currentState = nextStates[0]
 				continue
@@ -246,14 +286,15 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					return
 				}
 
+				agentOpts := makeAgentOpts(bCtx, agentDef.TaskQueue)
 				var output *asmtypes.AgentOutput
-				err := workflow.ExecuteActivity(agentOptsFor(agentDef), (*Activities).ExecuteAgent, ExecuteAgentParams{
+				err := workflow.ExecuteActivity(agentOpts, (*Activities).ExecuteAgent, ExecuteAgentParams{
 					RunID:      p.RunID,
 					AgentDef:   *agentDef,
 					StateDef:   *state,
 					Blackboard: bb,
 					Def:        p.Def,
-				}).Get(ctx, &output)
+				}).Get(bCtx, &output)
 				if err != nil {
 					workflowErr = fmt.Errorf("agent execution failed: %w", err)
 					return
@@ -271,13 +312,13 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, ctx, p.RunID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
 					workflowErr = err
 					return
 				}
 				for i := 1; i < len(nextStates); i++ {
 					target := nextStates[i]
-					workflow.Go(ctx, func(gCtx workflow.Context) { execBranch(target) })
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
 				}
 				currentState = nextStates[0]
 				continue
@@ -302,13 +343,58 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, ctx, p.RunID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
 					workflowErr = err
 					return
 				}
 				for i := 1; i < len(nextStates); i++ {
 					target := nextStates[i]
-					workflow.Go(ctx, func(gCtx workflow.Context) { execBranch(target) })
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+				}
+				currentState = nextStates[0]
+				continue
+			}
+
+			// ── Code state (JavaScript via goja) ─────────────────────────────────
+			if state.Type == asmtypes.StateCode && state.Code != nil {
+				outgoing := p.Def.TransitionsFrom(currentState)
+				validTriggers := make([]string, 0, len(outgoing))
+				for _, t := range outgoing {
+					validTriggers = append(validTriggers, t.Trigger)
+				}
+
+				codeOpts := makeAgentOpts(bCtx, "") // same long-timeout / heartbeat as agent activities
+				var output *asmtypes.AgentOutput
+				err := workflow.ExecuteActivity(codeOpts, (*Activities).ExecuteCode, ExecuteCodeParams{
+					RunID:         p.RunID,
+					StateDef:      *state,
+					Blackboard:    bb,
+					ValidTriggers: validTriggers,
+				}).Get(bCtx, &output)
+				if err != nil {
+					workflowErr = fmt.Errorf("code execution failed in state '%s': %w", currentState, err)
+					return
+				}
+
+				for k, v := range output.BlackboardUpdates {
+					bb[k] = v
+				}
+
+				nextStates, err := applyTransition(p.Def, currentState, output.Trigger, bb)
+				if err != nil {
+					workflowErr = err
+					return
+				}
+				if len(nextStates) == 0 {
+					return
+				}
+				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+					workflowErr = err
+					return
+				}
+				for i := 1; i < len(nextStates); i++ {
+					target := nextStates[i]
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
 				}
 				currentState = nextStates[0]
 				continue
@@ -328,20 +414,20 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 			}
 
 			if waitDur > 0 {
-				selector := workflow.NewSelector(ctx)
+				selector := workflow.NewSelector(bCtx)
 				selector.AddReceive(triggerCh, func(c workflow.ReceiveChannel, _ bool) {
-					c.Receive(ctx, &sig)
+					c.Receive(bCtx, &sig)
 					trigger = sig.Trigger
 				})
-				selector.AddFuture(workflow.NewTimer(ctx, waitDur), func(f workflow.Future) {
+				selector.AddFuture(workflow.NewTimer(bCtx, waitDur), func(f workflow.Future) {
 					trigger = state.OnTimeout
 					if trigger == "" {
 						trigger = "timeout"
 					}
 				})
-				selector.Select(ctx)
+				selector.Select(bCtx)
 			} else {
-				triggerCh.Receive(ctx, &sig)
+				triggerCh.Receive(bCtx, &sig)
 				trigger = sig.Trigger
 			}
 
@@ -357,23 +443,23 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 			if len(nextStates) == 0 {
 				return
 			}
-			if err := persistTransition(shortOpts, ctx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+			if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 				workflowErr = err
 				return
 			}
 			for i := 1; i < len(nextStates); i++ {
 				target := nextStates[i]
-				workflow.Go(ctx, func(gCtx workflow.Context) { execBranch(target) })
+				workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
 			}
 			currentState = nextStates[0]
 		}
 	}
 
-	execBranch(p.Def.InitialState().Name)
+	execBranch(ctx, p.Def.InitialState().Name)
 	wg.Wait(ctx)
 
 	if workflowErr != nil {
-		return failWorkflow(ctx, shortOpts, p, workflowErr)
+		return failWorkflow(ctx, makeShortOpts(ctx), p, workflowErr)
 	}
 
 	return nil
@@ -416,6 +502,20 @@ func persistTransition(shortOpts, ctx workflow.Context, runID, fromState, toStat
 	}).Get(ctx, nil); err != nil {
 		return err
 	}
+
+	// Keep workflow_runs.current_state in sync so GET /runs/{id} always reflects
+	// the live state without relying solely on WebSocket delivery.
+	// Terminal states override this immediately with their own UpdateRun call
+	// (status=complete), so using RunRunning here is always safe.
+	if err := workflow.ExecuteActivity(shortOpts, (*Activities).UpdateRun, UpdateRunParams{
+		RunID:        runID,
+		CurrentState: toState,
+		Status:       asmtypes.RunRunning,
+		Blackboard:   bb,
+	}).Get(ctx, nil); err != nil {
+		return err
+	}
+
 	_ = workflow.ExecuteActivity(shortOpts, (*Activities).PublishEvent, PublishEventParams{
 		EventType: events.StateChanged,
 		Data: events.StateChangedPayload{

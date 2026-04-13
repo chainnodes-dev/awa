@@ -67,22 +67,36 @@ Every state in a workflow has a `type` that determines how the engine processes 
 
 #### `initial`
 
-The entry point of every workflow. When a run starts, the engine places it in the `initial` state automatically.
+The entry point of every workflow. When a run starts, the engine places it in the `initial` state automatically. The input JSON supplied at run creation seeds the blackboard and is immediately available to the initial state.
 
 **Rules:**
 - Every workflow must have **exactly one** `initial` state. The loader rejects definitions with zero or more than one.
-- The `initial` state may have an agent or script assigned (to kick off processing immediately), or it may wait for an external trigger.
+- The `initial` state advances automatically: no external trigger is required.
+- An agent or script may optionally be assigned for validation or enrichment before advancing.
 
-**Runtime:** Engine enters the state, publishes a `state.entered` event, then dispatches the assigned worker — or waits for an external trigger if none is assigned.
+**Runtime:**
+The engine enters the initial state and behaves as follows depending on what is assigned:
+
+| Config | Behaviour |
+|---|---|
+| No agent, no script | Auto-advances immediately using the first outgoing transition whose guard passes. The run creation itself is the trigger. |
+| Script assigned | Evaluates the script expressions against the blackboard, computes the trigger, then advances. |
+| Agent assigned | Dispatches the LLM or specialist worker, applies its blackboard updates, then advances using the returned trigger. |
 
 **YAML example:**
 ```yaml
 states:
   - name: INTAKE
     type: initial
-    agent: intake-agent      # optional; omit to wait for an external trigger
+    # No agent needed — run creation auto-advances to the next state.
+    # Add an agent or script here only for optional validation/enrichment.
+
+  - name: INTAKE_WITH_VALIDATION
+    type: initial
+    agent: intake-agent      # optional; validates/enriches the input before advancing
     instructions: |
-      Extract the invoice number, vendor, amount, and currency from the raw input.
+      Validate that invoice_id, vendor, amount, and currency are present and well-formed.
+      Fire "valid" if all fields pass, "invalid" otherwise.
 ```
 
 ---
@@ -204,9 +218,18 @@ A join or conditional pause state. The run pauses here until a specific conditio
 `wait` states are commonly used as **join points** in parallel workflows, or as "guards" that wait for background processes to finish before continuing.
 
 A `wait` state resolves when **any** of these occur:
-1. The `condition` expression evaluates to `true`.
-2. An external trigger is received via `POST /api/v1/runs/{id}/trigger`.
-3. The `timeout` duration is reached.
+1. The `condition` expression evaluates to `true` → fires the `on_condition` trigger (defaults to `"condition_met"` if omitted).
+2. An external trigger is received via `POST /api/v1/runs/{id}/trigger` → fires that trigger directly.
+3. The `timeout` duration is reached → fires the `on_timeout` trigger (defaults to `"timeout"` if omitted).
+
+**Available fields**
+
+| Field | Required | Description |
+|---|---|---|
+| `condition` | No | expr-lang boolean expression evaluated against the blackboard |
+| `on_condition` | No | Trigger fired when `condition` becomes true. Defaults to `"condition_met"` |
+| `timeout` | No | Duration string (e.g. `1h`, `30m`). Defaults to 24 h if omitted |
+| `on_timeout` | No | Trigger fired on timeout. Defaults to `"timeout"` |
 
 **YAML example:**
 ```yaml
@@ -214,8 +237,18 @@ states:
   - name: AWAIT_CLEANUP
     type: wait
     condition: 'cleanup_status == "done"'
+    on_condition: cleanup_done      # fires this trigger when condition passes
     timeout: 1h
     on_timeout: cleanup_failed
+
+transitions:
+  - from: AWAIT_CLEANUP
+    to:   NEXT_STEP
+    trigger: cleanup_done
+
+  - from: AWAIT_CLEANUP
+    to:   HANDLE_FAILURE
+    trigger: cleanup_failed
 ```
 
 **Constraints:**

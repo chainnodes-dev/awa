@@ -1,20 +1,33 @@
 # Local config — never commit
 .env
 
-# Go build artifacts
+# Go build artifacts — compiled binaries at repo root and in bin/
 bin/
 *.exe
 *.test
-server
+/server
+/worker
+/specialist-worker
+/specialist-worker-template
 .cache/
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
 
-# Temporal local state
+# Temporal local state (generated at runtime by auto-setup container)
 temporal-config/
 
 # OS
 .DS_Store
+
+# Claude Code local config
 .claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/

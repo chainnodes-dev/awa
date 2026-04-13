@@ -351,6 +351,34 @@ func (h *Handlers) ScaffoldHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// CodegenHandler calls the LLM to produce JavaScript code for a Code node.
+// POST /api/v1/designer/codegen
+func (h *Handlers) CodegenHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "code generation is not available: no LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)",
+		})
+		return
+	}
+
+	var req designer.CodegenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.Instructions) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "instructions are required"})
+		return
+	}
+
+	result, err := h.generator.Codegen(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 // ScaffoldMCPHandler generates a Go MCP server implementation for the described tools.
 // POST /api/v1/designer/scaffold-mcp
 func (h *Handlers) ScaffoldMCPHandler(c *gin.Context) {

@@ -19,6 +19,11 @@
           <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
         </svg>
       </span>
+      <span v-if="data.type === 'code'" class="ml-auto text-teal-400">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+        </svg>
+      </span>
     </div>
 
     <!-- Agent badge -->
@@ -64,6 +69,8 @@ const TYPE_STYLES = {
   hitl:         'border-amber-500/60 bg-amber-500/10',
   terminal:     'border-slate-500/60 bg-slate-500/10',
   wait:         'border-indigo-400/60 bg-indigo-500/5',
+  script:       'border-amber-500/50 bg-amber-500/5',
+  code:         'border-teal-500/60 bg-teal-500/10',
 }
 const TYPE_DOTS = {
   initial:      'bg-green-500',
@@ -71,9 +78,12 @@ const TYPE_DOTS = {
   hitl:         'bg-amber-500',
   terminal:     'bg-slate-500',
   wait:         'bg-indigo-400',
+  script:       'bg-amber-500',
+  code:         'bg-teal-400',
 }
 const TYPE_COLORS = {
-  initial: '#22c55e', intermediate: '#6366f1', hitl: '#f59e0b', terminal: '#64748b', wait: '#818cf8'
+  initial: '#22c55e', intermediate: '#6366f1', hitl: '#f59e0b', terminal: '#64748b', wait: '#818cf8',
+  script: '#f59e0b', code: '#2dd4bf',
 }
 
 const nodeStyle = computed(() => {
