@@ -15,8 +15,9 @@ bin/
 frontend/node_modules/
 frontend/dist/
 
-# Temporal local state (generated at runtime by auto-setup container)
-temporal-config/
+# Temporal local state — the dynamicconfig file IS committed (required for startup)
+# only ignore extra files that may be generated at runtime
+temporal-config/*.lock
 
 # OS
 .DS_Store
