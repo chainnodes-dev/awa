@@ -371,9 +371,9 @@ func filterServers(entries []MCPServerEntry, names []string) []MCPServerEntry {
 }
 
 // MCPServerListItem is the public API representation of an MCP server entry.
-// The env_var field is omitted intentionally.
 type MCPServerListItem struct {
 	Name        string `json:"name"`
+	EnvVar      string `json:"env_var,omitempty"`
 	Description string `json:"description"`
 }
 
@@ -381,7 +381,7 @@ type MCPServerListItem struct {
 func ToListItems(entries []MCPServerEntry) []MCPServerListItem {
 	out := make([]MCPServerListItem, len(entries))
 	for i, e := range entries {
-		out[i] = MCPServerListItem{Name: e.Name, Description: e.Description}
+		out[i] = MCPServerListItem{Name: e.Name, EnvVar: e.EnvVar, Description: e.Description}
 	}
 	return out
 }

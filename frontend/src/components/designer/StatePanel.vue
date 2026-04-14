@@ -196,7 +196,7 @@
         </div>
         <div class="space-y-1">
           <label class="text-xs text-slate-500">MCP Servers</label>
-          <input class="input font-mono text-xs" v-model="agentForm.mcp_servers" placeholder="{{ env.MCP_URL }}" />
+          <MCPServerPicker v-model="agentForm.mcp_servers" />
         </div>
       </div>
 
@@ -254,6 +254,7 @@ import { api } from '@/stores/auth'
 import AgentCombobox from './AgentCombobox.vue'
 import CodeEditor from './CodeEditor.vue'
 import CodeEditorModal from './CodeEditorModal.vue'
+import MCPServerPicker from './MCPServerPicker.vue'
 
 // Starter template shown when a new code state is created.
 const defaultCodeTemplate = `// Blackboard fields are available via bb.*
