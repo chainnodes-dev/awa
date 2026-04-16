@@ -17,17 +17,32 @@
 
     <!-- ── Description editor ────────────────────────────────────────── -->
     <div class="space-y-1">
-      <label class="text-xs text-slate-500">Skill Description</label>
-      <textarea
+      <div class="flex items-center gap-1.5">
+        <label class="text-xs text-slate-500 flex-1">Skill Description</label>
+        <button
+          class="text-slate-500 hover:text-violet-400 transition-colors"
+          title="Open in fullscreen editor"
+          @click="showDescModal = true"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+        </button>
+      </div>
+      <CodeEditor
         v-model="description"
-        class="input text-xs leading-relaxed resize-none h-36"
-        placeholder="Describe what this skill does in plain English.&#10;&#10;Example: Research a company by name. Look up their FIGI ticker, fetch the current exchange rate for their reporting currency, convert their revenue to EUR, and return a structured summary."
+        language="text"
+        height="200px"
       />
     </div>
 
     <!-- ── I/O Contract ───────────────────────────────────────────────── -->
     <div class="space-y-2.5 pt-2 border-t border-border">
-      <h4 class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Input / Output Contract <span class="text-slate-700 font-normal normal-case">(optional)</span></h4>
+      <h4 class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+        Input / Output Contract
+        <span class="text-slate-700 font-normal normal-case">(optional)</span>
+      </h4>
 
       <div class="space-y-1">
         <div class="text-[10px] text-slate-600">Inputs — data required at invocation</div>
@@ -39,7 +54,7 @@
           <input class="input text-[10px] py-0.5 flex-1" v-model="p.description" placeholder="description" />
           <button class="text-slate-600 hover:text-red-400 text-xs px-1 transition-colors" @click="inputs.splice(i,1)">✕</button>
         </div>
-        <button class="w-full text-[10px] py-1 border border-dashed border-border hover:border-indigo-500/40 text-slate-600 hover:text-slate-400 rounded transition-colors" @click="inputs.push({name:'',type:'string',description:''})">+ Add input</button>
+        <button class="w-full text-[10px] py-1 border border-dashed border-border hover:border-violet-500/40 text-slate-600 hover:text-slate-400 rounded transition-colors" @click="inputs.push({name:'',type:'string',description:''})">+ Add input</button>
       </div>
 
       <div class="space-y-1">
@@ -52,7 +67,7 @@
           <input class="input text-[10px] py-0.5 flex-1" v-model="p.description" placeholder="description" />
           <button class="text-slate-600 hover:text-red-400 text-xs px-1 transition-colors" @click="outputs.splice(i,1)">✕</button>
         </div>
-        <button class="w-full text-[10px] py-1 border border-dashed border-border hover:border-indigo-500/40 text-slate-600 hover:text-slate-400 rounded transition-colors" @click="outputs.push({name:'',type:'string',description:''})">+ Add output</button>
+        <button class="w-full text-[10px] py-1 border border-dashed border-border hover:border-violet-500/40 text-slate-600 hover:text-slate-400 rounded transition-colors" @click="outputs.push({name:'',type:'string',description:''})">+ Add output</button>
       </div>
     </div>
 
@@ -136,19 +151,29 @@
           </div>
         </template>
 
-        <button
-          class="btn-ghost text-[10px] w-full"
-          @click="copyRenderedToDescription"
-        >↑ Copy description to editor</button>
+        <button class="btn-ghost text-[10px] w-full" @click="copyRenderedToDescription">
+          ↑ Copy description to editor
+        </button>
       </div>
     </template>
 
   </div>
+
+  <!-- Fullscreen description editor -->
+  <CodeEditorModal
+    v-if="showDescModal"
+    v-model="description"
+    language="text"
+    title="Skill Description"
+    @close="showDescModal = false"
+  />
 </template>
 
 <script setup>
 import { ref, reactive } from 'vue'
 import { api } from '@/stores/auth'
+import CodeEditor from './CodeEditor.vue'
+import CodeEditorModal from './CodeEditorModal.vue'
 
 const props = defineProps({
   yamlSource: { type: String, default: '' },
@@ -156,9 +181,10 @@ const props = defineProps({
 const emit = defineEmits(['apply'])
 
 // ── State ────────────────────────────────────────────────────────────────────
-const description   = ref('')
-const inputs        = reactive([])
-const outputs       = reactive([])
+const description    = ref('')
+const inputs         = reactive([])
+const outputs        = reactive([])
+const showDescModal  = ref(false)
 
 const analyseLoading = ref(false)
 const analyseError   = ref('')
@@ -173,9 +199,9 @@ async function analyse() {
   analyseError.value   = ''
   try {
     const { data } = await api.post('/designer/skill/analyse', {
-      description:  description.value,
-      inputs:       inputs.filter(p => p.name),
-      outputs:      outputs.filter(p => p.name),
+      description:   description.value,
+      inputs:        inputs.filter(p => p.name),
+      outputs:       outputs.filter(p => p.name),
       existing_yaml: props.yamlSource || '',
     })
     emit('apply', { yamlStr: data.yaml, definition: data.definition })
@@ -207,12 +233,10 @@ async function render() {
 function copyRenderedToDescription() {
   if (rendered.value?.description) {
     description.value = rendered.value.description
-    if (rendered.value.inferred_inputs?.length) {
+    if (rendered.value.inferred_inputs?.length)
       inputs.splice(0, inputs.length, ...rendered.value.inferred_inputs.map(p => ({ ...p })))
-    }
-    if (rendered.value.inferred_outputs?.length) {
+    if (rendered.value.inferred_outputs?.length)
       outputs.splice(0, outputs.length, ...rendered.value.inferred_outputs.map(p => ({ ...p })))
-    }
   }
 }
 </script>

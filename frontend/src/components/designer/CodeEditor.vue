@@ -68,23 +68,17 @@ function globalCompletions(context) {
 
 // ── Build editor ─────────────────────────────────────────────────────────────
 function buildExtensions() {
-  return [
-    lineNumbers(),
-    highlightActiveLineGutter(),
+  const isText = props.language === 'text'
+
+  const base = [
     drawSelection(),
     highlightActiveLine(),
-    bracketMatching(),
-    closeBrackets(),
     history(),
-    javascript(),
     oneDark,
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-    autocompletion({ override: [bbCompletions, globalCompletions] }),
     keymap.of([
-      ...closeBracketsKeymap,
       ...defaultKeymap,
       ...historyKeymap,
-      ...completionKeymap,
     ]),
     EditorView.updateListener.of(update => {
       if (update.docChanged) {
@@ -93,10 +87,27 @@ function buildExtensions() {
     }),
     EditorView.theme({
       '&': { height: props.height, fontSize: '12px' },
-      '.cm-scroller': { overflow: 'auto', fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" },
+      '.cm-scroller': { overflow: 'auto', fontFamily: isText ? "'Inter', 'system-ui', sans-serif" : "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" },
       '.cm-content': { padding: '8px 0' },
     }),
     props.readonly ? EditorState.readOnly.of(true) : [],
+  ]
+
+  if (isText) {
+    // Plain-text mode: word wrap, no line numbers, no bracket/autocomplete
+    return [...base, EditorView.lineWrapping]
+  }
+
+  // JavaScript mode: full featured
+  return [
+    ...base,
+    lineNumbers(),
+    highlightActiveLineGutter(),
+    bracketMatching(),
+    closeBrackets(),
+    javascript(),
+    autocompletion({ override: [bbCompletions, globalCompletions] }),
+    keymap.of([...closeBracketsKeymap, ...completionKeymap]),
   ]
 }
 
