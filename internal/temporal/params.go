@@ -73,3 +73,15 @@ type ExecuteCodeParams struct {
 	Blackboard    map[string]interface{}
 	ValidTriggers []string
 }
+
+// LoadWorkflowDefParams is the activity input for loading the latest WorkflowDef by name.
+// Used by skill_call states to resolve the child workflow before launching it.
+type LoadWorkflowDefParams struct {
+	WorkflowName string
+}
+
+// GetRunBlackboardParams is the activity input for reading the terminal blackboard of a run.
+// Used after a child skill workflow completes to extract its output fields.
+type GetRunBlackboardParams struct {
+	RunID string
+}

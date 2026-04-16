@@ -379,6 +379,71 @@ func (h *Handlers) CodegenHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// AnalyseSkillHandler decomposes a skill description into an ASM workflow YAML.
+// POST /api/v1/designer/skill/analyse
+func (h *Handlers) AnalyseSkillHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "skill analysis is not available: no LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)",
+		})
+		return
+	}
+
+	var req designer.AnalyseSkillRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.Description) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "description is required"})
+		return
+	}
+
+	result, err := h.generator.AnalyseSkill(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	// Reuse MarshalGenerateResult for identical response shape {yaml, definition}.
+	resp, err := designer.MarshalGenerateResult(&designer.GenerateResult{
+		YAML:       result.YAML,
+		Definition: result.Definition,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to serialise result"})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// RenderSkillHandler converts a WorkflowDef YAML into a human-readable skill description.
+// POST /api/v1/designer/skill/render
+func (h *Handlers) RenderSkillHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "skill rendering is not available: no LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)",
+		})
+		return
+	}
+
+	var req designer.RenderSkillRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.WorkflowYAML) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "workflow_yaml is required"})
+		return
+	}
+
+	result, err := h.generator.RenderSkill(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 // ScaffoldMCPHandler generates a Go MCP server implementation for the described tools.
 // POST /api/v1/designer/scaffold-mcp
 func (h *Handlers) ScaffoldMCPHandler(c *gin.Context) {

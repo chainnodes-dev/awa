@@ -113,6 +113,7 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
         condition:    n.data.condition    || undefined,
         timeout:      n.data.timeout      || undefined,
         on_timeout:   n.data.on_timeout   || undefined,
+        skill_call:   n.data.skill_call   || undefined,
         position:     n.position,
       })),
       transitions: Array.from(

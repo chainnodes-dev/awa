@@ -45,9 +45,10 @@ const (
 	StateIntermediate StateType = "intermediate"
 	StateHITL         StateType = "hitl"      // Human-in-the-loop pause
 	StateTerminal     StateType = "terminal"
-	StateScript       StateType = "script" // Deterministic expr-lang evaluation; no LLM
-	StateWait         StateType = "wait"   // Pauses until a condition is met or timeout
-	StateCode         StateType = "code"   // User-defined JavaScript executed via goja
+	StateScript       StateType = "script"     // Deterministic expr-lang evaluation; no LLM
+	StateWait         StateType = "wait"       // Pauses until a condition is met or timeout
+	StateCode         StateType = "code"       // User-defined JavaScript executed via goja
+	StateSkillCall    StateType = "skill_call" // Invokes another skill as a child workflow
 )
 
 type StateDef struct {
@@ -67,6 +68,8 @@ type StateDef struct {
 	OnCondition string `yaml:"on_condition,omitempty" json:"on_condition,omitempty"`
 	// Code is set when type == "code" (JavaScript executed via goja).
 	Code *CodeDef `yaml:"code,omitempty" json:"code,omitempty"`
+	// SkillCall is set when type == "skill_call".
+	SkillCall *SkillCallDef `yaml:"skill_call,omitempty" json:"skill_call,omitempty"`
 	// Layout hint for the designer canvas — not required at runtime.
 	Position *Position `yaml:"position,omitempty" json:"position,omitempty"`
 }

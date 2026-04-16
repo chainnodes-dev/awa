@@ -400,6 +400,81 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				continue
 			}
 
+			// ── Skill Call ───────────────────────────────────────────────────────
+			if state.Type == asmtypes.StateSkillCall && state.SkillCall != nil {
+				sc := state.SkillCall
+				skillOpts := makeShortOpts(bCtx)
+
+				// 1. Load the child WorkflowDef by name.
+				var childDef *asmtypes.WorkflowDef
+				err := workflow.ExecuteActivity(skillOpts, (*Activities).LoadWorkflowDef,
+					LoadWorkflowDefParams{WorkflowName: sc.SkillRef},
+				).Get(bCtx, &childDef)
+				if err != nil {
+					workflowErr = fmt.Errorf("skill_call: load workflow '%s': %w", sc.SkillRef, err)
+					return
+				}
+
+				// 2. Build the child blackboard from input mappings.
+				childBB := make(map[string]interface{})
+				for childField, parentField := range sc.InputMappings {
+					if v, ok := bb[parentField]; ok {
+						childBB[childField] = v
+					}
+				}
+
+				// 3. Launch a Temporal child workflow.
+				childRunID := workflow.GetInfo(bCtx).WorkflowExecution.ID + "__skill__" + currentState
+				cwo := workflow.ChildWorkflowOptions{
+					WorkflowID: childRunID,
+				}
+				childCtx := workflow.WithChildOptions(bCtx, cwo)
+				skillErr := workflow.ExecuteChildWorkflow(childCtx, ASMWorkflow, WorkflowParams{
+					RunID:      childRunID,
+					Def:        childDef,
+					Blackboard: childBB,
+				}).Get(bCtx, nil)
+
+				// 4. Determine trigger and apply output mappings.
+				trigger := sc.CompletionTrigger
+				if skillErr != nil {
+					trigger = sc.FailureTrigger
+					if trigger == "" {
+						trigger = "skill_failed"
+					}
+				} else {
+					// Read the child run's terminal blackboard and map outputs back.
+					var childFinalBB map[string]interface{}
+					_ = workflow.ExecuteActivity(skillOpts, (*Activities).GetRunBlackboard,
+						GetRunBlackboardParams{RunID: childRunID},
+					).Get(bCtx, &childFinalBB)
+					for childField, parentField := range sc.OutputMappings {
+						if v, ok := childFinalBB[childField]; ok {
+							bb[parentField] = v
+						}
+					}
+				}
+
+				nextStates, err := applyTransition(p.Def, currentState, trigger, bb)
+				if err != nil {
+					workflowErr = err
+					return
+				}
+				if len(nextStates) == 0 {
+					return
+				}
+				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+					workflowErr = err
+					return
+				}
+				for i := 1; i < len(nextStates); i++ {
+					target := nextStates[i]
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+				}
+				currentState = nextStates[0]
+				continue
+			}
+
 			// ── External trigger state ────────────────────────────────────────────
 			var (
 				sig     TriggerSignalPayload

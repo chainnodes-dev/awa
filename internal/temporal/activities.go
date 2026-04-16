@@ -3,6 +3,7 @@ package temporal
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -101,4 +102,25 @@ func (a *Activities) ExecuteAgent(ctx context.Context, p ExecuteAgentParams) (*a
 		Blackboard: p.Blackboard,
 		Def:        p.Def,
 	})
+}
+
+
+// LoadWorkflowDef loads the latest version of a WorkflowDef by name.
+// Used by skill_call states to resolve the child workflow before launching it.
+func (a *Activities) LoadWorkflowDef(ctx context.Context, p LoadWorkflowDefParams) (*asmtypes.WorkflowDef, error) {
+	def, _, err := a.Store.GetLatestDefinition(ctx, p.WorkflowName)
+	if err != nil {
+		return nil, fmt.Errorf("load workflow '%s': %w", p.WorkflowName, err)
+	}
+	return def, nil
+}
+
+// GetRunBlackboard reads the current blackboard snapshot for a completed run.
+// Used after a child skill workflow completes to extract its output fields.
+func (a *Activities) GetRunBlackboard(ctx context.Context, p GetRunBlackboardParams) (map[string]interface{}, error) {
+	run, err := a.Store.GetRun(ctx, p.RunID)
+	if err != nil {
+		return nil, fmt.Errorf("get run '%s': %w", p.RunID, err)
+	}
+	return run.Blackboard, nil
 }

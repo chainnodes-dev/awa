@@ -20,6 +20,8 @@
         <option value="script">script</option>
         <option value="code">code</option>
         <optgroup label="──────────────"></optgroup>
+        <option value="skill_call">skill_call</option>
+        <optgroup label="──────────────"></optgroup>
         <option value="hitl">hitl</option>
         <option value="wait">wait</option>
       </select>
@@ -90,7 +92,7 @@
     </template>
 
     <!-- Agent field -->
-    <template v-if="form.type !== 'script' && form.type !== 'wait' && form.type !== 'code'">
+    <template v-if="form.type !== 'script' && form.type !== 'wait' && form.type !== 'code' && form.type !== 'skill_call'">
       <div class="space-y-1">
         <label class="text-xs text-slate-500">Agent</label>
         <div class="space-y-1.5">
@@ -141,6 +143,56 @@
       </div>
     </template>
 
+    <!-- Skill Call section -->
+    <template v-if="form.type === 'skill_call'">
+      <div class="pt-3 border-t border-border space-y-2.5">
+        <h4 class="text-xs font-semibold text-violet-400/80 uppercase tracking-wider">Skill Call</h4>
+        <p class="text-[10px] text-slate-600 leading-relaxed">
+          Invoke another workflow as a child skill. The child runs to completion
+          before this state transitions.
+        </p>
+
+        <div class="space-y-1">
+          <label class="text-xs text-slate-500">Skill / Workflow Ref</label>
+          <input
+            class="input font-mono text-xs"
+            v-model="form.skill_ref"
+            placeholder="workflow-name"
+          />
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-xs text-slate-500">Completion Trigger</label>
+          <input
+            class="input font-mono text-xs"
+            v-model="form.skill_completion_trigger"
+            placeholder="skill_done"
+          />
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-xs text-slate-500">Failure Trigger <span class="text-slate-600 font-normal">(optional, default: skill_failed)</span></label>
+          <input
+            class="input font-mono text-xs"
+            v-model="form.skill_failure_trigger"
+            placeholder="skill_failed"
+          />
+        </div>
+
+        <SkillInputMappingEditor
+          label="Input Mappings — child port ← parent bb field"
+          :mappings="form.skill_input_mappings"
+          @update:mappings="form.skill_input_mappings = $event"
+        />
+
+        <SkillInputMappingEditor
+          label="Output Mappings — parent bb field ← child port"
+          :mappings="form.skill_output_mappings"
+          @update:mappings="form.skill_output_mappings = $event"
+        />
+      </div>
+    </template>
+
     <!-- Transitions -->
     <div class="pt-3 border-t border-border space-y-3">
       <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Transitions</h4>
@@ -171,7 +223,7 @@
     </div>
 
     <!-- Agent config section -->
-    <template v-if="form.type !== 'script' && form.agent">
+    <template v-if="form.type !== 'script' && form.type !== 'skill_call' && form.agent">
       <div class="pt-3 border-t border-border space-y-2.5">
         <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Agent Config</h4>
         <div class="space-y-1">
@@ -255,6 +307,7 @@ import AgentCombobox from './AgentCombobox.vue'
 import CodeEditor from './CodeEditor.vue'
 import CodeEditorModal from './CodeEditorModal.vue'
 import MCPServerPicker from './MCPServerPicker.vue'
+import SkillInputMappingEditor from './SkillInputMappingEditor.vue'
 
 // Starter template shown when a new code state is created.
 const defaultCodeTemplate = `// Blackboard fields are available via bb.*
@@ -281,6 +334,12 @@ const emit = defineEmits(['update', 'delete'])
 
 const STATE_TYPES = ['initial', 'terminal', 'intermediate', 'script', 'code', 'hitl', 'wait']
 
+// Helper to convert skill_call mappings object { portName: bbField } → array of { name, bbField }
+function mappingsToArray(obj) {
+  if (!obj) return []
+  return Object.entries(obj).map(([name, bbField]) => ({ name, bbField }))
+}
+
 const form = reactive({
   name:           props.node.name         ?? '',
   type:           props.node.type         ?? 'intermediate',
@@ -294,6 +353,12 @@ const form = reactive({
     ? Object.entries(props.node.script.updates).map(([k, v]) => ({ key: k, expr: v }))
     : [],
   code: props.node.code?.code ?? defaultCodeTemplate,
+  // skill_call fields
+  skill_ref:                 props.node.skill_call?.skill_ref            ?? '',
+  skill_completion_trigger:  props.node.skill_call?.completion_trigger   ?? 'skill_done',
+  skill_failure_trigger:     props.node.skill_call?.failure_trigger      ?? '',
+  skill_input_mappings:      mappingsToArray(props.node.skill_call?.input_mappings),
+  skill_output_mappings:     mappingsToArray(props.node.skill_call?.output_mappings),
 })
 
 const agentForm = reactive({
@@ -377,6 +442,14 @@ function copyScript() {
   navigator.clipboard.writeText(JSON.stringify(scaffoldScript.value, null, 2))
 }
 
+// Helper to convert mapping array [{ name, bbField }] → object { name: bbField }
+function mappingsToObject(arr) {
+  if (!arr || !arr.length) return undefined
+  const filtered = arr.filter(m => m.name)
+  if (!filtered.length) return undefined
+  return Object.fromEntries(filtered.map(m => [m.name, m.bbField]))
+}
+
 function onApply() {
   const scriptDef = form.type === 'script' ? {
     trigger: form.script_trigger || '',
@@ -390,18 +463,27 @@ function onApply() {
     code:     form.code || '',
   } : undefined
 
+  const skillCallDef = form.type === 'skill_call' ? {
+    skill_ref:          form.skill_ref          || '',
+    completion_trigger: form.skill_completion_trigger || 'skill_done',
+    failure_trigger:    form.skill_failure_trigger   || undefined,
+    input_mappings:     mappingsToObject(form.skill_input_mappings),
+    output_mappings:    mappingsToObject(form.skill_output_mappings),
+  } : undefined
+
   const nodeData = {
     name:         form.name,
     type:         form.type,
     instructions: form.instructions || undefined,
-    agent:        (form.type !== 'script' && form.type !== 'wait' && form.type !== 'code') ? (form.agent || undefined) : undefined,
+    agent:        (form.type !== 'script' && form.type !== 'wait' && form.type !== 'code' && form.type !== 'skill_call') ? (form.agent || undefined) : undefined,
     script:       scriptDef,
     code:         codeDef,
     condition:    form.type === 'wait' ? (form.condition || undefined) : undefined,
     timeout:      form.timeout    || undefined,
     on_timeout:   form.on_timeout || undefined,
+    skill_call:   skillCallDef,
   }
-  const agentData = (form.type !== 'script' && form.type !== 'code' && form.agent) ? {
+  const agentData = (form.type !== 'script' && form.type !== 'code' && form.type !== 'skill_call' && form.agent) ? {
     name:       form.agent,
     model:      agentForm.model      || undefined,
     task_queue: agentForm.task_queue || undefined,

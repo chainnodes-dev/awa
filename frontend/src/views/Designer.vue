@@ -178,7 +178,16 @@
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
               </svg>
-              AI Assistant
+              AI
+            </button>
+            <button
+              @click="rightTab = 'skill'"
+              :class="['flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5', rightTab === 'skill' ? 'text-slate-200 border-b-2 border-violet-400' : 'text-slate-500 hover:text-slate-400']"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
+              </svg>
+              Skill
             </button>
           </div>
 
@@ -261,10 +270,17 @@
 
           <!-- AI Assistant tab -->
           <AIChatPanel
-            v-else
+            v-else-if="rightTab === 'ai'"
             :yaml-source="yamlSource"
             :workflow-name="meta.name"
             :workflow-description="meta.description"
+            @apply="onAIApply"
+          />
+
+          <!-- Skill tab -->
+          <SkillPanel
+            v-else-if="rightTab === 'skill'"
+            :yaml-source="yamlSource"
             @apply="onAIApply"
           />
         </aside>
@@ -305,6 +321,7 @@ import EdgePanel              from '@/components/designer/EdgePanel.vue'
 import BBFieldModal           from '@/components/designer/BBFieldModal.vue'
 import AddStateModal          from '@/components/designer/AddStateModal.vue'
 import AIChatPanel            from '@/components/designer/AIChatPanel.vue'
+import SkillPanel             from '@/components/designer/SkillPanel.vue'
 
 import { useWorkflowStore } from '@/stores/workflows'
 import { useWorkflowIO }    from '@/composables/useWorkflowIO'

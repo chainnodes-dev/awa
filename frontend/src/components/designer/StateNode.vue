@@ -24,6 +24,11 @@
           <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
         </svg>
       </span>
+      <span v-if="data.type === 'skill_call'" class="ml-auto text-violet-400">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
+        </svg>
+      </span>
     </div>
 
     <!-- Agent badge -->
@@ -71,6 +76,7 @@ const TYPE_STYLES = {
   wait:         'border-indigo-400/60 bg-indigo-500/5',
   script:       'border-amber-500/50 bg-amber-500/5',
   code:         'border-teal-500/60 bg-teal-500/10',
+  skill_call:   'border-violet-500/60 bg-violet-500/10',
 }
 const TYPE_DOTS = {
   initial:      'bg-green-500',
@@ -80,10 +86,11 @@ const TYPE_DOTS = {
   wait:         'bg-indigo-400',
   script:       'bg-amber-500',
   code:         'bg-teal-400',
+  skill_call:   'bg-violet-400',
 }
 const TYPE_COLORS = {
   initial: '#22c55e', intermediate: '#6366f1', hitl: '#f59e0b', terminal: '#64748b', wait: '#818cf8',
-  script: '#f59e0b', code: '#2dd4bf',
+  script: '#f59e0b', code: '#2dd4bf', skill_call: '#a78bfa',
 }
 
 const nodeStyle = computed(() => {
