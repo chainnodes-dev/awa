@@ -167,7 +167,7 @@ func (e *Engine) evalScript(ctx context.Context, state *asmtypes.StateDef, bb ma
 	script := state.Script
 
 	// Evaluate the trigger expression → must produce a string.
-	triggerProg, err := expr.Compile(script.Trigger, expr.Env(bb))
+	triggerProg, err := expr.Compile(script.Trigger, expr.Env(bb), expr.AllowUndefinedVariables())
 	if err != nil {
 		return nil, fmt.Errorf("compile trigger expr '%s': %w", script.Trigger, err)
 	}
@@ -183,7 +183,7 @@ func (e *Engine) evalScript(ctx context.Context, state *asmtypes.StateDef, bb ma
 	// Evaluate each blackboard update expression.
 	updates := make(map[string]interface{})
 	for field, exprStr := range script.Updates {
-		prog, err := expr.Compile(exprStr, expr.Env(bb))
+		prog, err := expr.Compile(exprStr, expr.Env(bb), expr.AllowUndefinedVariables())
 		if err != nil {
 			return nil, fmt.Errorf("compile update expr for '%s': %w", field, err)
 		}
@@ -209,7 +209,7 @@ func EvalScript(state *asmtypes.StateDef, bb map[string]interface{}) (*asmtypes.
 	}
 	script := state.Script
 
-	triggerProg, err := expr.Compile(script.Trigger, expr.Env(bb))
+	triggerProg, err := expr.Compile(script.Trigger, expr.Env(bb), expr.AllowUndefinedVariables())
 	if err != nil {
 		return nil, fmt.Errorf("compile trigger expr '%s': %w", script.Trigger, err)
 	}
@@ -224,7 +224,7 @@ func EvalScript(state *asmtypes.StateDef, bb map[string]interface{}) (*asmtypes.
 
 	updates := make(map[string]interface{})
 	for field, exprStr := range script.Updates {
-		prog, err := expr.Compile(exprStr, expr.Env(bb))
+		prog, err := expr.Compile(exprStr, expr.Env(bb), expr.AllowUndefinedVariables())
 		if err != nil {
 			return nil, fmt.Errorf("compile update expr for '%s': %w", field, err)
 		}
@@ -243,7 +243,7 @@ func EvalScript(state *asmtypes.StateDef, bb map[string]interface{}) (*asmtypes.
 }
 
 func EvalGuard(expression string, bb map[string]interface{}) (bool, error) {
-	program, err := expr.Compile(expression, expr.Env(bb), expr.AsBool())
+	program, err := expr.Compile(expression, expr.Env(bb), expr.AsBool(), expr.AllowUndefinedVariables())
 	if err != nil {
 		return false, fmt.Errorf("compile guard '%s': %w", expression, err)
 	}

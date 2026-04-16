@@ -152,6 +152,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	var resp rpcResponse
 	switch req.Method {
+	case "initialize":
+		resp = rpcResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Result: map[string]interface{}{
+				"protocolVersion": "2024-11-05",
+				"capabilities":    map[string]interface{}{},
+				"serverInfo": map[string]string{
+					"name":    "mcp-server",
+					"version": "1.0.0",
+				},
+			},
+		}
+	case "notifications/initialized":
+		return // notifications don't get a response
+
 	case "tools/list":
 		resp = rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{"tools": tools}}
 

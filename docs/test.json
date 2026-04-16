@@ -44,3 +44,22 @@ Let Human reviewr approve or reject. If approved move to confirmed. If rejected 
 {
   "symbol": "AAPL"
 }
+
+# MCP test
+{
+  "amount": 14500.50,
+  "currency": "EUR",
+  "customer": "Acme Corp GmbH",
+  "invoice-nr": 202400189,
+  "lei": "529900T8BM49AURSDO55"
+}
+
+{
+  "amount": 14500.50,
+  "currency": "EUR",
+  "customer": "Solactive AG",
+  "invoice-nr": 202400189
+}
+
+len(['customer', ' lei', 'invoice-nr', 'currency', 'amount'
+]) == 5 ? "data_validated": (("lei" != nil) ? "missing_lei": "error")

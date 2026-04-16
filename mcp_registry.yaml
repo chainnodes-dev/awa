@@ -40,3 +40,15 @@ mcp_servers:
   - name: notification-hub
     env_var: MCP_NOTIFICATION_HUB_URL
     description: "Sends multi-channel notifications (Slack, email, SMS, webhooks). Tools: notify(channel, message, recipients)."
+
+  - name: gleif
+    env_var: MCP_GLEIF_URL
+    description: "Provides public data lookups for Legal Entity Identifiers using GLEIF. Tools: gleif_search(query)."
+
+  - name: exchange-rates
+    env_var: MCP_EXCHANGE_URL
+    description: "Provides current exchange rates and currency conversion using Frankfurter (ECB rates). Tools: get_exchange_rate(amount, from, to)."
+
+  - name: openfigi
+    env_var: MCP_OPENFIGI_URL
+    description: "Provides Financial Instrument Global Identifier (FIGI) lookups from stock tickers using OpenFIGI. Tools: figi_lookup(ticker)."

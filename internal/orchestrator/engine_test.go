@@ -288,3 +288,39 @@ func TestEngine_SignalHITL(t *testing.T) {
 		t.Errorf("SendHITLSignal was not called")
 	}
 }
+
+func TestEvalGuard_AllowUndefined(t *testing.T) {
+	bb := map[string]interface{}{"known": 100}
+	// Referencing "unknown" which is not in bb.
+	// Without AllowUndefinedVariables, this would fail to compile.
+	pass, err := EvalGuard("known > 50 && unknown == nil", bb)
+	if err != nil {
+		t.Fatalf("EvalGuard failed: %v", err)
+	}
+	if !pass {
+		t.Errorf("Expected guard to pass, got false")
+	}
+}
+
+func TestEvalScript_AllowUndefined(t *testing.T) {
+	bb := map[string]interface{}{"known": "value"}
+	state := &asmtypes.StateDef{
+		Name: "test",
+		Script: &asmtypes.ScriptDef{
+			Trigger: "unknown == nil ? 'next' : 'error'",
+			Updates: map[string]string{
+				"new_field": "unknown",
+			},
+		},
+	}
+	out, err := EvalScript(state, bb)
+	if err != nil {
+		t.Fatalf("EvalScript failed: %v", err)
+	}
+	if out.Trigger != "next" {
+		t.Errorf("Trigger: got %q, want %q", out.Trigger, "next")
+	}
+	if val, ok := out.BlackboardUpdates["new_field"]; !ok || val != nil {
+		t.Errorf("Update 'new_field': got %v, want nil", val)
+	}
+}
