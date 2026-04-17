@@ -94,6 +94,16 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			llmCfg.POST("/:provider/test", h.TestLLMConnection)
 		}
 
+		// Skill Registry — readable by all authenticated users; write requires operator/admin.
+		api.GET("/skills", h.ListSkills)
+		api.GET("/skills/:name", h.GetSkill)
+		skillsWrite := api.Group("/skills", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator))
+		{
+			skillsWrite.POST("", h.CreateSkill)
+			skillsWrite.PUT("/:name", h.UpdateSkill)
+			skillsWrite.DELETE("/:name", h.DeleteSkill)
+		}
+
 		// AI Workflow Designer — operator/admin only.
 		designerGroup := api.Group("/designer", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator))
 		{

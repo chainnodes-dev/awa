@@ -86,6 +86,7 @@ type Store interface {
 	TenantStore
 	MCPServerStore
 	LLMConfigStore
+	SkillStore
 	Close() error
 }
 

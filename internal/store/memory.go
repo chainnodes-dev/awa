@@ -26,6 +26,7 @@ type MemoryStore struct {
 	refreshTokens map[string]*RefreshToken // key: TokenHash
 	mcpServers    map[string]*MCPServer    // key: id
 	llmConfigs    map[string]*LLMConfig    // key: tenantID:provider
+	skills        map[string]*Skill        // key: tenantID:name
 }
 
 type defEntry struct {
@@ -46,6 +47,7 @@ func NewMemoryStore() *MemoryStore {
 		refreshTokens: make(map[string]*RefreshToken),
 		mcpServers:    make(map[string]*MCPServer),
 		llmConfigs:    make(map[string]*LLMConfig),
+		skills:        make(map[string]*Skill),
 	}
 }
 
