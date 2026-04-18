@@ -286,6 +286,116 @@ states:
 
 ---
 
+#### `code`
+
+A JavaScript state executed directly in the engine using the [goja](https://github.com/dop251/goja) pure-Go JavaScript runtime. No LLM, no external service — pure deterministic logic with full JavaScript expressiveness.
+
+Use `code` states when the logic is too complex for a single-line `script` expression but doesn't warrant a full specialist worker deployment.
+
+The code receives the blackboard as `bb` and must return `{ trigger, blackboard_updates?, reasoning? }` or call `trigger('name')` for early exit.
+
+```yaml
+states:
+  - name: COMPUTE_TOTALS
+    type: code
+    code:
+      language: javascript
+      code: |
+        bb.vat        = bb.amount * 0.2;
+        bb.net_amount = bb.amount - bb.vat;
+        return { trigger: bb.net_amount > 10000 ? "needs_review" : "auto_approve" };
+```
+
+The Designer includes an **LLM code generation** button: describe the logic in the Instructions field and click "Generate Code" — the platform sends the description, blackboard schema, and outgoing trigger names to the LLM and populates the editor with working JavaScript.
+
+---
+
+#### `skill_call`
+
+Invokes another registered **skill** (identified by its `workflow_ref`) as a Temporal child workflow. The parent run pauses until the child reaches a terminal state, then maps the child's outputs back onto the parent blackboard.
+
+This is the primary composition mechanism — skills call other skills to build complex, reusable capabilities.
+
+```yaml
+states:
+  - name: ENRICH_COMPANY
+    type: skill_call
+    skill_call:
+      skill_ref: gleif-lookup-workflow    # name of the child workflow
+      completion_trigger: enriched
+      failure_trigger:    enrichment_failed
+      input_mappings:
+        company_name: vendor              # child port ← parent bb field
+      output_mappings:
+        lei_code: vendor_lei             # parent bb field ← child port
+        revenue_eur: enriched_revenue
+```
+
+**Runtime:**
+1. `LoadWorkflowDef` activity resolves the child workflow definition by `skill_ref`
+2. `ExecuteChildWorkflow` launches it with `childBB` built from `input_mappings`
+3. Parent parks on the child workflow future
+4. On completion: `GetRunBlackboard` reads the child's terminal blackboard; `output_mappings` writes values back to the parent
+5. Fires `completion_trigger`; on failure fires `failure_trigger` (default: `skill_failed`)
+
+The child workflow is a fully durable Temporal workflow — it survives restarts independently of the parent.
+
+---
+
+---
+
+#### `emit_event`
+
+Fires a named platform event to the event bus. Other runs (in the same tenant) that are paused at a `wait` state listening for the same event name will be woken up and advanced.
+
+Use `emit_event` states for fire-and-forget fan-out: notify a downstream skill that data is ready without pausing the current run.
+
+```yaml
+states:
+  - name: NOTIFY_DOWNSTREAM
+    type: emit_event
+    emit_event:
+      event_name: data_ready          # name other runs listen for
+      payload_fields: [result, run_id] # which bb fields to include (omit = full bb)
+      completion_trigger: notified    # trigger fired after the event is delivered
+```
+
+**Runtime:**
+1. `EmitWorkflowEvent` activity publishes a `workflow.event` event to the bus (WebSocket clients see it)
+2. Queries `event_subscriptions` for all runs in this tenant waiting for `event_name`
+3. For each match: calls `client.SignalWorkflow` with the subscription's `on_match_trigger` and the payload
+4. Removes each delivered subscription from the store
+5. Fires `completion_trigger` (default: `event_emitted`) and advances
+
+---
+
+**Extended `wait` — wait for a named platform event (`on_event`):**
+
+A `wait` state gains two new optional fields that make it subscribe to the event bus rather than (or in addition to) polling a condition expression:
+
+| Field | Description |
+|---|---|
+| `on_event` | Platform event name to listen for. The run registers a subscription when it enters the wait state. |
+| `on_event_match` | Trigger fired when the event arrives. Defaults to `"event_received"`. |
+
+```yaml
+states:
+  - name: WAIT_FOR_RESULTS
+    type: wait
+    on_event: data_ready        # wake when any run in this tenant emits this event
+    on_event_match: event_received
+    timeout: 1h
+    on_timeout: timed_out
+```
+
+**Runtime:**
+1. `RegisterEventSubscription` activity records `{id, tenant_id, run_id, temporal_id, event_name, on_match_trigger}` — idempotent (ID = `temporal_workflow_id + "__" + state_name`)
+2. Blocks on `triggerCh` (same channel used by manual triggers and `emit_event` delivery)
+3. On wake: `UnregisterEventSubscription` activity removes the subscription
+4. Fires the signal's trigger (e.g. `event_received`), which maps to an outgoing transition
+
+---
+
 ### Choosing the Right Type
 
 | I need to… | Use |
@@ -293,11 +403,14 @@ states:
 | Start processing when a run is created | `initial` |
 | Run an LLM agent or specialist worker | `intermediate` |
 | Make a deterministic decision without an LLM | `script` |
+| Run JavaScript logic (more than one line) | `code` |
+| Invoke a reusable skill as a subprocess | `skill_call` |
+| Fire a named event to wake other runs | `emit_event` |
 | Pause and wait for a human decision | `hitl` |
-| Wait for a condition or join parallel branches | `wait` |
+| Wait for a condition, external trigger, or platform event | `wait` |
 | Mark the run as finished | `terminal` |
 
-A typical workflow follows this spine: `initial → intermediate(s) → hitl (optional) → terminal`
+A typical workflow follows this spine: `initial → intermediate(s) / skill_call(s) → hitl (optional) → terminal`
 
 ### Transitions & Guards
 
@@ -443,6 +556,12 @@ All durable state lives in PostgreSQL:
 - `hitl_requests` — pending and resolved human review requests
 - `users` — user accounts scoped to a tenant; username unique per-tenant
 - `refresh_tokens` — opaque tokens for JWT refresh rotation
+- `mcp_servers` — MCP server registry entries (name, url, env_var); DB-backed with YAML fallback
+- `llm_configs` — per-tenant LLM provider configuration (provider, api_key, model, enabled, is_default)
+- `skills` — registered skills with typed I/O contracts and capability declarations (JSONB)
+- `skill_dependencies` — directed edges: `(skill_id, depends_on_id)`; populated automatically from `skill_call` nodes in the skill's workflow
+- `event_subscriptions` — per-run registrations for wait-on-event states; indexed by `(tenant_id, event_name)`
+- `api_keys` — long-lived tokens for external callers; only the SHA-256 hash of the raw key is stored
 
 The transition history is immutable. Every run has a complete, auditable record of every decision made, which agent made it, and what the blackboard contained at that moment.
 
@@ -595,6 +714,185 @@ DELETE /api/v1/tenants/:id      — delete tenant (super_admin only; default ten
 ### First-Boot Seeding
 
 On startup, if no tenants exist, the server creates the **default tenant** (`slug: "default"`, fixed UUID `00000000-0000-0000-0000-000000000001`) and seeds the initial `super_admin` user from the `ADMIN_USERNAME` / `ADMIN_PASSWORD` environment variables. This is idempotent — safe to run on every restart.
+
+---
+
+## Skill System
+
+### What is a Skill?
+
+A **skill** is a named, versioned capability with a typed I/O contract. It is a higher-level abstraction over a workflow:
+
+- The **workflow** is the *implementation* — the states, transitions, and agents that do the work
+- The **skill** is the *contract* — the inputs it requires, the outputs it produces, and the MCP servers it depends on
+
+This separation allows skills to be reused across many workflows without exposing their internals. Callers only need to know the port names and types — not how the skill is implemented.
+
+```
+Skill: gleif-lookup
+  inputs:  [company_name: string]
+  outputs: [lei_code: string, revenue_eur: number, currency: string]
+  workflow_ref: gleif-lookup-workflow   ← points to a WorkflowDef
+```
+
+### Skill Registry
+
+Skills are stored in the `skills` table (tenant-scoped) and managed via:
+
+```
+GET    /api/v1/skills                    — list all skills (any authenticated user)
+GET    /api/v1/skills/:name              — get single skill
+GET    /api/v1/skills/:name/dependents   — skills that call this skill via skill_call
+POST   /api/v1/skills                    — create skill (operator/admin)
+PUT    /api/v1/skills/:name              — update skill (operator/admin)
+DELETE /api/v1/skills/:name              — delete skill; 409 if dependents exist (use ?force=true to override)
+```
+
+The **Skill Catalog** (`/skills` route) provides a table view with search, I/O port counts, workflow links, and inline create/edit/delete. It is accessible from the sidebar star icon.
+
+### Bi-Directional Conversion
+
+The platform provides two LLM-powered conversions between the skill abstraction and its workflow implementation:
+
+| Direction | Endpoint | What it does |
+|---|---|---|
+| **Analyse** (description → workflow) | `POST /designer/skill/analyse` | Decomposes a plain-English skill description into an optimised workflow YAML. Prefers `code`/`script` nodes over LLM nodes wherever logic is deterministic. |
+| **Render** (workflow → description) | `POST /designer/skill/render` | Converts an existing workflow YAML back into a human-readable skill description + inferred I/O port contract. |
+
+The workflow is the single source of truth. The description is a "projection" — editing it triggers a new analysis (proposed changes for review), not an automatic overwrite.
+
+### Skill Composition
+
+Skills are composed using `skill_call` states. When workflow A needs the output of skill B:
+
+```
+Workflow A:
+  INTAKE → ENRICH_COMPANY (skill_call → gleif-lookup-workflow) → REVIEW → DONE
+                  ↑ maps vendor → company_name
+                  ↓ maps lei_code → vendor_lei, revenue_eur → enriched_revenue
+```
+
+At runtime, the `skill_call` state:
+1. Launches `gleif-lookup-workflow` as a **Temporal child workflow** — fully durable, independent lifecycle
+2. Passes mapped blackboard fields as the child's input
+3. Waits for the child to complete
+4. Reads the child's terminal blackboard and maps outputs back to the parent
+
+The **SkillPicker** in the Designer's Properties panel provides a searchable dropdown of registered skills. Selecting a skill automatically pre-populates the I/O mapping rows with the skill's declared port names — the user only needs to fill in the parent blackboard field names.
+
+### Skill Dependency Graph
+
+The platform tracks which skills invoke which other skills via the `skill_dependencies` join table. Dependencies are recorded automatically whenever a skill is created or updated:
+
+1. The handler loads the skill's `workflow_ref` definition
+2. Scans all `skill_call` states for their `skill_ref` values
+3. Resolves each ref to a registered skill ID
+4. Calls `UpsertSkillDependencies` — replacing the full edge set atomically
+
+This powers two capabilities:
+
+- **`GET /api/v1/skills/:name/dependents`** — returns all skills that invoke the named skill. Used by operators to assess blast radius before modifying a shared skill.
+- **Delete protection** — `DELETE /api/v1/skills/:name` returns 409 with the caller list when dependents exist; requires `?force=true` to override.
+
+The Skill Catalog table shows a "Used by N" badge on every skill with dependents. The edit modal shows an amber warning when the skill being edited has callers.
+
+### Registry-aware Skill Analyser
+
+The Skill Analyser (`POST /designer/skill/analyse`) fetches the current tenant's skill catalog before calling the LLM and injects a `## Registered Skills` section into the system prompt. For each skill it lists the name, description, and typed I/O ports.
+
+The decomposition rules instruct the LLM to:
+1. Check the catalog first — if a registered skill already implements the required capability, emit a `skill_call` state pointing to it rather than reimplementing the logic inline.
+2. Only fall back to `intermediate`/`code`/`script` states for capabilities not covered by any existing skill.
+
+This ensures that as the skill registry grows, new workflows automatically benefit from existing building blocks without manual cross-referencing.
+
+### Capability Declarations
+
+Skills declare the MCP servers they require:
+
+```yaml
+capabilities:
+  - mcp_server: gleif       # logical name in the MCP registry
+  - mcp_server: fx-rates
+```
+
+This makes dependency auditing explicit: given a skill, you can immediately see which external tool servers it needs — without reading the full workflow implementation.
+
+### PostgreSQL Schema (Skill-related)
+
+```
+skills
+  id           UUID PK
+  tenant_id    UUID FK → tenants
+  name         TEXT         UNIQUE(tenant_id, name)
+  description  TEXT
+  workflow_ref TEXT         → workflow_definitions.name
+  inputs       JSONB        [{name, type, description, required}]
+  outputs      JSONB        [{name, type, description}]
+  capabilities JSONB        [{mcp_server}]
+  created_at   TIMESTAMPTZ
+  updated_at   TIMESTAMPTZ
+
+skill_dependencies
+  skill_id       UUID FK → skills(id) ON DELETE CASCADE
+  depends_on_id  UUID FK → skills(id) ON DELETE CASCADE
+  PRIMARY KEY (skill_id, depends_on_id)
+  INDEX on depends_on_id   -- for fast dependent lookups
+
+event_subscriptions
+  id              TEXT PK   -- temporalID + "__" + stateName (deterministic, prevents duplicates)
+  tenant_id       UUID FK → tenants
+  run_id          TEXT
+  temporal_id     TEXT       -- Temporal workflow execution ID for SignalWorkflow
+  event_name      TEXT
+  on_match_trigger TEXT      -- trigger fired when the event arrives (default: "event_received")
+  created_at      TIMESTAMPTZ
+  INDEX on (tenant_id, event_name)  -- for fast fan-out lookups
+
+api_keys
+  id           UUID PK DEFAULT gen_random_uuid()
+  tenant_id    UUID FK → tenants
+  name         TEXT
+  key_hash     TEXT NOT NULL UNIQUE   -- SHA-256 hex; raw key never stored
+  created_by   UUID FK → users ON DELETE SET NULL
+  created_at   TIMESTAMPTZ
+  last_used_at TIMESTAMPTZ
+  revoked_at   TIMESTAMPTZ
+  INDEX on tenant_id
+```
+
+### External Skill Invocation API
+
+Any external caller (human-facing app, webhook, another ASM tenant) can invoke a skill without a user session by presenting an **API key**.
+
+**API key lifecycle:**
+
+```
+POST /api/v1/api-keys   { "name": "my-app" }
+→ { "key": {...}, "raw_key": "asm_sk_<base64url-32-bytes>" }   ← shown once only
+
+GET    /api/v1/api-keys          — list keys for the tenant (hashes hidden)
+DELETE /api/v1/api-keys/:id      — revoke key (admin only)
+```
+
+**Invoking a skill:**
+
+```
+POST /api/v1/invoke/:name   { "input": { "company_name": "ACME Corp" } }
+X-API-Key: asm_sk_...
+→ 202  { "run_id": "...", "status": "running" }
+
+GET /api/v1/invoke/:name/runs/:run_id
+X-API-Key: asm_sk_...
+→ 200  { run object with current_state, status, blackboard }
+```
+
+The `RequireAuthOrAPIKey` middleware accepts:
+- `X-API-Key: asm_sk_...` header
+- `Authorization: Bearer asm_sk_...` (API key with Bearer prefix)
+- `Authorization: Bearer <jwt>` (standard user JWT)
+
+The middleware scopes the request context to the key's tenant identically to JWT auth — all downstream store operations are automatically tenant-isolated.
 
 ---
 

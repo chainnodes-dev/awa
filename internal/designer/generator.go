@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/asm-platform/asm/internal/executor/llm"
+	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
@@ -48,14 +49,17 @@ type GenerateResult struct {
 
 // Generator uses an LLM to produce WorkflowDef YAML from a plain-language description.
 type Generator struct {
-	provider llm.Provider
-	registry []MCPServerEntry
+	provider   llm.Provider
+	registry   []MCPServerEntry
+	skillStore store.SkillStore
 }
 
 // NewGenerator creates a Generator backed by the given LLM provider.
 // registry should come from LoadMCPRegistry().
-func NewGenerator(provider llm.Provider, registry []MCPServerEntry) *Generator {
-	return &Generator{provider: provider, registry: registry}
+// skillStore may be nil; when provided it is used by AnalyseSkill to inject
+// the registered skill catalog into the prompt so the LLM can emit skill_call nodes.
+func NewGenerator(provider llm.Provider, registry []MCPServerEntry, skillStore store.SkillStore) *Generator {
+	return &Generator{provider: provider, registry: registry, skillStore: skillStore}
 }
 
 // Generate calls the LLM and returns a validated WorkflowDef.
@@ -212,6 +216,17 @@ states:
     timeout: 5m
     on_timeout: timed_out
 
+  - name: ENRICH_DATA
+    type: skill_call           # invokes a registered child skill as a sub-workflow
+    skill_call:
+      skill_ref: enrich-company  # name of the registered skill / workflow to invoke
+      input_mappings:            # map child input ports → parent blackboard fields
+        company_name: vendor
+      output_mappings:           # map child output ports → parent blackboard fields
+        revenue_eur: enriched_revenue
+      completion_trigger: enriched   # transition fired on success
+      failure_trigger: enrich_failed # transition fired on failure (defaults to "skill_failed")
+
 transitions:
   # Standard single-target transition
   - from: SOURCE_STATE
@@ -259,6 +274,7 @@ agents:
 18. **DO NOT** put prompts or instructions inside the "agents" list. Use the agent config only for "mcp_servers" or "model" overrides.
 19. The "instructions" field on each state should only contain the specific task for that state.
 20. For parallel execution, use a transition with "to_nodes" (a list) to fan out to multiple states simultaneously, and a "wait" state with a "condition" expression to join them back.
+21. Use "skill_call" to invoke a registered skill as a child workflow. The "skill_call" state requires a "skill_call" block with "skill_ref" (the skill name), "input_mappings" (parent field → child port), "output_mappings" (child port → parent field), and "completion_trigger". A "failure_trigger" is optional (defaults to "skill_failed"). Skill_call states do NOT use an "agent" field.
 
 ## How Triggers Work
 

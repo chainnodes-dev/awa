@@ -27,6 +27,12 @@ type MemoryStore struct {
 	mcpServers    map[string]*MCPServer    // key: id
 	llmConfigs    map[string]*LLMConfig    // key: tenantID:provider
 	skills        map[string]*Skill        // key: tenantID:name
+	// skillDeps records dependency edges: callerSkillID → set of dependsOnSkillIDs.
+	skillDeps     map[string]map[string]bool
+	// Phase-4 stores.
+	eventSubs    map[string]*EventSubscription // key: id
+	apiKeys      map[string]*APIKey            // key: id
+	apiKeysByHash map[string]string            // hash → id
 }
 
 type defEntry struct {
@@ -48,6 +54,10 @@ func NewMemoryStore() *MemoryStore {
 		mcpServers:    make(map[string]*MCPServer),
 		llmConfigs:    make(map[string]*LLMConfig),
 		skills:        make(map[string]*Skill),
+		skillDeps:     make(map[string]map[string]bool),
+		eventSubs:     make(map[string]*EventSubscription),
+		apiKeys:       make(map[string]*APIKey),
+		apiKeysByHash: make(map[string]string),
 	}
 }
 

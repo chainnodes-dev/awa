@@ -1,7 +1,7 @@
 # ASM Platform — Implementation Plan
 
 > **Living document.** History through M12 is archived in `implementation-plan-archive.md`.
-> Last updated: 2026-04-17
+> Last updated: 2026-04-18
 
 ---
 
@@ -81,42 +81,32 @@ skill_call state → resolves child workflow by name → ExecuteChildWorkflow
 
 ---
 
-## Skill System — Phase 2: Skill Registry
+## Skill System — Phase 2: Skill Registry ✅
 
-> **Goal:** Skills become first-class, discoverable, versioned entities stored in the database — not just workflow YAML annotations. A Skill Catalog lets operators browse, compose, and reuse skills across workflows.
+> Skills are now first-class, discoverable entities stored in the database. The Skill Catalog lets operators browse, compose, and reuse skills across workflows.
 
-### S2.1 — DB-backed Skill store ⬜
+### S2.1 — DB-backed Skill store ✅
 
 **Why:** Today, a skill only exists implicitly — the `skill_ref` in a `skill_call` node is just a workflow name string. There is no registry of available skills, no type-checked I/O contracts, and no way to browse what skills exist. A DB-backed registry fixes this and enables composition.
 
 **Tasks:**
 
-- [ ] `migrations/000007_skills.up.sql` — `skills` table: `(tenant_id, name)` UNIQUE; columns: `id UUID PK`, `name`, `description`, `workflow_ref`, `inputs JSONB`, `outputs JSONB`, `capabilities JSONB`, `created_at`, `updated_at`
-- [ ] `SkillStore` interface — `CreateSkill`, `GetSkill`, `ListSkills`, `UpdateSkill`, `DeleteSkill`; `MemoryStore` + `PostgresStore` implementations
-- [ ] Embed `SkillStore` in the `Store` aggregate interface
-- [ ] `internal/api/skill_handlers.go` — CRUD endpoints + a `POST /api/v1/skills/:name/analyse` endpoint that re-runs the analyser and saves the updated workflow ref
-- [ ] Routes: `GET/POST /api/v1/skills`, `GET/PUT/DELETE /api/v1/skills/:name`
+- [x] `migrations/000008_skills.up.sql` — `skills` table: `(tenant_id, name)` UNIQUE; `inputs`, `outputs`, `capabilities` as JSONB
+- [x] `SkillStore` interface — `CreateSkill`, `GetSkill`, `ListSkills`, `UpdateSkill`, `DeleteSkill`; `MemoryStore` + `PostgresStore` implementations
+- [x] `SkillStore` embedded in `Store` aggregate interface
+- [x] `internal/api/skill_handlers.go` — `ListSkills`, `GetSkill`, `CreateSkill`, `UpdateSkill`, `DeleteSkill`
+- [x] Routes: `GET/POST /api/v1/skills`, `GET/PUT/DELETE /api/v1/skills/:name`
 
-### S2.2 — Skill Catalog UI ⬜
+### S2.2 — Skill Catalog UI ✅
 
-**Why:** Operators need to browse existing skills before deciding to reuse them or build a `skill_call` node that references them.
+- [x] `frontend/src/views/Skills.vue` — table with search, name + capability chips, input/output badges, workflow link, row-hover edit/delete
+- [x] Sidebar star icon NavItem between Designer and MCP Servers; `/skills` route
+- [x] `SkillModal.vue` — create/edit with name, description, workflow_ref + "Open ↗" link, I/O port editor rows (name/type/description/required), MCP server capability picker
 
-**Tasks:**
+### S2.3 — skill_call picker ✅
 
-- [ ] `frontend/src/views/Skills.vue` — table view: name, description, inputs count, outputs count, workflow link; search/filter bar
-- [ ] Sidebar nav entry (star icon) between Workflows and MCP Servers
-- [ ] `SkillModal.vue` — create/edit: name, description, CodeMirror description editor (language="text"), I/O port editor rows, capability declarations (MCPServerPicker)
-- [ ] "Open in Designer" link → `/designer/:workflow_ref/latest`
-
-### S2.3 — skill_call picker ⬜
-
-**Why:** Currently, the user types a workflow name into a free-text field. With a registry, we can offer a dropdown of available skills and auto-populate the I/O mapping editor with the skill's declared port names.
-
-**Tasks:**
-
-- [ ] `SkillPicker.vue` — combobox that fetches `GET /api/v1/skills`; shows name + short description; on select: populates `skill_ref`, pre-fills `skill_input_mappings` rows with input port names (bbField left blank for user to fill), pre-fills `skill_output_mappings` rows with output port names
-- [ ] Replace the free-text `skill_ref` input in `StatePanel.vue` with `SkillPicker`
-- [ ] Validate: warn if the selected skill's input ports are not all mapped
+- [x] `SkillPicker.vue` — searchable dropdown fetching `GET /api/v1/skills`; shows name, description, input/output counts; selected state shows port summary (names + types) + workflow_ref; close on outside click; "Manage skill registry ↗" footer link
+- [x] `StatePanel.vue` — replaced free-text `skill_ref` input with `SkillPicker`; `onSkillSelected()` auto-populates input/output mapping rows from the skill's declared ports (only adds rows not already present, preserving manual edits)
 
 ---
 
@@ -124,53 +114,114 @@ skill_call state → resolves child workflow by name → ExecuteChildWorkflow
 
 > **Goal:** Skills can be composed from smaller, reusable subskills. The analyser is taught about existing skills in the registry so it can generate `skill_call` nodes instead of reimplementing logic inline.
 
-### S3.1 — Registry-aware Analyser ⬜
+### S3.1 — Registry-aware Analyser ✅
 
 **Why:** Today the analyser only knows the YAML schema. If a skill for "fetch GLEIF data" already exists in the registry, a new skill that needs GLEIF data should reference it via `skill_call` rather than re-implementing the lookup.
 
 **Tasks:**
 
-- [ ] `AnalyseSkillRequest` gets `available_skills []SkillSummary` field
-- [ ] `buildSkillAnalyserPrompt()` appends an "Available Skills" section listing registered skills with their I/O contracts
-- [ ] `AnalyseSkillHandler` loads `ListSkills()` from the store and attaches them to the request before calling the LLM
-- [ ] Update SkillPanel.vue to show a "Using X available skills" note when the registry is non-empty
+- [x] `Generator` struct gains a `skillStore store.SkillStore` field (injected at startup via `NewGenerator`)
+- [x] `AnalyseSkill` calls `ListSkills(ctx)` at request time and passes the result into the prompt builder
+- [x] `buildSkillAnalyserPrompt()` injects a `## Registered Skills` section listing each skill's name, description, and typed I/O ports when the registry is non-empty
+- [x] Decomposition rules updated: "use **skill_call** FIRST when a registered skill already implements the capability"
+- [x] `skill_call` state type added to `buildSystemPrompt` schema example + Rule 21 documenting required fields
+- [x] `cmd/server/main.go` passes the store to `NewGenerator`
 
-### S3.2 — Skill dependency graph ⬜
+### S3.2 — Skill dependency graph ✅
 
 **Why:** If skill A calls skill B via `skill_call`, and skill B is updated, operators need to know which callers are affected.
 
 **Tasks:**
 
-- [ ] `skill_dependencies` join table: `(skill_id, depends_on_skill_id)` — populated when a skill's workflow contains `skill_call` nodes
-- [ ] `GET /api/v1/skills/:name/dependents` — returns skills that call this skill
-- [ ] Skill Catalog shows a "Used by N skills" badge
-- [ ] Warning on skill update if dependents exist
+- [x] `migrations/000009_skill_dependencies.up.sql` — `skill_dependencies` join table: `(skill_id, depends_on_id)` PK; index on `depends_on_id`
+- [x] `SkillStore` interface gains `UpsertSkillDependencies` and `ListSkillDependents`; `MemoryStore` + `PostgresStore` both implemented
+- [x] `Skill.DependentsCount int` computed field — populated by `GetSkill` and `ListSkills` via LEFT JOIN aggregate (Postgres) / O(n) scan (Memory)
+- [x] `syncSkillDependencies` helper in skill handlers — scans the skill's workflow for `skill_call` states, resolves each `skill_ref` to an ID, calls `UpsertSkillDependencies`; runs after every Create and Update; errors are non-fatal (logged, not returned)
+- [x] `GET /api/v1/skills/:name/dependents` — returns skills that call this skill
+- [x] `DELETE /api/v1/skills/:name` returns 409 with `dependents` list when callers exist; bypassed with `?force=true`
+- [x] Skill Catalog table: new "Used by" column with violet badge showing dependent count
+- [x] Delete confirm dialog includes caller count warning when `dependents_count > 0`
+- [x] Edit modal shows amber warning banner when skill has dependents
 
 ---
 
-## Skill System — Phase 4: A2A Communication
+## Skill System — Phase 4: A2A Communication ✅
 
 > **Goal:** Skills can communicate with each other at runtime, not just via parent-child Temporal hierarchy. This enables peer-to-peer skill invocation and event-driven skill activation.
 
-### S4.1 — Skill-to-skill events via blackboard ⬜
+### S4.1 — Skill-to-skill events (emit_event + wait-on-event) ✅
 
 **Why:** The current `skill_call` model is synchronous — the parent waits for the child. Some use cases need fire-and-forget or event-driven patterns (e.g., one skill emits a `data_ready` event; another skill wakes up when it sees it).
 
+**Design — tenant-scoped named events, delivered via Temporal signals:**
+
+```
+emit_event state
+  └─ EmitWorkflowEvent activity
+       ├─ publishes events.WorkflowEvent to the bus (WebSocket clients see it)
+       └─ queries event_subscriptions (tenant_id, event_name)
+            └─ for each match: client.SignalWorkflow → triggerCh → wait state wakes
+```
+
+Wait state with `on_event`:
+```
+RegisterEventSubscription activity (idempotent ID = temporalID + "__" + stateName)
+  └─ blocks on triggerCh (same channel used by manual triggers)
+       └─ on signal: UnregisterEventSubscription activity → applyTransition
+```
+
 **Tasks:**
 
-- [ ] `emit_event` state type — fires a named platform event to the bus; payload is a subset of the blackboard
-- [ ] `wait` node extended with `on_event: event_name` — wakes the workflow when the bus delivers the named event to this run
-- [ ] Design decision: event routing (global bus vs. per-tenant channel vs. named topic) — 💬 needs discussion
+- [x] `StateEmitEvent` + `EmitEventDef` type in `pkg/asmtypes/workflow.go`
+- [x] `OnEvent` / `OnEventMatch` fields on `StateDef` for wait-on-event states
+- [x] `migrations/000010_event_subscriptions.up.sql` — `event_subscriptions` table with index on `(tenant_id, event_name)`
+- [x] `EventSubscription` struct + `EventSubscriptionStore` interface + Memory + Postgres implementations
+- [x] `events.WorkflowEvent = "workflow.event"` constant
+- [x] `RegisterEventSubscription`, `UnregisterEventSubscription`, `EmitWorkflowEvent` Temporal activities
+- [x] `Activities.Client client.Client` — injected at worker startup so `EmitWorkflowEvent` can signal workflows
+- [x] `WorkflowParams.TenantID string` — propagated from `run.TenantID` at workflow start
+- [x] `StateEmitEvent` branch in `execBranch` — builds payload (named fields or full blackboard), calls activity, advances on `completion_trigger` (default `event_emitted`)
+- [x] `StateWait` block extended — registers subscription before blocking when `state.OnEvent != ""`, unregisters after selector fires (on event, timeout, or condition)
 
-### S4.2 — External skill invocation API ⬜
+**YAML example:**
+```yaml
+states:
+  - name: notify_downstream
+    type: emit_event
+    emit_event:
+      event_name: data_ready
+      payload_fields: [result, run_id]
+      completion_trigger: notified
 
-**Why:** A skill should be callable from outside the platform (e.g., a human-facing app, a webhook, another ASM tenant).
+  - name: wait_for_data
+    type: wait
+    on_event: data_ready
+    on_event_match: event_received
+    timeout: 1h
+    on_timeout: timed_out
+```
+
+### S4.2 — External skill invocation API + API key auth ✅
+
+**Why:** A skill should be callable from outside the platform (e.g., a human-facing app, a webhook, another ASM tenant) without issuing a full user JWT.
+
+**API key format:** `asm_sk_` + base64url(32 random bytes). Only the SHA-256 hex hash is stored. The raw key is shown once at creation time.
+
+**Auth middleware — `RequireAuthOrAPIKey`:**
+- Checks `X-API-Key` header first, then `Authorization: Bearer asm_sk_...`
+- Falls back to standard JWT validation if no API key is present
+- Scopes the request context to the key's tenant via `store.WithTenantID`
+- Calls `TouchAPIKey` asynchronously (non-blocking `last_used_at` update)
 
 **Tasks:**
 
-- [ ] `POST /api/v1/skills/:name/invoke` — starts a run for the skill's workflow_ref with the provided inputs; returns `run_id`
-- [ ] `GET /api/v1/skills/:name/invoke/:run_id` — polls for completion and returns the terminal blackboard
-- [ ] API key auth for external callers (no JWT required) — scoped to operator-created API tokens
+- [x] `migrations/000011_api_keys.up.sql` — `api_keys` table (`key_hash` UNIQUE, `revoked_at` nullable)
+- [x] `APIKey` struct + `APIKeyStore` interface + Memory + Postgres implementations
+- [x] `internal/api/apikey_middleware.go` — `RequireAuthOrAPIKey` middleware + `hashAPIKey` helper
+- [x] `internal/api/api_key_handlers.go` — `CreateAPIKey` (generates + returns raw key once), `ListAPIKeys`, `RevokeAPIKey`
+- [x] `GET /api/v1/api-keys`, `POST /api/v1/api-keys`, `DELETE /api/v1/api-keys/:id` (admin only)
+- [x] `internal/api/skill_invoke_handlers.go` — `InvokeSkill` (POST, starts run, returns `run_id`), `GetSkillInvocation` (GET, returns run)
+- [x] `POST /api/v1/invoke/:name`, `GET /api/v1/invoke/:name/runs/:run_id` — protected by `RequireAuthOrAPIKey`
 
 ---
 

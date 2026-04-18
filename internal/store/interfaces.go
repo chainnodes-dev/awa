@@ -87,6 +87,8 @@ type Store interface {
 	MCPServerStore
 	LLMConfigStore
 	SkillStore
+	EventSubscriptionStore
+	APIKeyStore
 	Close() error
 }
 

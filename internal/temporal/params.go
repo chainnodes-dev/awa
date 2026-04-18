@@ -1,6 +1,7 @@
 package temporal
 
 import (
+	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
@@ -15,6 +16,7 @@ const (
 // workflow function stays deterministic across replays.
 type WorkflowParams struct {
 	RunID      string
+	TenantID   string // required for event subscription activities
 	Def        *asmtypes.WorkflowDef
 	Blackboard map[string]interface{}
 }
@@ -84,4 +86,23 @@ type LoadWorkflowDefParams struct {
 // Used after a child skill workflow completes to extract its output fields.
 type GetRunBlackboardParams struct {
 	RunID string
+}
+
+// RegisterEventSubscriptionParams is the activity input for registering a wait-on-event subscription.
+type RegisterEventSubscriptionParams struct {
+	Subscription *store.EventSubscription
+}
+
+// UnregisterEventSubscriptionParams is the activity input for removing a wait-on-event subscription.
+type UnregisterEventSubscriptionParams struct {
+	SubscriptionID string
+}
+
+// EmitWorkflowEventParams is the activity input for emitting a named platform event
+// and signalling all waiting Temporal workflows in the same tenant.
+type EmitWorkflowEventParams struct {
+	TenantID  string
+	RunID     string
+	EventName string
+	Payload   map[string]interface{}
 }

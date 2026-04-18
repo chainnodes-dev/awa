@@ -9,6 +9,7 @@ import (
 
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/orchestrator"
+	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
@@ -134,7 +135,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				return
 			}
 
-			// ── Wait Node (Join) ────────────────────────────────────────────────
+			// ── Wait Node (Join / wait-on-event) ────────────────────────────────
 			if state.Type == asmtypes.StateWait {
 				_ = workflow.ExecuteActivity(shortOpts, (*Activities).UpdateRun, UpdateRunParams{
 					RunID:        p.RunID,
@@ -148,6 +149,30 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					if d, err := time.ParseDuration(state.Timeout); err == nil {
 						waitDur = d
 					}
+				}
+
+				// If this wait state listens for a platform event, register a subscription
+				// so EmitWorkflowEvent can locate and signal this workflow.
+				var eventSubID string
+				if state.OnEvent != "" {
+					wfID := workflow.GetInfo(bCtx).WorkflowExecution.ID
+					eventSubID = wfID + "__" + state.Name
+					onMatchTrigger := state.OnEventMatch
+					if onMatchTrigger == "" {
+						onMatchTrigger = "event_received"
+					}
+					_ = workflow.ExecuteActivity(shortOpts, (*Activities).RegisterEventSubscription,
+						RegisterEventSubscriptionParams{
+							Subscription: &store.EventSubscription{
+								ID:             eventSubID,
+								TenantID:       p.TenantID,
+								RunID:          p.RunID,
+								TemporalID:     wfID,
+								EventName:      state.OnEvent,
+								OnMatchTrigger: onMatchTrigger,
+							},
+						},
+					).Get(bCtx, nil)
 				}
 
 				var (
@@ -184,6 +209,13 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				})
 
 				selector.Select(bCtx)
+
+				// Clean up event subscription regardless of how the wait resolved.
+				if eventSubID != "" {
+					_ = workflow.ExecuteActivity(shortOpts, (*Activities).UnregisterEventSubscription,
+						UnregisterEventSubscriptionParams{SubscriptionID: eventSubID},
+					).Get(bCtx, nil)
+				}
 
 				if processedJoins[state.Name] {
 					return
@@ -389,6 +421,55 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					return
 				}
 				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+					workflowErr = err
+					return
+				}
+				for i := 1; i < len(nextStates); i++ {
+					target := nextStates[i]
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+				}
+				currentState = nextStates[0]
+				continue
+			}
+
+			// ── Emit Event ──────────────────────────────────────────────────────
+			if state.Type == asmtypes.StateEmitEvent && state.EmitEvent != nil {
+				ee := state.EmitEvent
+
+				// Build payload: include only named fields, or the full blackboard.
+				payload := make(map[string]interface{})
+				if len(ee.PayloadFields) > 0 {
+					for _, f := range ee.PayloadFields {
+						if v, ok := bb[f]; ok {
+							payload[f] = v
+						}
+					}
+				} else {
+					for k, v := range bb {
+						payload[k] = v
+					}
+				}
+
+				_ = workflow.ExecuteActivity(shortOpts, (*Activities).EmitWorkflowEvent, EmitWorkflowEventParams{
+					TenantID:  p.TenantID,
+					RunID:     p.RunID,
+					EventName: ee.EventName,
+					Payload:   payload,
+				}).Get(bCtx, nil)
+
+				trigger := ee.CompletionTrigger
+				if trigger == "" {
+					trigger = "event_emitted"
+				}
+				nextStates, err := applyTransition(p.Def, currentState, trigger, bb)
+				if err != nil {
+					workflowErr = err
+					return
+				}
+				if len(nextStates) == 0 {
+					return
+				}
+				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}

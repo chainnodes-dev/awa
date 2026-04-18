@@ -57,6 +57,7 @@ func (e *EngineClient) StartWorkflow(ctx context.Context, run *asmtypes.Workflow
 	}
 	_, err := e.client.ExecuteWorkflow(ctx, opts, ASMWorkflow, WorkflowParams{
 		RunID:      run.ID,
+		TenantID:   run.TenantID,
 		Def:        def,
 		Blackboard: run.Blackboard,
 	})

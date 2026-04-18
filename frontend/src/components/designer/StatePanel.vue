@@ -153,11 +153,10 @@
         </p>
 
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">Skill / Workflow Ref</label>
-          <input
-            class="input font-mono text-xs"
+          <label class="text-xs text-slate-500">Skill</label>
+          <SkillPicker
             v-model="form.skill_ref"
-            placeholder="workflow-name"
+            @skill-selected="onSkillSelected"
           />
         </div>
 
@@ -308,6 +307,7 @@ import CodeEditor from './CodeEditor.vue'
 import CodeEditorModal from './CodeEditorModal.vue'
 import MCPServerPicker from './MCPServerPicker.vue'
 import SkillInputMappingEditor from './SkillInputMappingEditor.vue'
+import SkillPicker from './SkillPicker.vue'
 
 // Starter template shown when a new code state is created.
 const defaultCodeTemplate = `// Blackboard fields are available via bb.*
@@ -333,6 +333,29 @@ const props = defineProps({
 const emit = defineEmits(['update', 'delete'])
 
 const STATE_TYPES = ['initial', 'terminal', 'intermediate', 'script', 'code', 'hitl', 'wait']
+
+// When a skill is selected from the picker, pre-populate the mapping rows
+// with the skill's declared port names (bbField left blank for the user to fill).
+// Only populates rows that aren't already filled to preserve manual edits.
+function onSkillSelected(sk) {
+  if (!sk) return
+  if (sk.inputs?.length) {
+    const existing = new Set(form.skill_input_mappings.map(m => m.name))
+    sk.inputs.forEach(p => {
+      if (!existing.has(p.name)) {
+        form.skill_input_mappings.push({ name: p.name, bbField: '' })
+      }
+    })
+  }
+  if (sk.outputs?.length) {
+    const existing = new Set(form.skill_output_mappings.map(m => m.name))
+    sk.outputs.forEach(p => {
+      if (!existing.has(p.name)) {
+        form.skill_output_mappings.push({ name: p.name, bbField: '' })
+      }
+    })
+  }
+}
 
 // Helper to convert skill_call mappings object { portName: bbField } → array of { name, bbField }
 function mappingsToArray(obj) {

@@ -97,6 +97,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 		// Skill Registry — readable by all authenticated users; write requires operator/admin.
 		api.GET("/skills", h.ListSkills)
 		api.GET("/skills/:name", h.GetSkill)
+		api.GET("/skills/:name/dependents", h.ListSkillDependents)
 		skillsWrite := api.Group("/skills", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator))
 		{
 			skillsWrite.POST("", h.CreateSkill)
@@ -115,6 +116,14 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			designerGroup.POST("/skill/render", h.RenderSkillHandler)
 		}
 
+		// API key management — admin only.
+		apiKeys := api.Group("/api-keys", auth.RequireRole(auth.RoleAdmin))
+		{
+			apiKeys.POST("", h.CreateAPIKey)
+			apiKeys.GET("", h.ListAPIKeys)
+			apiKeys.DELETE("/:id", h.RevokeAPIKey)
+		}
+
 		// Tenant management — super_admin only.
 		tenants := api.Group("/tenants", auth.RequireRole(auth.RoleSuperAdmin))
 		{
@@ -123,5 +132,12 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			tenants.GET("/:id", h.GetTenant)
 			tenants.DELETE("/:id", h.DeleteTenant)
 		}
+	}
+
+	// External skill invocation — accepts JWT OR API key (no role restriction beyond auth).
+	invoke := r.Group("/api/v1/invoke", RequireAuthOrAPIKey(jwtSvc, h.store))
+	{
+		invoke.POST("/:name", h.InvokeSkill)
+		invoke.GET("/:name/runs/:run_id", h.GetSkillInvocation)
 	}
 }

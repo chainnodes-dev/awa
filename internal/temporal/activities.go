@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.temporal.io/sdk/client"
 	temporalactivity "go.temporal.io/sdk/activity"
 
 	"github.com/asm-platform/asm/internal/events"
@@ -22,10 +23,11 @@ type Activities struct {
 	Store    store.Store
 	Bus      events.Bus
 	Executor orchestrator.Executor
+	Client   client.Client // used by EmitWorkflowEvent to signal waiting workflows
 }
 
-func NewActivities(s store.Store, bus events.Bus, exec orchestrator.Executor) *Activities {
-	return &Activities{Store: s, Bus: bus, Executor: exec}
+func NewActivities(s store.Store, bus events.Bus, exec orchestrator.Executor, c client.Client) *Activities {
+	return &Activities{Store: s, Bus: bus, Executor: exec, Client: c}
 }
 
 // UpdateRun persists run state changes to the store.
@@ -123,4 +125,52 @@ func (a *Activities) GetRunBlackboard(ctx context.Context, p GetRunBlackboardPar
 		return nil, fmt.Errorf("get run '%s': %w", p.RunID, err)
 	}
 	return run.Blackboard, nil
+}
+
+// RegisterEventSubscription persists a wait-on-event subscription so that
+// EmitWorkflowEvent can locate this workflow when the named event fires.
+func (a *Activities) RegisterEventSubscription(ctx context.Context, p RegisterEventSubscriptionParams) error {
+	if err := a.Store.RegisterEventSubscription(ctx, p.Subscription); err != nil {
+		return fmt.Errorf("register event subscription: %w", err)
+	}
+	return nil
+}
+
+// UnregisterEventSubscription removes the wait-on-event subscription after
+// the event has been received (or the wait state timed out).
+func (a *Activities) UnregisterEventSubscription(ctx context.Context, p UnregisterEventSubscriptionParams) error {
+	return a.Store.UnregisterEventSubscription(ctx, p.SubscriptionID)
+}
+
+// EmitWorkflowEvent publishes a named event to the bus and signals every Temporal
+// workflow in the same tenant that is currently waiting for that event name.
+func (a *Activities) EmitWorkflowEvent(ctx context.Context, p EmitWorkflowEventParams) error {
+	// 1. Publish to the event bus so WebSocket clients and other subscribers see it.
+	raw, _ := json.Marshal(map[string]interface{}{
+		"run_id":     p.RunID,
+		"event_name": p.EventName,
+		"payload":    p.Payload,
+	})
+	_ = a.Bus.Publish(ctx, events.New(events.WorkflowEvent, json.RawMessage(raw)))
+
+	// 2. Find all runs in this tenant waiting for this event name.
+	subs, err := a.Store.ListEventSubscriptions(ctx, p.TenantID, p.EventName)
+	if err != nil {
+		return fmt.Errorf("list event subscriptions for '%s': %w", p.EventName, err)
+	}
+
+	// 3. Signal each waiting Temporal workflow and remove the subscription.
+	for _, sub := range subs {
+		sigErr := a.Client.SignalWorkflow(ctx, sub.TemporalID, "", SignalTrigger, TriggerSignalPayload{
+			Trigger: sub.OnMatchTrigger,
+			Payload: p.Payload,
+		})
+		if sigErr != nil {
+			// Log but continue — the workflow may have already completed.
+			fmt.Printf("warn: signal workflow %s for event %s: %v\n", sub.TemporalID, p.EventName, sigErr)
+			continue
+		}
+		_ = a.Store.UnregisterEventSubscription(ctx, sub.ID)
+	}
+	return nil
 }

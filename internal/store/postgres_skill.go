@@ -49,18 +49,35 @@ func (s *PostgresStore) CreateSkill(ctx context.Context, sk *Skill) error {
 func (s *PostgresStore) GetSkill(ctx context.Context, name string) (*Skill, error) {
 	tenantID := TenantIDFromContext(ctx)
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, tenant_id, name, description, workflow_ref, inputs, outputs, capabilities, created_at, updated_at
-         FROM skills WHERE tenant_id=$1 AND name=$2`,
+		`SELECT s.id, s.tenant_id, s.name, s.description, s.workflow_ref,
+		        s.inputs, s.outputs, s.capabilities, s.created_at, s.updated_at,
+		        COALESCE(d.cnt, 0)
+		 FROM skills s
+		 LEFT JOIN (
+		     SELECT depends_on_id, COUNT(*) AS cnt
+		     FROM skill_dependencies
+		     GROUP BY depends_on_id
+		 ) d ON d.depends_on_id = s.id
+		 WHERE s.tenant_id=$1 AND s.name=$2`,
 		tenantID, name,
 	)
-	return scanSkill(row)
+	return scanSkillWithCount(row)
 }
 
 func (s *PostgresStore) ListSkills(ctx context.Context) ([]*Skill, error) {
 	tenantID := TenantIDFromContext(ctx)
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, tenant_id, name, description, workflow_ref, inputs, outputs, capabilities, created_at, updated_at
-         FROM skills WHERE tenant_id=$1 ORDER BY name`,
+		`SELECT s.id, s.tenant_id, s.name, s.description, s.workflow_ref,
+		        s.inputs, s.outputs, s.capabilities, s.created_at, s.updated_at,
+		        COALESCE(d.cnt, 0)
+		 FROM skills s
+		 LEFT JOIN (
+		     SELECT depends_on_id, COUNT(*) AS cnt
+		     FROM skill_dependencies
+		     GROUP BY depends_on_id
+		 ) d ON d.depends_on_id = s.id
+		 WHERE s.tenant_id=$1
+		 ORDER BY s.name`,
 		tenantID,
 	)
 	if err != nil {
@@ -69,7 +86,7 @@ func (s *PostgresStore) ListSkills(ctx context.Context) ([]*Skill, error) {
 	defer rows.Close()
 	var out []*Skill
 	for rows.Next() {
-		sk, err := scanSkill(rows)
+		sk, err := scanSkillWithCount(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -114,6 +131,66 @@ func (s *PostgresStore) DeleteSkill(ctx context.Context, name string) error {
 	return nil
 }
 
+func (s *PostgresStore) UpsertSkillDependencies(ctx context.Context, skillID string, dependsOnIDs []string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("upsert skill deps begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM skill_dependencies WHERE skill_id = $1`, skillID,
+	); err != nil {
+		return fmt.Errorf("clear skill deps: %w", err)
+	}
+
+	for _, depID := range dependsOnIDs {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO skill_dependencies (skill_id, depends_on_id) VALUES ($1, $2)
+             ON CONFLICT DO NOTHING`,
+			skillID, depID,
+		); err != nil {
+			return fmt.Errorf("insert skill dep: %w", err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *PostgresStore) ListSkillDependents(ctx context.Context, name string) ([]*Skill, error) {
+	tenantID := TenantIDFromContext(ctx)
+	rows, err := s.pool.Query(ctx,
+		`SELECT s.id, s.tenant_id, s.name, s.description, s.workflow_ref,
+		        s.inputs, s.outputs, s.capabilities, s.created_at, s.updated_at,
+		        COALESCE(d.cnt, 0)
+		 FROM skills s
+		 JOIN skill_dependencies sd ON sd.skill_id = s.id
+		 JOIN skills dep ON dep.id = sd.depends_on_id
+		 LEFT JOIN (
+		     SELECT depends_on_id, COUNT(*) AS cnt
+		     FROM skill_dependencies
+		     GROUP BY depends_on_id
+		 ) d ON d.depends_on_id = s.id
+		 WHERE dep.tenant_id = $1 AND dep.name = $2
+		   AND s.tenant_id = $1
+		 ORDER BY s.name`,
+		tenantID, name,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list skill dependents: %w", err)
+	}
+	defer rows.Close()
+	var out []*Skill
+	for rows.Next() {
+		sk, err := scanSkillWithCount(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sk)
+	}
+	return out, rows.Err()
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 // scanner is satisfied by both pgx.Row and pgx.Rows.
@@ -121,7 +198,8 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
-func scanSkill(row scanner) (*Skill, error) {
+// scanSkillWithCount scans a skill row that includes a trailing dependents_count column.
+func scanSkillWithCount(row scanner) (*Skill, error) {
 	var (
 		sk         Skill
 		inputsRaw  []byte
@@ -132,6 +210,7 @@ func scanSkill(row scanner) (*Skill, error) {
 		&sk.ID, &sk.TenantID, &sk.Name, &sk.Description, &sk.WorkflowRef,
 		&inputsRaw, &outputsRaw, &capsRaw,
 		&sk.CreatedAt, &sk.UpdatedAt,
+		&sk.DependentsCount,
 	); err != nil {
 		return nil, fmt.Errorf("scan skill: %w", err)
 	}

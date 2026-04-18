@@ -49,6 +49,7 @@ const (
 	StateWait         StateType = "wait"       // Pauses until a condition is met or timeout
 	StateCode         StateType = "code"       // User-defined JavaScript executed via goja
 	StateSkillCall    StateType = "skill_call" // Invokes another skill as a child workflow
+	StateEmitEvent    StateType = "emit_event" // Fires a named platform event to the bus
 )
 
 type StateDef struct {
@@ -70,8 +71,31 @@ type StateDef struct {
 	Code *CodeDef `yaml:"code,omitempty" json:"code,omitempty"`
 	// SkillCall is set when type == "skill_call".
 	SkillCall *SkillCallDef `yaml:"skill_call,omitempty" json:"skill_call,omitempty"`
+	// EmitEvent is set when type == "emit_event".
+	EmitEvent *EmitEventDef `yaml:"emit_event,omitempty" json:"emit_event,omitempty"`
+	// OnEvent names a platform event that will wake this wait state.
+	// Only effective when type == "wait". When the named event fires in
+	// the same tenant, the run receives the on_event_match trigger.
+	OnEvent      string `yaml:"on_event,omitempty"       json:"on_event,omitempty"`
+	// OnEventMatch is the trigger fired when OnEvent arrives (default: "event_received").
+	OnEventMatch string `yaml:"on_event_match,omitempty" json:"on_event_match,omitempty"`
 	// Layout hint for the designer canvas — not required at runtime.
 	Position *Position `yaml:"position,omitempty" json:"position,omitempty"`
+}
+
+// EmitEventDef is the configuration for a state of type "emit_event".
+// The state fires a named platform event, optionally carrying a subset of the
+// blackboard as payload, then immediately advances via CompletionTrigger.
+type EmitEventDef struct {
+	// EventName is the logical name of the event (e.g. "document.ready").
+	// Other runs waiting with on_event: document.ready in the same tenant will wake.
+	EventName string `yaml:"event_name" json:"event_name"`
+	// PayloadFields is an optional list of blackboard field names to include
+	// in the event payload. Omit to emit an event with no payload.
+	PayloadFields []string `yaml:"payload_fields,omitempty" json:"payload_fields,omitempty"`
+	// CompletionTrigger is the transition trigger fired after the event is emitted.
+	// Defaults to "emitted".
+	CompletionTrigger string `yaml:"completion_trigger,omitempty" json:"completion_trigger,omitempty"`
 }
 
 // ScriptDef defines deterministic inline logic for a state of type "script".

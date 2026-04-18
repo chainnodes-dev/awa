@@ -111,7 +111,7 @@ func main() {
 	defer temporalClient.Close()
 
 	// -- Activities + Worker --
-	acts := temporalpkg.NewActivities(s, bus, exec)
+	acts := temporalpkg.NewActivities(s, bus, exec, temporalClient)
 	w := temporalpkg.NewWorker(temporalClient, cfg.TemporalTaskQueue, acts)
 
 	// Graceful shutdown on SIGINT / SIGTERM.

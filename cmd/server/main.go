@@ -185,7 +185,7 @@ func main() {
 	}
 	// Use the active LLM provider if available.
 	if llmProv, _ := llmRegistry.Get(activeLLMProvider); llmProv != nil {
-		gen = designer.NewGenerator(llmProv, mcpEntries)
+		gen = designer.NewGenerator(llmProv, mcpEntries, s)
 		slog.Info("AI workflow generator enabled", "provider", activeLLMProvider)
 	} else {
 		slog.Info("AI workflow generator disabled (no LLM provider configured)")

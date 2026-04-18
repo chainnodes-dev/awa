@@ -31,6 +31,12 @@
       </svg>
     </NavItem>
 
+    <NavItem to="/skills" title="Skills">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
+      </svg>
+    </NavItem>
+
     <NavItem to="/mcp-servers" title="MCP Servers">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <rect x="2" y="2" width="20" height="6" rx="2"/>
