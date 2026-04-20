@@ -530,27 +530,37 @@ func (s *PostgresStore) CreateHITL(ctx context.Context, req *asmtypes.HITLReques
 		req.ID = uuid.NewString()
 	}
 	meta, _ := json.Marshal(req.Metadata)
+	fs, _ := json.Marshal(req.FormSchema)
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO hitl_requests (id, run_id, state_name, assignee, timeout_at, metadata, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		req.ID, req.RunID, req.StateName, req.Assignee, req.TimeoutAt, meta, req.CreatedAt,
+		INSERT INTO hitl_requests (id, run_id, state_name, assignee, timeout_at, metadata, form_schema, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		req.ID, req.RunID, req.StateName, req.Assignee, req.TimeoutAt, meta, fs, req.CreatedAt,
 	)
 	return err
 }
 
 func (s *PostgresStore) GetHITL(ctx context.Context, runID string) (*asmtypes.HITLRequest, error) {
 	var req asmtypes.HITLRequest
-	var meta []byte
+	var meta, fs, bb, bbs []byte
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, run_id, state_name, coalesce(assignee,''), timeout_at, resolved,
-		       resolved_at, coalesce(resolution,''), coalesce(resolver,''), metadata, created_at
-		FROM hitl_requests WHERE run_id=$1 AND resolved=FALSE ORDER BY created_at DESC LIMIT 1`, runID,
+		SELECT hr.id, hr.run_id, hr.state_name, coalesce(hr.assignee,''), hr.timeout_at, hr.resolved,
+		       hr.resolved_at, coalesce(hr.resolution,''), coalesce(hr.resolver,''), hr.metadata, hr.form_schema, hr.created_at,
+		       wr.workflow_name, wr.blackboard,
+		       w.definition->'blackboard'->'schema'
+		FROM hitl_requests hr
+		JOIN workflow_runs wr ON wr.id = hr.run_id
+		JOIN workflow_definitions w ON w.name = wr.workflow_name AND w.version = wr.workflow_version
+		WHERE hr.run_id=$1 AND hr.resolved=FALSE ORDER BY hr.created_at DESC LIMIT 1`, runID,
 	).Scan(&req.ID, &req.RunID, &req.StateName, &req.Assignee, &req.TimeoutAt, &req.Resolved,
-		&req.ResolvedAt, &req.Resolution, &req.Resolver, &meta, &req.CreatedAt)
+		&req.ResolvedAt, &req.Resolution, &req.Resolver, &meta, &fs, &req.CreatedAt,
+		&req.WorkflowName, &bb, &bbs)
 	if err != nil {
 		return nil, fmt.Errorf("no HITL request for run '%s': %w", runID, err)
 	}
 	_ = json.Unmarshal(meta, &req.Metadata)
+	_ = json.Unmarshal(fs, &req.FormSchema)
+	_ = json.Unmarshal(bb, &req.Blackboard)
+	_ = json.Unmarshal(bbs, &req.BlackboardSchema)
 	return &req, nil
 }
 
@@ -568,11 +578,15 @@ func (s *PostgresStore) ResolveHITL(ctx context.Context, runID, resolution, reso
 func (s *PostgresStore) ListPendingHITL(ctx context.Context) ([]*asmtypes.HITLRequest, error) {
 	tenantID := TenantIDFromContext(ctx)
 	query := `
-		SELECT hr.id, hr.run_id, hr.state_name, coalesce(hr.assignee,''), hr.timeout_at, hr.created_at
-		FROM hitl_requests hr`
+		SELECT hr.id, hr.run_id, hr.state_name, coalesce(hr.assignee,''), hr.timeout_at, hr.metadata, hr.form_schema, hr.created_at,
+		       wr.workflow_name, wr.blackboard,
+		       w.definition->'blackboard'->'schema'
+		FROM hitl_requests hr
+		JOIN workflow_runs wr ON wr.id = hr.run_id
+		JOIN workflow_definitions w ON w.name = wr.workflow_name AND w.version = wr.workflow_version`
 	var args []interface{}
 	if tenantID != "" {
-		query += ` JOIN workflow_runs wr ON wr.id = hr.run_id WHERE hr.resolved=FALSE AND wr.tenant_id=$1`
+		query += ` WHERE hr.resolved=FALSE AND wr.tenant_id=$1`
 		args = append(args, tenantID)
 	} else {
 		query += ` WHERE hr.resolved=FALSE`
@@ -587,9 +601,16 @@ func (s *PostgresStore) ListPendingHITL(ctx context.Context) ([]*asmtypes.HITLRe
 	var out []*asmtypes.HITLRequest
 	for rows.Next() {
 		var r asmtypes.HITLRequest
-		if err := rows.Scan(&r.ID, &r.RunID, &r.StateName, &r.Assignee, &r.TimeoutAt, &r.CreatedAt); err != nil {
+		var meta, fs, bb, bbs []byte
+		err := rows.Scan(&r.ID, &r.RunID, &r.StateName, &r.Assignee, &r.TimeoutAt, &meta, &fs, &r.CreatedAt,
+			&r.WorkflowName, &bb, &bbs)
+		if err != nil {
 			return nil, err
 		}
+		_ = json.Unmarshal(meta, &r.Metadata)
+		_ = json.Unmarshal(fs, &r.FormSchema)
+		_ = json.Unmarshal(bb, &r.Blackboard)
+		_ = json.Unmarshal(bbs, &r.BlackboardSchema)
 		out = append(out, &r)
 	}
 	return out, nil

@@ -32,6 +32,7 @@ type HITLResolutionPayload struct {
 	Resolution string // "approved" | "rejected"
 	Resolver   string
 	Comment    string
+	Payload    map[string]interface{} // Data collected from dynamic forms
 }
 
 // UpdateRunParams is the activity input for updating a run's persisted state.

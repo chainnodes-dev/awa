@@ -16,6 +16,7 @@
    - [Blackboard Schema](#44-blackboard-schema)
    - [Agent Configuration](#45-agent-configuration)
    - [MCP Servers](#46-mcp-servers)
+   - [HITL Form Schemas & Preview](#47-hitl-form-schemas--preview)
 5. [AI-Assisted Authoring](#5-ai-assisted-authoring)
    - [AI Workflow Generator](#51-ai-workflow-generator)
    - [Code Node Generation](#52-code-node-generation)
@@ -29,6 +30,7 @@
 8. [State Type Reference](#8-state-type-reference)
    - [Script Node](#81-script-node)
    - [Code Node](#82-code-node)
+   - [HITL State](#83-hitl-state)
 9. [Workflow YAML Reference](#9-workflow-yaml-reference)
 10. [Execution Engines](#10-execution-engines)
 
@@ -240,11 +242,25 @@ MCP (Model Context Protocol) servers expose tools that LLM agents can call durin
 1. Open the state and expand **Agent Config**
 2. In the **MCP Servers** row, click any server chip to select it (click again to deselect)
 3. Multiple servers can be selected — the agent will have access to all their tools
-4. The green dot on a chip means the server has a URL or env-var configured and is ready to use
+4. The resolved value stored in the workflow (shown in small text below the chips) uses the `{{ env.ENV_VAR }}` template syntax, e.g. `{{ env.MCP_GLEIF_URL }}`. This means the actual URL is supplied via the environment and never hardcoded in the workflow definition.
 
-The picker reads from the platform's MCP server registry. To register a new server, go to **Settings → MCP Servers** (admin only).
+---
 
-The resolved value stored in the workflow (shown in small text below the chips) uses the `{{ env.ENV_VAR }}` template syntax, e.g. `{{ env.MCP_GLEIF_URL }}`. This means the actual URL is supplied via the environment and never hardcoded in the workflow definition.
+### 4.7 HITL Form Schemas & Preview
+
+When using a **Human-in-the-Loop (HITL)** state, you can define a custom data entry form that the operator will use to resolve the task. This is powered by **JSON Schema**.
+
+**Editing the Schema:**
+1. Select an HITL state in the Designer.
+2. Find the **HITL Form Schema** section in the right panel.
+3. Use the **Insert Template** button to get started with a valid boilerplate.
+4. The editor provides **real-time JSON validation**. If you have a syntax error, a message will appear immediately below the editor.
+
+**Live Preview:**
+Click the **Preview Form** button to open an interactive modal. This shows exactly how the form will appear to the end-user in the Monitoring view or Task Inbox. You can test inputs, dropdowns, and toggles without saving or running the workflow.
+
+**Persistence:**
+Once you click **Apply** in the state panel and **Save** the workflow, the schema is stored within the workflow definition and will be used for every run that hits that state.
 
 ---
 
@@ -534,6 +550,59 @@ A code node runs user-written JavaScript in a sandboxed VM for cases that requir
 
 ---
 
+### 8.3 HITL State
+
+The HITL (Human-in-the-Loop) state pauses execution and waits for an external signal (usually from a human operator). By providing a `form_schema`, you can generate a structured UI for data entry.
+
+**Component Mapping:**
+
+| JSON Schema Type | UI Component |
+|---|---|
+| `string` | Single-line text input |
+| `string` + `enum` | Dropdown selection box |
+| `number` / `integer` | Numeric input |
+| `boolean` | Toggle switch |
+
+**Comprehensive Example:**
+
+```json
+{
+  "type": "object",
+  "title": "Approval Request",
+  "required": ["decision"],
+  "properties": {
+    "reviewer_name": {
+      "type": "string",
+      "title": "Reviewer Name"
+    },
+    "impact_score": {
+      "type": "number",
+      "title": "Impact Score (1-100)",
+      "default": 50
+    },
+    "category": {
+      "type": "string",
+      "title": "Category",
+      "enum": ["Financial", "Operational", "Strategic"]
+    },
+    "urgent": {
+      "type": "boolean",
+      "title": "Mark as Urgent",
+      "default": false
+    },
+    "decision": {
+      "type": "string",
+      "title": "Final Decision",
+      "enum": ["Approved", "Rejected", "Needs More Info"]
+    }
+  }
+}
+```
+
+When the operator submits this form, the values are **automatically merged into the Blackboard**, making them available for subsequent states to use in reasoning or logic.
+
+---
+
 ## 9. Workflow YAML Reference
 
 A complete annotated example:
@@ -569,7 +638,12 @@ states:
 
   - name: HIGH_VALUE_REVIEW
     type: hitl
-    assignee: finance-team        # informational — not enforced by the platform
+    assignee: finance-team        # informational
+    form_schema:                  # Generative UI definition
+      type: object
+      properties:
+        comment: { type: string, title: "Reviewer Comment" }
+        risk_level: { type: string, enum: ["Low", "Medium", "High"] }
     timeout: 48h
     on_timeout: auto_reject
 

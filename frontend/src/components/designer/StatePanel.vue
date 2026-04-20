@@ -51,12 +51,52 @@
         <p v-if="codegenExplanation" class="text-[10px] text-teal-400/70 mt-1 leading-relaxed">✓ {{ codegenExplanation }}</p>
       </div>
     </div>
-
     <!-- Wait condition -->
     <template v-if="form.type === 'wait'">
       <div class="space-y-1">
         <label class="text-xs text-slate-500">Condition (expr-lang)</label>
         <input class="input font-mono text-xs" v-model="form.condition" placeholder="e.g. blackboard.count >= 2" />
+      </div>
+    </template>
+    
+    <!-- HITL Form Schema -->
+    <template v-if="form.type === 'hitl'">
+      <div class="pt-3 border-t border-border space-y-2.5">
+        <h4 class="text-xs font-semibold text-amber-500/80 uppercase tracking-wider">HITL Form Schema</h4>
+        <p class="text-[10px] text-slate-600 leading-relaxed">
+          Define a JSON Schema to render a custom input form in the dashboard.
+        </p>
+        <CodeEditor
+          v-model="form.form_schema"
+          mode="json"
+          height="200px"
+          @update:modelValue="validateJson"
+        />
+        <div v-if="jsonError" class="text-[10px] text-red-400 font-mono mt-1 break-all bg-red-500/5 p-1.5 rounded border border-red-500/10">
+          ⚠ {{ jsonError }}
+        </div>
+        <div class="flex items-center gap-3">
+          <button 
+            class="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1"
+            @click="form.form_schema = JSON.stringify({type: 'object', properties: { field_1: {type: 'string', title: 'Example Field'}}}, null, 2); validateJson()"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Insert Template
+          </button>
+          <div class="w-px h-3 bg-border"/>
+          <button 
+            class="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+            :disabled="!!jsonError || !form.form_schema"
+            @click="showPreview = true"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+            Preview Form
+          </button>
+        </div>
       </div>
     </template>
 
@@ -297,10 +337,32 @@
     :bb-schema="bbSchema"
     @close="showCodeModal = false"
   />
+
+  <!-- HITL Form Preview Modal -->
+  <div v-if="showPreview" class="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm" @click.self="showPreview = false">
+    <div class="bg-surface-1 border border-border rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden animate-in zoom-in duration-200">
+      <header class="px-6 py-4 border-b border-border flex items-center justify-between">
+        <h3 class="text-sm font-bold text-slate-200">Form Preview</h3>
+        <button @click="showPreview = false" class="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+      </header>
+      <div class="p-8 overflow-y-auto max-h-[70vh]">
+        <div class="mb-6 pb-6 border-b border-border/50">
+          <p class="text-xs text-slate-400">This is how the form will appear to operators during HITL resolution.</p>
+        </div>
+        <JsonSchemaForm
+          :schema="parsedFormSchema"
+          :initial-data="{}"
+        />
+      </div>
+      <footer class="px-6 py-4 bg-surface-0 border-t border-border flex justify-end">
+        <button @click="showPreview = false" class="btn-primary px-6">Close Preview</button>
+      </footer>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, watch } from 'vue'
 import { api } from '@/stores/auth'
 import AgentCombobox from './AgentCombobox.vue'
 import CodeEditor from './CodeEditor.vue'
@@ -308,6 +370,7 @@ import CodeEditorModal from './CodeEditorModal.vue'
 import MCPServerPicker from './MCPServerPicker.vue'
 import SkillInputMappingEditor from './SkillInputMappingEditor.vue'
 import SkillPicker from './SkillPicker.vue'
+import JsonSchemaForm from '@/components/monitor/JsonSchemaForm.vue'
 
 // Starter template shown when a new code state is created.
 const defaultCodeTemplate = `// Blackboard fields are available via bb.*
@@ -377,11 +440,12 @@ const form = reactive({
     : [],
   code: props.node.code?.code ?? defaultCodeTemplate,
   // skill_call fields
-  skill_ref:                 props.node.skill_call?.skill_ref            ?? '',
-  skill_completion_trigger:  props.node.skill_call?.completion_trigger   ?? 'skill_done',
-  skill_failure_trigger:     props.node.skill_call?.failure_trigger      ?? '',
+  skill_ref:                 props.node.skill_ref            ?? '',
+  skill_completion_trigger:  props.node.skill_completion_trigger ?? 'skill_done',
+  skill_failure_trigger:     props.node.skill_failure_trigger    ?? '',
   skill_input_mappings:      mappingsToArray(props.node.skill_call?.input_mappings),
   skill_output_mappings:     mappingsToArray(props.node.skill_call?.output_mappings),
+  form_schema: props.node.form_schema ? JSON.stringify(props.node.form_schema, null, 2) : '',
 })
 
 const agentForm = reactive({
@@ -397,9 +461,34 @@ const scaffoldLoading = ref(false)
 const scaffoldError   = ref('')
 const showCodeModal   = ref(false)
 
-const codegenLoading     = ref(false)
-const codegenError       = ref('')
 const codegenExplanation = ref('')
+
+const jsonError = ref('')
+const showPreview = ref(false)
+
+const parsedFormSchema = computed(() => {
+  try {
+    return form.form_schema ? JSON.parse(form.form_schema) : null
+  } catch {
+    return null
+  }
+})
+
+function validateJson() {
+  if (!form.form_schema) {
+    jsonError.value = ''
+    return
+  }
+  try {
+    JSON.parse(form.form_schema)
+    jsonError.value = ''
+  } catch (e) {
+    jsonError.value = e.message
+  }
+}
+
+// Initial validation
+validateJson()
 
 async function generateCode() {
   if (!form.instructions.trim()) return
@@ -474,6 +563,15 @@ function mappingsToObject(arr) {
 }
 
 function onApply() {
+  if (form.type === 'hitl' && form.form_schema) {
+    try {
+      JSON.parse(form.form_schema)
+    } catch (e) {
+      alert('Cannot apply changes: Invalid HITL Form Schema JSON.\n\n' + e.message)
+      return
+    }
+  }
+
   const scriptDef = form.type === 'script' ? {
     trigger: form.script_trigger || '',
     updates: form.script_updates.length
@@ -505,6 +603,7 @@ function onApply() {
     timeout:      form.timeout    || undefined,
     on_timeout:   form.on_timeout || undefined,
     skill_call:   skillCallDef,
+    form_schema:  form.type === 'hitl' && form.form_schema ? JSON.parse(form.form_schema) : undefined,
   }
   const agentData = (form.type !== 'script' && form.type !== 'code' && form.type !== 'skill_call' && form.agent) ? {
     name:       form.agent,

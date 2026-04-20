@@ -20,6 +20,16 @@
       </svg>
     </NavItem>
 
+    <NavItem to="/inbox" title="Inbox" class="relative">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+        <polyline points="22,6 12,13 2,6"/>
+      </svg>
+      <div v-if="pendingCount > 0" class="absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-red-500 text-[9px] font-bold text-white flex items-center justify-center rounded-full px-0.5 border border-surface-1">
+        {{ pendingCount }}
+      </div>
+    </NavItem>
+
     <NavItem to="/designer" title="Designer">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <circle cx="12" cy="5" r="2"/>
@@ -67,10 +77,15 @@
 
 <script setup>
 import { RouterLink, useRoute } from 'vue-router'
-import { useWebSocket } from '@/composables/useWebSocket'
+import { computed } from 'vue'
+import { useWebSocket }      from '@/composables/useWebSocket'
+import { useExecutionStore } from '@/stores/execution'
 
 const { connected } = useWebSocket()
-const route = useRoute()
+const route      = useRoute()
+const execStore  = useExecutionStore()
+
+const pendingCount = computed(() => execStore.pendingHITL.length)
 </script>
 
 <script>

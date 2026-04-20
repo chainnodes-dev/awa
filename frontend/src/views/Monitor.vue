@@ -130,6 +130,10 @@
                 class="text-[9px] bg-accent/20 text-accent px-1 rounded-full"
               >{{ runLLMCalls.length }}</span>
             </span>
+            <span v-else-if="tab.id === 'task'" class="flex items-center justify-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/>
+              Task
+            </span>
             <span v-else>{{ tab.label }}</span>
           </button>
         </div>
@@ -147,6 +151,76 @@
           :calls="runLLMCalls"
           class="flex-1 overflow-hidden"
         />
+        
+        <!-- Task tab (HITL) -->
+        <div v-else-if="activeTab === 'task'" class="flex-1 flex flex-col overflow-hidden bg-surface-2/30">
+          <div class="p-4 space-y-4 flex-1 overflow-y-auto">
+            <div class="space-y-1 mb-4">
+              <h3 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Input Required</h3>
+              <p class="text-xs text-slate-500">{{ currentStateDef?.instructions || 'A human must review this step to continue.' }}</p>
+            </div>
+
+            <JsonSchemaForm
+              v-if="currentFormSchema"
+              ref="hitlForm"
+              :schema="currentFormSchema"
+              :initial-data="run?.blackboard"
+            />
+            <div v-else class="py-4 text-center">
+              <p class="text-xs text-slate-500">No additional data required. Please approve or reject above.</p>
+            </div>
+
+            <!-- Blackboard Tweak (Optional) -->
+            <div class="mt-8 pt-4 border-t border-border">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Advanced Tweaks</h4>
+                <button 
+                  @click="showBlackboardTweak = !showBlackboardTweak" 
+                  class="text-[9px] text-indigo-400 hover:text-indigo-300"
+                >
+                  {{ showBlackboardTweak ? 'Hide Context' : 'Edit Context' }}
+                </button>
+              </div>
+
+              <div v-if="showBlackboardTweak && blackboardSchema" class="flex p-1 bg-surface-0 border border-slate-800/40 rounded-lg w-fit mb-3">
+                <button
+                  @click="tweakView = 'form'"
+                  :class="[
+                    'px-2 py-1 text-[9px] font-bold uppercase rounded transition-all',
+                    tweakView === 'form' ? 'bg-accent/10 text-accent' : 'text-slate-600 hover:text-slate-400'
+                  ]"
+                > Form </button>
+                <button
+                  @click="tweakView = 'json'"
+                  :class="[
+                    'px-2 py-1 text-[9px] font-bold uppercase rounded transition-all',
+                    tweakView === 'json' ? 'bg-accent/10 text-accent' : 'text-slate-600 hover:text-slate-400'
+                  ]"
+                > JSON </button>
+              </div>
+              <div v-if="showBlackboardTweak" class="space-y-4">
+                <div v-if="tweakView === 'form' && blackboardSchema" class="max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-800">
+                  <JsonSchemaForm
+                    :schema="blackboardSchema"
+                    :initial-data="editedBlackboard"
+                    @update:modelValue="syncFromTweakForm"
+                  />
+                </div>
+                <BlackboardEditor 
+                  v-else
+                  v-model="editedBlackboard"
+                  class="max-h-[300px]"
+                  @update:modelValue="syncFromTweakJson"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div class="p-4 border-t border-border bg-surface-1 flex gap-2">
+            <button @click="resolve('rejected')" class="flex-1 btn-danger justify-center">Reject</button>
+            <button @click="resolve('approved')" class="flex-1 btn-primary justify-center">Approve</button>
+          </div>
+        </div>
 
         <!-- Timeline tab -->
         <div v-else class="flex-1 overflow-y-auto p-3">
@@ -252,7 +326,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, shallowRef } from 'vue'
+import { ref, computed, onMounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -260,15 +334,19 @@ import { Controls }   from '@vue-flow/controls'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/controls/dist/style.css'
 
+import BlackboardEditor from '@/components/monitor/BlackboardEditor.vue'
+
 import StateNode      from '@/components/designer/StateNode.vue'
 import BlackboardPanel from '@/components/monitor/BlackboardPanel.vue'
 import EventLog        from '@/components/monitor/EventLog.vue'
 import LLMDebugPanel   from '@/components/monitor/LLMDebugPanel.vue'
+import JsonSchemaForm  from '@/components/monitor/JsonSchemaForm.vue'
 import StartRunModal from '@/components/shared/StartRunModal.vue'
 import { useExecutionStore } from '@/stores/execution'
 import { useWorkflowStore }  from '@/stores/workflows'
 import { useAuthStore }      from '@/stores/auth'
 import { useLayout }         from '@/composables/useLayout'
+import { convertAsmSchemaToJsonSchema } from '@/utils/schema'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -277,27 +355,73 @@ const wfStore    = useWorkflowStore()
 const authStore  = useAuthStore()
 const { layout } = useLayout()
 
-const run          = computed(() => execStore.activeRun)
-const history      = computed(() => execStore.transitions)
-const runLLMCalls  = computed(() => execStore.llmCalls[route.params.id] ?? [])
-const visibleTabs  = computed(() => {
-  const tabs = [
-    { id: 'blackboard', label: 'Blackboard' },
-    { id: 'timeline',   label: 'Timeline'   },
-  ]
-  if (authStore.hasRole('admin')) tabs.push({ id: 'debug', label: 'Debug' })
-  return tabs
-})
-const currentStateType = computed(() => {
-  if (!workflowDef.value || !run.value?.current_state) return null
-  return workflowDef.value.states?.find(s => s.name === run.value.current_state)?.type ?? null
-})
 const activeTab    = ref('blackboard')
 const showTriggerModal = ref(false)
 const showRunModal = ref(false)
 const triggerName  = ref('')
 const workflowDef  = ref(null)
 const nodeTypes    = shallowRef({ stateNode: StateNode })
+const hitlForm     = ref(null)
+const showBlackboardTweak = ref(false)
+const tweakView = ref('form')
+const editedBlackboard = ref({})
+const resolveError = ref('')
+
+const run          = computed(() => execStore.activeRun)
+const history      = computed(() => execStore.transitions)
+const runLLMCalls  = computed(() => execStore.llmCalls[route.params.id] ?? [])
+
+const currentStateType = computed(() => {
+  if (!workflowDef.value || !run.value?.current_state) return null
+  return workflowDef.value.states?.find(s => s.name === run.value.current_state)?.type ?? null
+})
+
+const currentStateDef = computed(() => {
+  if (!workflowDef.value || !run.value?.current_state) return null
+  return workflowDef.value.states?.find(s => s.name === run.value.current_state)
+})
+
+const currentFormSchema = computed(() => currentStateDef.value?.form_schema)
+
+const blackboardSchema = computed(() => {
+  return convertAsmSchemaToJsonSchema(workflowDef.value?.blackboard?.schema)
+})
+
+const visibleTabs  = computed(() => {
+  const tabs = [
+    { id: 'blackboard', label: 'Blackboard' },
+    { id: 'timeline',   label: 'Timeline'   },
+  ]
+  if (run.value?.status === 'waiting' && currentStateType.value === 'hitl') {
+    tabs.unshift({ id: 'task', label: 'Task' })
+  }
+  if (authStore.hasRole('admin')) tabs.push({ id: 'debug', label: 'Debug' })
+  return tabs
+})
+
+// Auto-switch to Task tab when waiting at a HITL node
+watch([() => run.value?.status, () => currentStateType.value], ([status, type]) => {
+  if (status === 'waiting' && type === 'hitl') {
+    activeTab.value = 'task'
+  }
+}, { immediate: true })
+
+// Capture blackboard when HITL is active
+watch(() => run.value?.blackboard, (bb) => {
+  if (bb && run.value?.status === 'waiting') {
+    editedBlackboard.value = JSON.parse(JSON.stringify(bb))
+  }
+}, { immediate: true })
+
+function syncFromTweakForm(data) {
+  if (JSON.stringify(editedBlackboard.value) !== JSON.stringify(data)) {
+    editedBlackboard.value = { ...data }
+  }
+}
+
+function syncFromTweakJson(data) {
+  // Bi-directional updates work through v-model
+}
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 
@@ -373,17 +497,25 @@ const thinkingText = computed(() => execStore.thinkingTokens[route.params.id] ??
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 
-const resolveError = ref('')
-
 async function resolve(resolution) {
+  if (!run.value) return
   resolveError.value = ''
   try {
-    await execStore.resolveHITL(route.params.id, resolution, 'user')
+    const formPayload = hitlForm.value ? hitlForm.value.formData : {}
+    const finalPayload = {
+      ...editedBlackboard.value,
+      ...formPayload
+    }
+    await execStore.resolveHITL(route.params.id, resolution, 'user', finalPayload)
+    
+    // Switch tab and clean up before refetching to ensure smooth transition
+    activeTab.value = 'blackboard'
+    showBlackboardTweak.value = false
+    
     await loadRun()
   } catch (err) {
     const msg = err?.response?.data?.error ?? err?.message ?? 'Unknown error'
     resolveError.value = msg
-    // Roll back optimistic status update so HITL buttons reappear
     await loadRun()
   }
 }

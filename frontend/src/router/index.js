@@ -19,6 +19,12 @@ const routes = [
     meta: { title: 'Dashboard' }
   },
   {
+    path: '/inbox',
+    name: 'Inbox',
+    component: () => import('@/views/Inbox.vue'),
+    meta: { title: 'Inbox' }
+  },
+  {
     path: '/designer',
     name: 'DesignerNew',
     component: () => import('@/views/Designer.vue'),

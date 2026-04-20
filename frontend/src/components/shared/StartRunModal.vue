@@ -18,24 +18,59 @@
         </button>
       </div>
 
+      <!-- Tabs -->
+      <div v-if="hasSchema" class="flex p-1 bg-surface-0 border border-slate-800/40 rounded-lg w-fit">
+        <button
+          @click="activeView = 'form'"
+          :class="[
+            'px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all duration-200',
+            activeView === 'form' ? 'bg-accent/10 text-accent' : 'text-slate-600 hover:text-slate-400'
+          ]"
+        >
+          Form
+        </button>
+        <button
+          @click="activeView = 'json'"
+          :class="[
+            'px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all duration-200',
+            activeView === 'json' ? 'bg-accent/10 text-accent' : 'text-slate-600 hover:text-slate-400'
+          ]"
+        >
+          JSON
+        </button>
+      </div>
+
       <div class="space-y-1.5">
-        <div class="flex items-center justify-between">
-          <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Initial Blackboard Data</label>
-          <span class="text-[10px] text-slate-600 font-mono">JSON format</span>
-        </div>
-        <div class="relative group">
-          <textarea
-            v-model="input"
-            class="input font-mono text-sm min-h-[160px] h-48 w-full resize-none bg-surface-0 border-slate-800/50 group-hover:border-slate-700/50 transition-colors py-3"
-            placeholder='{ "key": "value" }'
-            spellcheck="false"
+        <div v-if="activeView === 'form'" class="min-h-[200px] overflow-y-auto max-h-[400px] pr-2 scrollbar-thin scrollbar-thumb-slate-800">
+          <JsonSchemaForm
+             v-if="jsonSchema"
+             :schema="jsonSchema"
+             :initial-data="formData"
+             @update:modelValue="syncFromForm"
           />
-          <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-             <button @click="formatJSON" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 px-2 py-1 rounded border border-slate-700">
-               Format JSON
-             </button>
+        </div>
+        
+        <div v-else class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Initial Blackboard Data</label>
+            <span class="text-[10px] text-slate-600 font-mono">JSON format</span>
+          </div>
+          <div class="relative group">
+            <textarea
+              v-model="input"
+              class="input font-mono text-sm min-h-[160px] h-48 w-full resize-none bg-surface-0 border-slate-800/50 group-hover:border-slate-700/50 transition-colors py-3"
+              placeholder='{ "key": "value" }'
+              spellcheck="false"
+              @input="syncFromJson"
+            />
+            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+               <button @click="formatJSON" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 px-2 py-1 rounded border border-slate-700">
+                 Format JSON
+               </button>
+            </div>
           </div>
         </div>
+
         <p v-if="error" class="text-red-400 text-xs font-mono bg-red-400/5 p-2 rounded border border-red-400/20">
           {{ error }}
         </p>
@@ -68,8 +103,10 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed, reactive } from 'vue'
 import { useWorkflowStore } from '@/stores/workflows'
+import { convertAsmSchemaToJsonSchema } from '@/utils/schema'
+import JsonSchemaForm from '@/components/monitor/JsonSchemaForm.vue'
 
 const props = defineProps({
   definition: Object,
@@ -83,13 +120,63 @@ const loading = ref(false)
 const error   = ref('')
 const wfStore = useWorkflowStore()
 
+const activeView = ref('form')
+const formData   = reactive({})
+
+const hasSchema = computed(() => {
+  const s = props.definition?.blackboard?.schema
+  return s && Object.keys(s).length > 0
+})
+
+const jsonSchema = computed(() => {
+  return convertAsmSchemaToJsonSchema(props.definition?.blackboard?.schema)
+})
+
+function syncFromForm(data) {
+  const currentStr = input.value.trim() || '{}'
+  try {
+    const current = JSON.parse(currentStr)
+    // Only update if data actually changed to avoid cursor jumps in JSON view
+    if (JSON.stringify(current) !== JSON.stringify(data)) {
+      Object.assign(formData, data)
+      input.value = JSON.stringify(data, null, 2)
+    }
+  } catch (e) {
+    // If JSON is currently invalid, allow form updates to overwrite it
+    Object.assign(formData, data)
+    input.value = JSON.stringify(data, null, 2)
+  }
+}
+
+function syncFromJson() {
+  try {
+    const parsed = JSON.parse(input.value)
+    // Only update form if data actually changed
+    if (JSON.stringify(parsed) !== JSON.stringify(formData)) {
+      Object.keys(formData).forEach(key => delete formData[key])
+      Object.assign(formData, parsed)
+    }
+    error.value = ''
+  } catch (e) {
+    // Ignore invalid JSON while typing
+  }
+}
+
 onMounted(() => {
   if (props.initialData) {
     if (typeof props.initialData === 'object') {
       input.value = JSON.stringify(props.initialData, null, 2)
+      Object.assign(formData, props.initialData)
     } else {
       input.value = props.initialData
+      try {
+        Object.assign(formData, JSON.parse(props.initialData))
+      } catch (e) {}
     }
+  }
+  
+  if (!hasSchema.value) {
+    activeView.value = 'json'
   }
 })
 

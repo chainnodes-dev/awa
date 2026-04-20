@@ -81,6 +81,9 @@ type StateDef struct {
 	OnEventMatch string `yaml:"on_event_match,omitempty" json:"on_event_match,omitempty"`
 	// Layout hint for the designer canvas — not required at runtime.
 	Position *Position `yaml:"position,omitempty" json:"position,omitempty"`
+	// FormSchema is an optional JSON Schema used to render a custom input form
+	// in the dashboard when type == "hitl".
+	FormSchema map[string]interface{} `yaml:"form_schema,omitempty" json:"form_schema,omitempty"`
 }
 
 // EmitEventDef is the configuration for a state of type "emit_event".

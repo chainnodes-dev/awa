@@ -261,10 +261,11 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				}).Get(bCtx, nil)
 
 				hitlReq := &asmtypes.HITLRequest{
-					RunID:     p.RunID,
-					StateName: state.Name,
-					Assignee:  state.Assignee,
-					CreatedAt: workflow.Now(bCtx),
+					RunID:      p.RunID,
+					StateName:  state.Name,
+					Assignee:   state.Assignee,
+					CreatedAt:  workflow.Now(bCtx),
+					FormSchema: state.FormSchema,
 				}
 				waitDur := 24 * time.Hour
 				if state.Timeout != "" {
@@ -284,6 +285,9 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					var sig HITLResolutionPayload
 					c.Receive(bCtx, &sig)
 					trigger = sig.Resolution
+					for k, v := range sig.Payload {
+						bb[k] = v
+					}
 				})
 				selector.AddFuture(workflow.NewTimer(bCtx, waitDur), func(f workflow.Future) {
 					trigger = "timeout"

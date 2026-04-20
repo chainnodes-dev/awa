@@ -54,8 +54,12 @@ type HITLRequest struct {
 	ResolvedAt *time.Time             `json:"resolved_at,omitempty"`
 	Resolution string                 `json:"resolution,omitempty"` // "approved" | "rejected"
 	Resolver   string                 `json:"resolver,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt  time.Time              `json:"created_at"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	FormSchema       map[string]interface{} `json:"form_schema,omitempty"`
+	Blackboard       map[string]interface{} `json:"blackboard,omitempty"`
+	BlackboardSchema map[string]FieldDef    `json:"blackboard_schema,omitempty"`
+	WorkflowName     string                 `json:"workflow_name,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
 }
 
 // AgentOutput is the structured JSON an agent returns after execution.
@@ -75,8 +79,9 @@ type TriggerRequest struct {
 
 // HITLSignal is sent by a human to resolve a HITL state.
 type HITLSignal struct {
-	RunID      string `json:"run_id"`
-	Resolution string `json:"resolution"` // "approved" | "rejected"
-	Resolver   string `json:"resolver"`
-	Comment    string `json:"comment,omitempty"`
+	RunID      string                 `json:"run_id"`
+	Resolution string                 `json:"resolution"` // "approved" | "rejected"
+	Resolver   string                 `json:"resolver"`
+	Comment    string                 `json:"comment,omitempty"`
+	Payload    map[string]interface{} `json:"payload,omitempty"` // Data collected from dynamic forms
 }

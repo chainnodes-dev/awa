@@ -50,8 +50,8 @@ export const useExecutionStore = defineStore('execution', () => {
     await api.post(`/runs/${runId}/trigger`, { trigger, payload })
   }
 
-  async function resolveHITL(runId, resolution, resolver = 'user') {
-    await api.post(`/runs/${runId}/signal`, { resolution, resolver })
+  async function resolveHITL(runId, resolution, resolver = 'user', payload = {}) {
+    await api.post(`/runs/${runId}/signal`, { resolution, resolver, payload })
     await fetchPendingHITL()
   }
 

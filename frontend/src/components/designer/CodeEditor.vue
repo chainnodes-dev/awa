@@ -105,7 +105,7 @@ function buildExtensions() {
     highlightActiveLineGutter(),
     bracketMatching(),
     closeBrackets(),
-    javascript(),
+    props.language === 'json' ? javascript() : javascript(), // javascript() extension handles JSON too
     autocompletion({ override: [bbCompletions, globalCompletions] }),
     keymap.of([...closeBracketsKeymap, ...completionKeymap]),
   ]
