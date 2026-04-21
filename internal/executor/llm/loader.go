@@ -60,12 +60,12 @@ func BuildRegistryFromDB(ctx context.Context, s store.LLMConfigStore) (*Registry
 			if cfg.APIKey == "" {
 				continue
 			}
-			prov = NewAnthropicProvider(cfg.APIKey, model)
+			prov = NewAnthropicProvider(cfg.APIKey, model, cfg.MaxOutputTokens)
 		case "ollama":
 			if cfg.BaseURL == "" {
 				continue
 			}
-			prov = NewOllamaProvider(cfg.BaseURL, model)
+			prov = NewOllamaProvider(cfg.BaseURL, model, cfg.MaxOutputTokens)
 		default:
 			// openai, grok, deepseek, gemini — all OpenAI-compatible
 			if cfg.APIKey == "" {
@@ -75,11 +75,11 @@ func BuildRegistryFromDB(ctx context.Context, s store.LLMConfigStore) (*Registry
 			if endpoint == "" {
 				endpoint = ProviderEndpoint(cfg.Provider)
 			}
-			prov = NewOpenAICompatibleProvider(endpoint, cfg.APIKey, cfg.Provider, model)
+			prov = NewOpenAICompatibleProvider(endpoint, cfg.APIKey, cfg.Provider, model, cfg.MaxOutputTokens)
 		}
 
 		reg.Register(prov)
-		slog.Info("LLM provider loaded from DB", "provider", cfg.Provider, "model", model)
+		slog.Info("LLM provider loaded from DB", "provider", cfg.Provider, "model", model, "max_tokens", cfg.MaxOutputTokens)
 
 		if cfg.IsDefault {
 			defaultName = cfg.Provider

@@ -172,13 +172,13 @@
               :class="['flex-1 py-2 text-xs font-medium transition-colors', rightTab === 'properties' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-400']"
             >Properties</button>
             <button
-              @click="rightTab = 'skill'"
-              :class="['flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5', rightTab === 'skill' ? 'text-slate-200 border-b-2 border-violet-400' : 'text-slate-500 hover:text-slate-400']"
+              @click="rightTab = 'generate'"
+              :class="['flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5', rightTab === 'generate' ? 'text-slate-200 border-b-2 border-violet-400' : 'text-slate-500 hover:text-slate-400']"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
               </svg>
-              Skill
+              Generate
             </button>
           </div>
 
@@ -259,10 +259,16 @@
             />
           </template>
 
-          <!-- Skill tab -->
-          <SkillPanel
-            v-else-if="rightTab === 'skill'"
+          <!-- Generate tab -->
+          <GeneratePanel
+            v-else-if="rightTab === 'generate'"
             :yaml-source="yamlSource"
+            v-model:description="generateDescription"
+            v-model:prompt="generatePrompt"
+            v-model:history="generateHistory"
+            v-model:interactions="generateInteractions"
+            v-model:provider="generateProvider"
+            :metadata-abstract="meta.description"
             @apply="onAIApply"
           />
         </aside>
@@ -302,7 +308,7 @@ import StatePanel             from '@/components/designer/StatePanel.vue'
 import EdgePanel              from '@/components/designer/EdgePanel.vue'
 import BBFieldModal           from '@/components/designer/BBFieldModal.vue'
 import AddStateModal          from '@/components/designer/AddStateModal.vue'
-import SkillPanel             from '@/components/designer/SkillPanel.vue'
+import GeneratePanel          from '@/components/designer/GeneratePanel.vue'
 
 import { useWorkflowStore } from '@/stores/workflows'
 import { useWorkflowIO }    from '@/composables/useWorkflowIO'
@@ -338,6 +344,13 @@ const showBBModal       = ref(false)
 const showAddState      = ref(false)
 const flowKey           = ref(0)
 const showTimeoutEdges  = ref(true)
+
+// -- Generation Tab State (lifted for persistence) --
+const generateDescription  = ref('')
+const generatePrompt       = ref('')
+const generateHistory      = ref([])
+const generateInteractions = ref([])
+const generateProvider     = ref('')
 
 const nodeTypes = shallowRef({ stateNode: StateNode })
 const edgeTypes = shallowRef({ transitionEdge: TransitionEdge })

@@ -7,29 +7,35 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 const openAIAPIURL = "https://api.openai.com/v1/chat/completions"
 
 type OpenAIProvider struct {
-	name         string // provider name returned by Name()
-	apiKey       string
-	apiURL       string // chat completions endpoint
-	defaultModel string
-	client       *http.Client
+	name            string // provider name returned by Name()
+	apiKey          string
+	apiURL          string // chat completions endpoint
+	defaultModel    string
+	maxOutputTokens int
+	client          *http.Client
 }
 
 // NewOpenAIProvider creates a provider backed by the OpenAI API.
-func NewOpenAIProvider(apiKey, defaultModel string) *OpenAIProvider {
+func NewOpenAIProvider(apiKey, defaultModel string, maxTokens int) *OpenAIProvider {
 	if defaultModel == "" {
 		defaultModel = "gpt-4o"
 	}
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
 	return &OpenAIProvider{
-		name:         "openai",
-		apiKey:       apiKey,
-		apiURL:       openAIAPIURL,
-		defaultModel: defaultModel,
-		client:       &http.Client{},
+		name:            "openai",
+		apiKey:          apiKey,
+		apiURL:          openAIAPIURL,
+		defaultModel:    defaultModel,
+		maxOutputTokens: maxTokens,
+		client:          &http.Client{Timeout: 300 * time.Second},
 	}
 }
 
@@ -42,17 +48,23 @@ func NewOpenAIProvider(apiKey, defaultModel string) *OpenAIProvider {
 //	apiKey   – optional; pass "" for local servers that don't require auth
 //	name     – logical provider name registered in the LLM registry
 //	model    – default model identifier (Ollama model tag, vLLM model ID, …)
-func NewOpenAICompatibleProvider(baseURL, apiKey, name, defaultModel string) *OpenAIProvider {
+func NewOpenAICompatibleProvider(baseURL, apiKey, name, defaultModel string, maxTokens int) *OpenAIProvider {
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
 	return &OpenAIProvider{
-		name:         name,
-		apiKey:       apiKey,
-		apiURL:       baseURL,
-		defaultModel: defaultModel,
-		client:       &http.Client{},
+		name:            name,
+		apiKey:          apiKey,
+		apiURL:          baseURL,
+		defaultModel:    defaultModel,
+		maxOutputTokens: maxTokens,
+		client:          &http.Client{Timeout: 300 * time.Second},
 	}
 }
 
 func (p *OpenAIProvider) Name() string { return p.name }
+
+func (p *OpenAIProvider) MaxOutputTokens() int { return p.maxOutputTokens }
 
 func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error) {
 	body := p.buildRequest(req, false)

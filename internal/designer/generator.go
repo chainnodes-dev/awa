@@ -37,6 +37,9 @@ type GenerateRequest struct {
 	// MCPServers is an optional list of logical MCP server names from the registry
 	// that should be available to agents in the generated workflow.
 	MCPServers []string `json:"mcp_servers,omitempty"`
+	// Provider is an optional LLM provider name to use for this request, overriding
+	// the default provider.
+	Provider string `json:"provider,omitempty"`
 }
 
 // GenerateResult holds the LLM-generated workflow.
@@ -45,21 +48,47 @@ type GenerateResult struct {
 	YAML string `json:"yaml"`
 	// Definition is the parsed and validated WorkflowDef.
 	Definition *asmtypes.WorkflowDef `json:"definition"`
+	// Interactions is the full conversation trace for this generation.
+	Interactions []llm.Message `json:"interactions"`
 }
 
 // Generator uses an LLM to produce WorkflowDef YAML from a plain-language description.
 type Generator struct {
-	provider   llm.Provider
-	registry   []MCPServerEntry
-	skillStore store.SkillStore
+	provider llm.Provider
+	registry []MCPServerEntry
+	skStore  store.SkillStore
+	prompts  *PromptManager
 }
 
 // NewGenerator creates a Generator backed by the given LLM provider.
 // registry should come from LoadMCPRegistry().
-// skillStore may be nil; when provided it is used by AnalyseSkill to inject
+// skStore may be nil; when provided it is used by AnalyseSkill to inject
 // the registered skill catalog into the prompt so the LLM can emit skill_call nodes.
-func NewGenerator(provider llm.Provider, registry []MCPServerEntry, skillStore store.SkillStore) *Generator {
-	return &Generator{provider: provider, registry: registry, skillStore: skillStore}
+func NewGenerator(provider llm.Provider, registry []MCPServerEntry, skStore store.SkillStore) *Generator {
+	return &Generator{
+		provider: provider,
+		registry: registry,
+		skStore:  skStore,
+		prompts:  NewPromptManager(),
+	}
+}
+
+// WithProvider returns a shallow clone of the generator using a different LLM provider.
+func (g *Generator) WithProvider(p llm.Provider) *Generator {
+	return &Generator{
+		provider: p,
+		registry: g.registry,
+		skStore:  g.skStore,
+		prompts:  g.prompts,
+	}
+}
+
+func (g *Generator) GetPrompt(id string) string {
+	return g.prompts.Get(id, "")
+}
+
+func (g *Generator) SetPrompt(id, content string) {
+	g.prompts.Set(id, content)
 }
 
 // Generate calls the LLM and returns a validated WorkflowDef.
@@ -106,44 +135,38 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 	}
 	messages = append(messages, llm.Message{Role: "user", Content: userMsg})
 
+	interaction := make([]llm.Message, 0)
+	interaction = append(interaction, llm.Message{Role: "system", Content: system})
+	interaction = append(interaction, messages...)
+
 	// Call the LLM with the full conversation.
 	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
 		SystemPrompt: system,
 		Messages:     messages,
-		MaxTokens:    4096,
+		MaxTokens:    g.provider.MaxOutputTokens(),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("LLM call failed: %w", err)
+		return &GenerateResult{Interactions: interaction}, fmt.Errorf("LLM call failed: %w", err)
 	}
 
-	// Extract and validate. On failure, retry once with the error feedback.
+	interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
+
+	// Extract and validate.
 	yamlStr, def, err := g.extractAndValidate(resp.Content)
 	if err != nil {
-		// Automatic retry: feed the error back to the LLM and ask for a fix.
-		retryMessages := append(messages,
-			llm.Message{Role: "assistant", Content: resp.Content},
-			llm.Message{Role: "user", Content: fmt.Sprintf(
-				"The YAML you produced is invalid:\n\n%s\n\nPlease fix the issues and return the corrected, complete YAML.",
-				err.Error(),
-			)},
-		)
-		resp2, err2 := g.provider.Complete(ctx, llm.CompletionRequest{
-			SystemPrompt: system,
-			Messages:     retryMessages,
-			MaxTokens:    4096,
-		})
-		if err2 != nil {
-			return nil, fmt.Errorf("LLM retry failed: %w (original error: %w)", err2, err)
-		}
-		yamlStr, def, err = g.extractAndValidate(resp2.Content)
-		if err != nil {
-			return nil, fmt.Errorf("generated workflow is still invalid after retry: %w", err)
-		}
+		// No automatic retry. We return the result even on error so the user
+		// can see the faulty YAML and interactions in the trace tab.
+		return &GenerateResult{
+			YAML:         yamlStr,
+			Definition:   def,
+			Interactions: interaction,
+		}, fmt.Errorf("generated workflow is invalid: %w", err)
 	}
 
 	return &GenerateResult{
-		YAML:       yamlStr,
-		Definition: def,
+		YAML:         yamlStr,
+		Definition:   def,
+		Interactions: interaction,
 	}, nil
 }
 
@@ -166,14 +189,14 @@ func (g *Generator) extractAndValidate(content string) (string, *asmtypes.Workfl
 func (g *Generator) buildSystemPrompt(requestedServers []string) string {
 	var sb strings.Builder
 
-	sb.WriteString(`You are an expert workflow designer for the ASM (Agentic State Machine) platform.
+	sb.WriteString(g.prompts.Get(PromptIDBase, `You are an expert workflow designer for the ASM (Agentic State Machine) platform.
 Your task is to produce a valid ASM workflow YAML definition based on the user's description.
 
 ## YAML Schema
 
 The workflow YAML must conform to this structure:
 
-` + "```yaml" + `
+`+"```yaml"+`
 apiVersion: asm/v1
 kind: Workflow
 metadata:
@@ -250,7 +273,7 @@ agents:
       mcp_servers: "{{ env.MCP_SERVER_URL }}"   # comma-separated env var references
       prompt: |                # optional inline system prompt override
         You are a specialist agent for...
-` + "```" + `
+`+"```"+`
 
 ## Rules
 
@@ -260,7 +283,7 @@ agents:
 4.  All state names referenced in transitions (both "to" and "to_nodes") must exist in the states list. **NEVER use wildcards like "*" as a state name — every state must be explicitly defined.**
 5.  All agent names referenced in states must exist in the agents list.
 6.  Use "hitl" for any step that requires a human decision or approval.
-7.  Use "script" ONLY for purely deterministic computations (arithmetic, comparisons, field mapping) where no reasoning is needed. Scripts use expr-lang expressions, not code.
+7.  Use "script" or "code" ONLY for purely deterministic computations (arithmetic, comparisons, field mapping) where no reasoning is needed. Scripts use expr-lang expressions, not code. Code use javascript code
 8.  Use "wait" for join points that synchronise parallel branches, or for any pause that resolves automatically when a blackboard condition is met or a timeout fires. A "wait" state does NOT require human input.
 9.  Use "initial" or "intermediate" for ALL steps that require reasoning, validation, enrichment, classification, extraction, or any non-trivial logic. These are LLM-powered states.
 10. Every state of type "initial" or "intermediate" MUST have an "agent" field referencing an agent defined in the "agents:" list. **CRITICAL: Reasoning states cannot be automated without an agent.**
@@ -270,11 +293,12 @@ agents:
 14. The LLM agent decides which trigger to fire based on its analysis. Mention the available trigger names in the instructions so the agent knows its options.
 15. The "initial" state should capture the input and start processing. **Assign an agent to the initial state to begin work immediately.**
 16. Keep the blackboard schema minimal — only fields that flow between states.
-17. **CRITICAL**: Define the agent's identity, tone, and global business logic in "metadata.system_prompt". This applies to all LLM agents in the workflow.
+17. **CRITICAL**: Define the agent's identity, tone, and global business logic in metadata.system_prompt. This applies to all LLM agents in the workflow.
 18. **DO NOT** put prompts or instructions inside the "agents" list. Use the agent config only for "mcp_servers" or "model" overrides.
 19. The "instructions" field on each state should only contain the specific task for that state.
 20. For parallel execution, use a transition with "to_nodes" (a list) to fan out to multiple states simultaneously, and a "wait" state with a "condition" expression to join them back.
 21. Use "skill_call" to invoke a registered skill as a child workflow. The "skill_call" state requires a "skill_call" block with "skill_ref" (the skill name), "input_mappings" (parent field → child port), "output_mappings" (child port → parent field), and "completion_trigger". A "failure_trigger" is optional (defaults to "skill_failed"). Skill_call states do NOT use an "agent" field.
+22. **Abstract Generation** — Populate metadata.description with a concise, professional 1-sentence abstract of the workflow's purpose. **IMPORTANT**: If an existing workflow is provided and it already has a description that is more than a placeholder, PRESERVE it. Only generate a new abstract if it is missing or empty.
 
 ## How Triggers Work
 
@@ -286,7 +310,7 @@ agents:
 
 Example: a state VALIDATE_DATA with instructions "Validate the invoice data. If valid emit 'valid', if there are issues emit 'invalid'" will have two transitions: VALIDATE_DATA→PROCESS (trigger: valid) and VALIDATE_DATA→REJECT (trigger: invalid).
 
-`)
+`))
 
 	// Add MCP server context if any servers were requested or all are listed.
 	relevantServers := g.registry
@@ -317,7 +341,7 @@ The YAML must be complete and valid according to the schema above.
 // refinementAddendum returns additional instructions appended to the system prompt
 // when the user is refining an existing workflow rather than generating from scratch.
 func (g *Generator) refinementAddendum() string {
-	return `
+	return g.prompts.Get(PromptIDRefine, `
 ## Refinement Mode
 
 You are modifying an existing workflow. The user will provide the current YAML and a change request.
@@ -329,7 +353,7 @@ Rules for refinement:
 4. If adding new states, integrate them naturally into the existing flow.
 5. Ensure all transitions remain valid after the change — no dangling references.
 6. Output the complete updated YAML (not just the diff).
-`
+`)
 }
 
 // extractYAMLBlock finds the first ```yaml ... ``` block in the LLM response,
@@ -411,7 +435,8 @@ func MarshalGenerateResult(r *GenerateResult) (map[string]interface{}, error) {
 	var defMap interface{}
 	_ = json.Unmarshal(defBytes, &defMap)
 	return map[string]interface{}{
-		"yaml":       r.YAML,
-		"definition": defMap,
+		"yaml":         r.YAML,
+		"definition":   defMap,
+		"interactions": r.Interactions,
 	}, nil
 }

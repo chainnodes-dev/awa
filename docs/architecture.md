@@ -8,7 +8,7 @@ The **Agentic State Machine (ASM) Platform** is a workflow orchestration system 
 
 Each worker's sole responsibility is to complete a task and return a result. It does not know what happens next. The workflow definition owns all routing logic — transitions, conditions, and branching. This clean separation means you can replace, upgrade, or specialise a worker without ever touching the workflow definition, and vice versa.
 
-The platform is powered by **Temporal**, ensuring every workflow execution is durable, resumable, and auditable. While developer-friendly, durability is not an afterthought — it is mandatory. Every run survives server and worker restarts by default.
+The platform is powered by **Temporal**, ensuring every workflow execution is durable, resumable, and auditable. Durability is not an afterthought — it is mandatory and universal. Every run is executed as a Temporal workflow, surviving server and worker restarts by default.
 
 ---
 
@@ -47,6 +47,8 @@ A run has a lifecycle status:
 - `waiting` — paused at a human-in-the-loop state
 - `complete` — reached a terminal state
 - `failed` — an unrecoverable error occurred
+
+All execution is performed by Temporal workers. There is no "direct" or non-durable mode.
 
 ### Blackboard
 
@@ -557,7 +559,7 @@ All durable state lives in PostgreSQL:
 - `users` — user accounts scoped to a tenant; username unique per-tenant
 - `refresh_tokens` — opaque tokens for JWT refresh rotation
 - `mcp_servers` — MCP server registry entries (name, url, env_var); DB-backed with YAML fallback
-- `llm_configs` — per-tenant LLM provider configuration (provider, api_key, model, enabled, is_default)
+- `llm_configs` — per-tenant LLM provider configuration (provider, api_key, base_url, default_model, max_output_tokens, enabled, is_default)
 - `skills` — registered skills with typed I/O contracts and capability declarations (JSONB)
 - `skill_dependencies` — directed edges: `(skill_id, depends_on_id)`; populated automatically from `skill_call` nodes in the skill's workflow
 - `event_subscriptions` — per-run registrations for wait-on-event states; indexed by `(tenant_id, event_name)`

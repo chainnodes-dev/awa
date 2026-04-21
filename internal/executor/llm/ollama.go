@@ -14,10 +14,13 @@ import "fmt"
 // Tool calling is supported on models that implement it (llama3.1+, llama3.2 11B+).
 // Smaller models (llama3.2 3B) may return tool calls inconsistently — use them
 // for simple text-output states and rely on the structured-output parsing fallback.
-func NewOllamaProvider(baseURL, defaultModel string) *OpenAIProvider {
+func NewOllamaProvider(baseURL, defaultModel string, maxTokens int) *OpenAIProvider {
 	if defaultModel == "" {
 		defaultModel = "llama3.2"
 	}
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
 	endpoint := fmt.Sprintf("%s/v1/chat/completions", baseURL)
-	return NewOpenAICompatibleProvider(endpoint, "", "ollama", defaultModel)
+	return NewOpenAICompatibleProvider(endpoint, "", "ollama", defaultModel, maxTokens)
 }

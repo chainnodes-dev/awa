@@ -81,6 +81,7 @@ func (e *EngineClient) SendHITLSignal(ctx context.Context, temporalID string, si
 		Resolution: sig.Resolution,
 		Resolver:   sig.Resolver,
 		Comment:    sig.Comment,
+		Payload:    sig.Payload,
 	})
 }
 

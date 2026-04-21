@@ -28,10 +28,11 @@ func (h *Handlers) ListLLMConfigs(c *gin.Context) {
 }
 
 type upsertLLMConfigRequest struct {
-	APIKey       string `json:"api_key"`
-	BaseURL      string `json:"base_url"`
-	DefaultModel string `json:"default_model"`
-	Enabled      bool   `json:"enabled"`
+	APIKey          string `json:"api_key"`
+	BaseURL         string `json:"base_url"`
+	DefaultModel    string `json:"default_model"`
+	MaxOutputTokens int    `json:"max_output_tokens"`
+	Enabled         bool   `json:"enabled"`
 }
 
 // UpsertLLMConfig creates or updates a provider's configuration.
@@ -56,12 +57,13 @@ func (h *Handlers) UpsertLLMConfig(c *gin.Context) {
 	}
 
 	cfg := &store.LLMConfig{
-		TenantID:     store.DefaultTenantID,
-		Provider:     provider,
-		APIKey:       apiKey,
-		BaseURL:      req.BaseURL,
-		DefaultModel: req.DefaultModel,
-		Enabled:      req.Enabled,
+		TenantID:        store.DefaultTenantID,
+		Provider:        provider,
+		APIKey:          apiKey,
+		BaseURL:         req.BaseURL,
+		DefaultModel:    req.DefaultModel,
+		MaxOutputTokens: req.MaxOutputTokens,
+		Enabled:         req.Enabled,
 	}
 	if err := h.store.UpsertLLMConfig(ctx, cfg); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -125,15 +127,15 @@ func (h *Handlers) TestLLMConnection(c *gin.Context) {
 	var prov llm.Provider
 	switch provider {
 	case "anthropic":
-		prov = llm.NewAnthropicProvider(cfg.APIKey, model)
+		prov = llm.NewAnthropicProvider(cfg.APIKey, model, cfg.MaxOutputTokens)
 	case "ollama":
-		prov = llm.NewOllamaProvider(cfg.BaseURL, model)
+		prov = llm.NewOllamaProvider(cfg.BaseURL, model, cfg.MaxOutputTokens)
 	default:
 		endpoint := cfg.BaseURL
 		if endpoint == "" {
 			endpoint = llm.ProviderEndpoint(provider)
 		}
-		prov = llm.NewOpenAICompatibleProvider(endpoint, cfg.APIKey, provider, model)
+		prov = llm.NewOpenAICompatibleProvider(endpoint, cfg.APIKey, provider, model, cfg.MaxOutputTokens)
 	}
 
 	_, testErr := prov.Complete(c.Request.Context(), llm.CompletionRequest{

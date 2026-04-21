@@ -34,7 +34,8 @@
 | **M10** Generated MCP servers | MCP server scaffolding, MCP registry promoted to DB |
 | **M11** LLM config UI | DB-backed providers, Settings page, Grok/Deepseek/Gemini, worker hot-reload, HITL fixes |
 | **M12** Orchestration 2.0 | Mandatory Temporal, `wait` state type, parallel `to_nodes` transitions |
-| **Post-M12** | Code state (JavaScript / goja), LLM code-gen for code nodes, MCP server picker (chip UI), Docker frontend (Nginx), GitHub repo |
+| **M13** Designer 2.0 | Multi-stage generation UX, configurable token limits, removal of autoretries, Trace tab for all, system prompt overrides |
+| **Post-M13** | Code state (JavaScript / goja), LLM code-gen for code nodes, MCP server picker (chip UI), Docker frontend (Nginx), GitHub repo |
 
 ---
 
@@ -60,6 +61,24 @@ The foundational Skill layer has been implemented. A **skill** is a higher-level
 | Skill tab in Designer (replaces AI tab) | `frontend/src/views/Designer.vue` | ✅ |
 | `CodeEditor` `language="text"` mode — word-wrap, no JS syntax | `frontend/src/components/designer/CodeEditor.vue` | ✅ |
 | `CodeEditorModal` — language + title props, violet theme for text | `frontend/src/components/designer/CodeEditorModal.vue` | ✅ |
+ 
+---
+ 
+## Designer UX 2.0 & LLM Config ✅
+ 
+> **Goal:** Enhance the reliably and flexibility of AI-driven workflow generation.
+ 
+### Features
+ 
+| Component | Description | Status |
+|---|---|---|
+| **Max Output Tokens** | Per-provider configurable token limit in Settings | ✅ |
+| **Autoretry Removal** | Disabled automatic LLM retries on invalid YAML to allow manual intervention | ✅ |
+| **Two-Stage Designer** | "Description" vs "Prompt" model for iterative generation | ✅ |
+| **Trace for All** | Communication Trace (debug panel) now available to everyone | ✅ |
+| **System Prompt Overrides** | Global prompts can be tuned in the Settings UI | ✅ |
+| **HTTP Timeouts** | Increased backend LLM timeout to 300s for large generations | ✅ |
+| **Abstract Preservation** | Designer now preserves existing abstracts if not empty | ✅ |
 
 ### How it works today
 

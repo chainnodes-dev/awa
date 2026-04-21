@@ -228,8 +228,8 @@ When a state's type is `intermediate` (or `initial`), expand the **Agent Config*
 | **MCP Servers** | Tool servers this agent can call — see [Section 4.6](#46-mcp-servers) |
 | **Instructions** | Plain-language description of what this state should do |
 
-**System prompt:**
-A global system prompt can be set in the workflow metadata (left sidebar → **System Prompt**). It is prepended to every agent call in the workflow. Individual state **Instructions** are appended on top.
+**System prompt overrides:**
+Global system prompts for the AI Designer (Base, Skill Analyser, and Refinement) can be overridden in **Settings** (admin only). Individual state **Instructions** are appended to the relevant system prompt during LLM calls.
 
 ---
 
@@ -271,16 +271,18 @@ Once you click **Apply** in the state panel and **Save** the workflow, the schem
 The AI generator creates a complete workflow from a natural-language description.
 
 1. Open the Designer for a new or existing workflow
-2. Click the **✦ AI** button in the top toolbar
-3. Describe the process you want to model, e.g.:
+2. Click the **Generate** secondary tab in the bottom panel (replaces the old Skill tab).
+3. The generator uses a two-stage interface:
+   - **Description**: Add the high-level process description here. Changing this will trigger a fresh workflow generation.
+   - **Prompt**: Once a workflow is generated, use this field to request specific adaptations (e.g., "add a timeout to the validation state" or "change the trigger name to 'verified'").
+4. Select the desired **LLM Provider** and **Model** from the dropdowns next to the Generate button.
+5. Click **Generate** (or **Restart** to start a fresh process).
+6. The AI produces a workflow YAML. Review it in the **YAML** sub-tab.
+7. Click **Apply to Canvas** to update the designer.
 
-   > *Process incoming invoices. Validate the vendor and amount. If the amount is above €10,000 route for manual approval, otherwise auto-approve. Send a confirmation email after approval.*
+The generator is aware of the registered MCP servers and will suggest relevant tools. It also automatically generates a concise professional abstract for the workflow in `metadata.description` (if empty).
 
-4. Click **Generate**
-5. The AI produces a full workflow YAML — states, transitions, agents, and blackboard schema
-6. Review it in the preview panel, then click **Apply to Canvas**
-
-The generator is aware of the registered MCP servers (from `mcp_registry.yaml` or the DB registry) and will suggest assigning relevant tool servers to agents automatically.
+**Persistence**: Text in the Description and Prompt fields is preserved when switching between Overview and Generate modes, ensuring no work is lost.
 
 **Tips:**
 - Be specific about routing conditions ("if amount > 10000") — the AI will turn them into transition guards
@@ -403,7 +405,7 @@ Uses the 6-field robfig/cron format: `seconds minutes hours day-of-month month d
 
 Open the **Monitor** view by clicking a run in the Runs list, or clicking **Monitor** after starting a run.
 
-The Monitor has three tabs: **Timeline**, **Blackboard**, and **Debug** (admin only).
+The Monitor has three tabs: **Timeline**, **Blackboard**, and **Trace**.
 
 ---
 
@@ -735,6 +737,7 @@ agents:
 | `transition.guard` | `expr-lang` expression that must be true for this edge to be taken |
 | `transition.to_nodes` | List of target states for parallel fan-out (instead of `to`) |
 | `agent.model` | Override the model for this agent |
+| `agent.max_output_tokens` | Configurable per provider in Settings; prevents truncation of large workflows |
 | `agent.task_queue` | Route to a specialist Temporal worker |
 | `agent.config.mcp_servers` | Comma-separated MCP server URLs or `{{ env.VAR }}` references |
 

@@ -12,9 +12,9 @@ Define your process as a state machine in YAML. Assign LLM agents, deterministic
 
 - **Visual workflow designer** — drag-and-drop canvas to build state machines, define transitions and guards, assign agents
 - **Multiple state types** — LLM agent, JavaScript code node, deterministic script, human-in-the-loop (HITL), wait (event-driven), parallel fan-out
-- **AI-assisted authoring** — describe a state in plain English, generate the workflow YAML or code node JavaScript with one click
-- **Live monitoring** — real-time event log, blackboard inspector, LLM debug panel showing every prompt and response
-- **Durable execution** — every run survives server and worker restarts via Temporal
+- **AI-assisted authoring** — describe a process in plain English, decompose it into an optimized workflow, or generate code node JavaScript with one click
+- **Live monitoring** — real-time event log, blackboard inspector, LLM Trace panel showing every prompt and response (available to all users)
+- **Mandatory durability** — every run is a Temporal workflow, surviving server and worker restarts by default
 - **Multi-provider LLM** — Anthropic, OpenAI, Grok, DeepSeek, Gemini, Ollama (local); configurable per agent
 - **MCP tool servers** — agents call external tools via the Model Context Protocol
 - **RBAC auth** — admin / operator / viewer roles, JWT + refresh tokens
@@ -244,9 +244,9 @@ pkg/
 frontend/
   src/
     components/
-      designer/         Canvas, state panel, code editor
-      monitor/          Event log, blackboard view, LLM debug panel
-    views/              Designer, Monitor, Workflows list
+      designer/         Canvas, state panel, code editor, generate panel
+      monitor/          Event log, blackboard view, LLM Trace panel
+    views/              Designer, Monitor, Workflows list, Skills list
     stores/             Pinia stores (auth, execution, workflows)
 ```
 
@@ -266,7 +266,6 @@ Key variables:
 | `ADMIN_USERNAME` | Seeded admin username | `admin` |
 | `ADMIN_PASSWORD` | Seeded admin password (required) | — |
 | `JWT_SECRET` | JWT signing secret — **change in production** | dev default |
-| `EXECUTOR_MODE` | `temporal` (production) or `direct` (dev only) | `direct` |
 | `FRONTEND_PORT` | Host port for the Nginx frontend container | `80` |
 
 ---

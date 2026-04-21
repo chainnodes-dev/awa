@@ -22,12 +22,20 @@ type mockProvider struct {
 	name      string
 	responses []*llm.CompletionResponse
 	callCount int
+	maxTokens int
 }
 
 func (m *mockProvider) Name() string { return m.name }
 
 func (m *mockProvider) Complete(_ context.Context, _ llm.CompletionRequest) (*llm.CompletionResponse, error) {
 	return m.nextResponse()
+}
+
+func (m *mockProvider) MaxOutputTokens() int { 
+	if m.maxTokens <= 0 {
+		return 4096
+	}
+	return m.maxTokens 
 }
 
 func (m *mockProvider) Stream(_ context.Context, _ llm.CompletionRequest, _ chan<- string) (*llm.CompletionResponse, error) {
@@ -100,6 +108,8 @@ func (p *ctxCheckProvider) Name() string { return p.name }
 func (p *ctxCheckProvider) Complete(ctx context.Context, _ llm.CompletionRequest) (*llm.CompletionResponse, error) {
 	return nil, ctx.Err()
 }
+func (p *ctxCheckProvider) MaxOutputTokens() int { return 4096 }
+
 func (p *ctxCheckProvider) Stream(ctx context.Context, _ llm.CompletionRequest, _ chan<- string) (*llm.CompletionResponse, error) {
 	return nil, ctx.Err()
 }

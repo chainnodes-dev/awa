@@ -79,6 +79,17 @@
                 class="input text-sm w-full"
               />
             </div>
+
+            <!-- Max Tokens -->
+            <div>
+              <label class="text-xs text-slate-500 mb-1 block">Max Output Tokens</label>
+              <input
+                v-model.number="forms[prov.id].max_output_tokens"
+                type="number"
+                placeholder="4096"
+                class="input text-sm w-full"
+              />
+            </div>
           </div>
 
           <!-- Status message -->
@@ -107,6 +118,34 @@
             </button>
           </div>
         </section>
+
+        <!-- System Prompts -->
+        <section class="card p-5 space-y-4">
+          <div class="flex items-center gap-2 mb-2">
+            <svg class="text-violet-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
+            </svg>
+            <h2 class="text-sm font-semibold text-slate-300">AI Designer System Prompts</h2>
+          </div>
+          <p class="text-xs text-slate-500">
+            Customize the underlying instructions used by the AI to generate and refine workflows.
+            Overrides are stored in-memory and will reset on server restart.
+          </p>
+
+          <div v-for="(content, id) in systemPrompts" :key="id" class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">{{ id.replace(/_/g, ' ') }}</span>
+              <button @click="savePrompt(id)" :disabled="savingPrompt[id]" class="text-[10px] text-violet-400 hover:text-violet-300 font-bold uppercase transition-colors">
+                {{ savingPrompt[id] ? 'Saving...' : 'Save Override' }}
+              </button>
+            </div>
+            <textarea
+              v-model="systemPrompts[id]"
+              class="input w-full h-32 font-mono text-[11px] leading-relaxed resize-y"
+              placeholder="Enter custom system prompt..."
+            />
+          </div>
+        </section>
       </template>
 
     </div>
@@ -115,7 +154,7 @@
 
 <script setup>
 import { ref, computed, onMounted, reactive } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, api } from '@/stores/auth'
 import { useLLMStore } from '@/stores/llm'
 
 const authStore = useAuthStore()
@@ -126,7 +165,7 @@ const isAdmin = computed(() => authStore.user?.role === 'admin' || authStore.use
 // Build a reactive form object per provider
 const forms = reactive({})
 llmStore.PROVIDERS.forEach(p => {
-  forms[p.id] = { api_key: '', base_url: '', default_model: '', enabled: false }
+  forms[p.id] = { api_key: '', base_url: '', default_model: '', max_output_tokens: 4096, enabled: false }
 })
 
 const saving  = reactive({})
@@ -138,6 +177,8 @@ const selectedDefault = ref('')
 const enabledProviders = computed(() =>
   llmStore.PROVIDERS.filter(p => forms[p.id]?.enabled)
 )
+
+// ...
 
 function isDefaultProvider(id) {
   return llmStore.configs.find(c => c.provider === id)?.is_default === true
@@ -162,10 +203,11 @@ function syncFormsFromStore() {
   llmStore.PROVIDERS.forEach(p => {
     const cfg = llmStore.configs.find(c => c.provider === p.id)
     if (cfg) {
-      forms[p.id].enabled       = cfg.enabled
-      forms[p.id].default_model = cfg.default_model
-      forms[p.id].base_url      = cfg.base_url ?? ''
-      forms[p.id].api_key       = ''  // never pre-fill masked keys
+      forms[p.id].enabled            = cfg.enabled
+      forms[p.id].default_model      = cfg.default_model
+      forms[p.id].max_output_tokens  = cfg.max_output_tokens || 4096
+      forms[p.id].base_url           = cfg.base_url ?? ''
+      forms[p.id].api_key            = ''  // never pre-fill masked keys
     } else {
       forms[p.id].enabled       = false
       forms[p.id].default_model = ''
@@ -182,10 +224,11 @@ async function save(provider) {
   statuses[provider] = null
   try {
     await llmStore.upsert(provider, {
-      api_key:       forms[provider].api_key,
-      base_url:      forms[provider].base_url,
-      default_model: forms[provider].default_model,
-      enabled:       forms[provider].enabled,
+      api_key:           forms[provider].api_key,
+      base_url:          forms[provider].base_url,
+      default_model:     forms[provider].default_model,
+      max_output_tokens: forms[provider].max_output_tokens,
+      enabled:           forms[provider].enabled,
     })
     syncFormsFromStore()
   } catch (e) {
@@ -217,10 +260,39 @@ async function saveDefault() {
   }
 }
 
+// -- System Prompts --
+const systemPrompts = reactive({
+  workflow_generator_base: '',
+  skill_analyser_preamble: '',
+  workflow_refinement_addendum: '',
+})
+const savingPrompt = reactive({})
+
+async function fetchPrompts() {
+  try {
+    const { data } = await api.get('/designer/prompts')
+    Object.assign(systemPrompts, data)
+  } catch (e) {
+    console.error('Failed to fetch system prompts', e)
+  }
+}
+
+async function savePrompt(id) {
+  savingPrompt[id] = true
+  try {
+    await api.put(`/designer/prompts/${id}`, { content: systemPrompts[id] })
+  } catch (e) {
+    alert('Failed to save prompt: ' + (e.response?.data?.error ?? e.message))
+  } finally {
+    savingPrompt[id] = false
+  }
+}
+
 onMounted(async () => {
   if (isAdmin.value) {
     await llmStore.fetchAll()
     syncFormsFromStore()
+    await fetchPrompts()
   }
 })
 </script>

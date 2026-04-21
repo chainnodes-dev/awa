@@ -16,22 +16,25 @@ type AnalyseSkillRequest struct {
 	// Description is the natural-language description of what the skill does.
 	Description string `json:"description" binding:"required"`
 	// Inputs is the typed I/O contract the caller declares.
-	// When provided, generated blackboard fields MUST include all input ports.
 	Inputs []asmtypes.SkillPortDef `json:"inputs,omitempty"`
 	// Outputs is the typed output contract.
-	// Generated terminal states MUST write all output ports to the blackboard.
 	Outputs []asmtypes.SkillPortDef `json:"outputs,omitempty"`
 	// MCPServers lists MCP server names available to the generated workflow.
 	MCPServers []string `json:"mcp_servers,omitempty"`
 	// ExistingYAML when set causes the LLM to refine rather than generate from scratch.
 	ExistingYAML string `json:"existing_yaml,omitempty"`
+	// History is the prior conversation turns (chat).
+	History []ChatMessage `json:"history,omitempty"`
+	// Provider is an optional LLM provider name to use for this request, overriding
+	// the default provider.
+	Provider string `json:"provider,omitempty"`
 }
 
 // AnalyseSkillResult holds the generated workflow.
-// The shape is identical to GenerateResult so the same frontend handler works.
 type AnalyseSkillResult struct {
-	YAML       string                `json:"yaml"`
-	Definition *asmtypes.WorkflowDef `json:"definition"`
+	YAML         string                `json:"yaml"`
+	Definition   *asmtypes.WorkflowDef `json:"definition"`
+	Interactions []llm.Message         `json:"interactions"`
 }
 
 // AnalyseSkill decomposes a skill description into a WorkflowDef YAML.
@@ -48,9 +51,9 @@ func (g *Generator) AnalyseSkill(ctx context.Context, req AnalyseSkillRequest) (
 	// Fetch the registered skill catalog so the LLM can reuse existing skills
 	// instead of reimplementing their logic inline.
 	var registeredSkills []*store.Skill
-	if g.skillStore != nil {
+	if g.skStore != nil {
 		var err error
-		registeredSkills, err = g.skillStore.ListSkills(ctx)
+		registeredSkills, err = g.skStore.ListSkills(ctx)
 		if err != nil {
 			// Non-fatal: log and proceed without registry context.
 			slog.Warn("skill analyser: failed to list registered skills", "error", err)
@@ -63,42 +66,42 @@ func (g *Generator) AnalyseSkill(ctx context.Context, req AnalyseSkillRequest) (
 	}
 
 	userMsg := g.buildSkillUserMsg(req)
-	messages := []llm.Message{{Role: "user", Content: userMsg}}
+	messages := make([]llm.Message, 0, len(req.History)+1)
+	for _, m := range req.History {
+		messages = append(messages, llm.Message{Role: m.Role, Content: m.Content})
+	}
+	messages = append(messages, llm.Message{Role: "user", Content: userMsg})
+
+	interaction := make([]llm.Message, 0)
+	interaction = append(interaction, llm.Message{Role: "system", Content: system})
+	interaction = append(interaction, messages...)
 
 	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
 		SystemPrompt: system,
 		Messages:     messages,
-		MaxTokens:    4096,
+		MaxTokens:    g.provider.MaxOutputTokens(),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("LLM call failed: %w", err)
+		return &AnalyseSkillResult{Interactions: interaction}, fmt.Errorf("LLM call failed: %w", err)
 	}
+
+	interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
 
 	yamlStr, def, err := g.extractAndValidate(resp.Content)
 	if err != nil {
-		// Retry once with error feedback.
-		retryMessages := append(messages,
-			llm.Message{Role: "assistant", Content: resp.Content},
-			llm.Message{Role: "user", Content: fmt.Sprintf(
-				"The YAML you produced is invalid:\n\n%s\n\nPlease fix all issues and return the corrected, complete YAML.",
-				err.Error(),
-			)},
-		)
-		resp2, err2 := g.provider.Complete(ctx, llm.CompletionRequest{
-			SystemPrompt: system,
-			Messages:     retryMessages,
-			MaxTokens:    4096,
-		})
-		if err2 != nil {
-			return nil, fmt.Errorf("LLM retry failed: %w (original: %w)", err2, err)
-		}
-		yamlStr, def, err = g.extractAndValidate(resp2.Content)
-		if err != nil {
-			return nil, fmt.Errorf("generated workflow still invalid after retry: %w", err)
-		}
+		// No automatic retry.
+		return &AnalyseSkillResult{
+			YAML:         yamlStr,
+			Definition:   def,
+			Interactions: interaction,
+		}, fmt.Errorf("generated workflow is invalid: %w", err)
 	}
 
-	return &AnalyseSkillResult{YAML: yamlStr, Definition: def}, nil
+	return &AnalyseSkillResult{
+		YAML:         yamlStr,
+		Definition:   def,
+		Interactions: interaction,
+	}, nil
 }
 
 // buildSkillAnalyserPrompt produces the system prompt for the skill decomposer.
@@ -111,7 +114,7 @@ func (g *Generator) buildSkillAnalyserPrompt(mcpServers []string, registeredSkil
 	base := g.buildSystemPrompt(mcpServers)
 
 	// Prepend skill-specific decomposition instructions.
-	preamble := `You are a skill decomposition engine for the ASM (Agentic State Machine) platform.
+	preamble := g.prompts.Get(PromptIDSkill, `You are a skill decomposition engine for the ASM (Agentic State Machine) platform.
 
 Your task is to analyse a skill description and convert it into an optimal ASM workflow.
 A "skill" is a reusable capability described in natural language or code. Your job is to:
@@ -134,14 +137,15 @@ A "skill" is a reusable capability described in natural language or code. Your j
    These become the blackboard schema fields.
 4. **Honour the declared I/O contract** — all declared input ports MUST appear as
    blackboard fields; all declared output ports MUST be written before terminal states.
-5. **Minimise LLM usage** — prefer code, script, or skill_call nodes over intermediate
+5. **Abstract Generation** — Populate "metadata.description" with a concise, professional 1-sentence abstract of the workflow's purpose. **IMPORTANT**: If an existing workflow is provided and it already has a description that is more than a placeholder, PRESERVE it. Only generate a new abstract if it is missing or empty.
+6. **Minimise LLM usage** — prefer code, script, or skill_call nodes over intermediate
    nodes wherever possible. This reduces cost, latency, and non-determinism.
 
 Think step by step before writing the YAML. Ask yourself for each step:
 "Does a registered skill already do this?" If yes, use skill_call.
 "Can this be expressed without an LLM?" If yes, use code or script.
 
-` + base
+`) + base
 
 	// Inject the registered skill catalog when the registry is non-empty.
 	if len(registeredSkills) > 0 {

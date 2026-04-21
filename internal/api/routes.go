@@ -114,6 +114,8 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			designerGroup.POST("/codegen", h.CodegenHandler)
 			designerGroup.POST("/skill/analyse", h.AnalyseSkillHandler)
 			designerGroup.POST("/skill/render", h.RenderSkillHandler)
+			designerGroup.GET("/prompts", h.GetPrompts)
+			designerGroup.PUT("/prompts/:id", h.UpdatePrompt)
 		}
 
 		// API key management — admin only.

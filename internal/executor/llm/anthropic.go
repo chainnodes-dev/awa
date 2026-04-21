@@ -7,24 +7,36 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 const anthropicAPIURL = "https://api.anthropic.com/v1/messages"
 
 type AnthropicProvider struct {
-	apiKey       string
-	defaultModel string
-	client       *http.Client
+	apiKey          string
+	defaultModel    string
+	maxOutputTokens int
+	client          *http.Client
 }
 
-func NewAnthropicProvider(apiKey, defaultModel string) *AnthropicProvider {
+func NewAnthropicProvider(apiKey, defaultModel string, maxTokens int) *AnthropicProvider {
 	if defaultModel == "" {
 		defaultModel = "claude-sonnet-4-5"
 	}
-	return &AnthropicProvider{apiKey: apiKey, defaultModel: defaultModel, client: &http.Client{}}
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
+	return &AnthropicProvider{
+		apiKey:          apiKey,
+		defaultModel:    defaultModel,
+		maxOutputTokens: maxTokens,
+		client:          &http.Client{Timeout: 300 * time.Second},
+	}
 }
 
 func (p *AnthropicProvider) Name() string { return "anthropic" }
+
+func (p *AnthropicProvider) MaxOutputTokens() int { return p.maxOutputTokens }
 
 func (p *AnthropicProvider) Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error) {
 	body := p.buildRequest(req, false)

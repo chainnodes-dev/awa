@@ -12,6 +12,7 @@ type Provider interface {
 	// Stream sends tokens to the tokenCh as they arrive. Caller must drain the channel.
 	Stream(ctx context.Context, req CompletionRequest, tokenCh chan<- string) (*CompletionResponse, error)
 	Name() string
+	MaxOutputTokens() int
 }
 
 type CompletionRequest struct {

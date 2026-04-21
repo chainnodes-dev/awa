@@ -309,9 +309,21 @@ func (h *Handlers) GenerateWorkflow(c *gin.Context) {
 		return
 	}
 
-	result, err := h.generator.Generate(c.Request.Context(), req)
+	gen := h.generator
+	if req.Provider != "" {
+		p, err := h.llmRegistry.Get(req.Provider)
+		if err == nil {
+			gen = gen.WithProvider(p)
+		}
+	}
+
+	result, err := gen.Generate(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		resp := gin.H{"error": err.Error()}
+		if result != nil {
+			resp["interactions"] = result.Interactions
+		}
+		c.JSON(http.StatusInternalServerError, resp)
 		return
 	}
 
@@ -399,15 +411,28 @@ func (h *Handlers) AnalyseSkillHandler(c *gin.Context) {
 		return
 	}
 
-	result, err := h.generator.AnalyseSkill(c.Request.Context(), req)
+	gen := h.generator
+	if req.Provider != "" {
+		p, err := h.llmRegistry.Get(req.Provider)
+		if err == nil {
+			gen = gen.WithProvider(p)
+		}
+	}
+
+	result, err := gen.AnalyseSkill(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		resp := gin.H{"error": err.Error()}
+		if result != nil {
+			resp["interactions"] = result.Interactions
+		}
+		c.JSON(http.StatusInternalServerError, resp)
 		return
 	}
-	// Reuse MarshalGenerateResult for identical response shape {yaml, definition}.
+	// Reuse MarshalGenerateResult for identical response shape {yaml, definition, interactions}.
 	resp, err := designer.MarshalGenerateResult(&designer.GenerateResult{
-		YAML:       result.YAML,
-		Definition: result.Definition,
+		YAML:         result.YAML,
+		Definition:   result.Definition,
+		Interactions: result.Interactions,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to serialise result"})

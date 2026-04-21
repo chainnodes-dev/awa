@@ -148,10 +148,12 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
       const def    = buildDefinition()
       const yamlStr = yaml.dump(def, { lineWidth: 120 })
       const result  = await wfStore.save(yamlStr)
+      fromLoad.value = true
       const newDef  = result.definition ?? result
       meta.version       = newDef.metadata?.version ?? meta.version
       meta.versionNumber = result.version_number ?? newDef.metadata?.version_number ?? meta.versionNumber
       isDirty.value = false
+      nextTick(() => { fromLoad.value = false })
       try { versions.value = await wfStore.fetchVersions(meta.name) } catch { /* ignore */ }
       router.replace(`/designer/${meta.name}/${meta.version}`)
       return result

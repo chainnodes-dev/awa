@@ -12,9 +12,10 @@ type LLMConfig struct {
 	Provider     string    `json:"provider"`
 	APIKey       string    `json:"api_key"`
 	BaseURL      string    `json:"base_url,omitempty"`
-	DefaultModel string    `json:"default_model"`
-	Enabled      bool      `json:"enabled"`
-	IsDefault    bool      `json:"is_default"`
+	DefaultModel    string    `json:"default_model"`
+	MaxOutputTokens int       `json:"max_output_tokens"`
+	Enabled         bool      `json:"enabled"`
+	IsDefault       bool      `json:"is_default"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
