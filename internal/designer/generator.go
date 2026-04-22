@@ -9,6 +9,7 @@ import (
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
+	"gopkg.in/yaml.v3"
 )
 
 // ChatMessage represents one turn in the AI assistant conversation.
@@ -181,7 +182,15 @@ func (g *Generator) extractAndValidate(content string) (string, *asmtypes.Workfl
 	if err != nil {
 		return "", nil, fmt.Errorf("YAML validation failed: %w", err)
 	}
-	return yamlStr, def, nil
+
+	// Tidy up: marshal back to YAML to ensure consistent indentation/format.
+	tidied, err := yaml.Marshal(def)
+	if err != nil {
+		// If re-marshaling fails (rare), return the raw one as fallback.
+		return yamlStr, def, nil
+	}
+
+	return string(tidied), def, nil
 }
 
 // buildSystemPrompt produces the system prompt that teaches the LLM the YAML schema
@@ -250,6 +259,7 @@ agents:
 9. **Abstracts**: Always generate/preserve a professional 1-sentence 'metadata.description'.
 10. **States Format**: The 'states' field MUST be a YAML list (array), NOT a map.
 11. **Versioning**: Use simple increasing integers for 'metadata.version' (e.g., "1", "2", "3"). NEVER use semantic versioning like "1.0.0".
+12. **CRITICAL**: Every 'instructions' field MUST be wrapped in double-quotes to prevent YAML parsing errors (e.g. ` + "`" + `instructions: "Task: verify invoice"` + "`" + `).
 `))
 
 	// Add MCP server context if any servers were requested or all are listed.

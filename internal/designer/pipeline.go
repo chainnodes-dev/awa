@@ -451,7 +451,7 @@ states:
 ## Rules
 
 1. Exactly one 'initial' state and at least one 'terminal' state
-2. Every state must have a meaningful 1–2 sentence 'instructions' field
+2. **CRITICAL**: Every 'instructions' field MUST be wrapped in double-quotes to prevent YAML parsing errors (e.g. ` + "`" + `instructions: "Task: verify invoice"` + "`" + `).
 3. **Every non-terminal state MUST have at least one outgoing transition** (usually to the next logical step)
 4. Be thorough — identify all meaningful steps in the process
 `
@@ -586,6 +586,7 @@ For each code/script/hitl/wait/emit_event node, update the 'instructions' field 
 - Keep all existing state names and types
 - Transitions MUST be in the top-level 'transitions:' block, NEVER inside a state
 - The 'states' field MUST be a YAML list (sequence), NOT a map.
+- **CRITICAL**: ALL 'instructions' and 'guard' strings MUST be wrapped in double-quotes. This prevents colons in descriptions or ternary expressions from breaking the YAML.
 `
 }
 
@@ -619,6 +620,7 @@ Your task is to implement the remaining nodes and produce a clean, complete, run
 - Preserve all code/script node implementations exactly as-is
 - Transitions MUST be in the top-level 'transitions:' block, NEVER inside a state
 - The 'states' field MUST be a YAML list (sequence), NOT a map.
+- **CRITICAL**: ALL 'instructions' prompts MUST be wrapped in double-quotes.
 ` + "```yaml" + `
 states:
   - name: START        # CORRECT
