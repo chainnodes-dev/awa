@@ -52,4 +52,10 @@ const (
 	PromptIDBase     = "workflow_generator_base"
 	PromptIDSkill    = "skill_analyser_preamble"
 	PromptIDRefine   = "workflow_refinement_addendum"
+
+	// Pipeline step prompts — each maps to one stage of the multi-step generator.
+	PromptIDDecompose      = "workflow_decompose"
+	PromptIDCategorise     = "workflow_categorise"
+	PromptIDWire           = "workflow_wire"
+	PromptIDImplFinish     = "workflow_implement_finish"
 )

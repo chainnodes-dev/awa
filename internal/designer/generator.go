@@ -198,8 +198,9 @@ apiVersion: asm/v1
 kind: Workflow
 metadata:
   name: kebab-case-unique-name
-  version: "1.0.0"
+  version: "1"
   description: "Concise 1-sentence abstract"
+  labels: { env: production, category: finance }
   system_prompt: "Global persona/rules for LLM agents"
 blackboard:
   schema: { input_field: { type: string, required: true } } # ONLY required inputs or defaults
@@ -247,6 +248,8 @@ agents:
 7. **Blackboard Minimalist**: Only define fields in 'blackboard.schema' that are required as initial input or need a specific default value. LLM agents can read/write any other fields dynamically.
 8. **Config**: Every value in 'agents.config' MUST be a string. Use '` + "`" + `{{ env.VAR }}` + "`" + `' for env vars.
 9. **Abstracts**: Always generate/preserve a professional 1-sentence 'metadata.description'.
+10. **States Format**: The 'states' field MUST be a YAML list (array), NOT a map.
+11. **Versioning**: Use simple increasing integers for 'metadata.version' (e.g., "1", "2", "3"). NEVER use semantic versioning like "1.0.0".
 `))
 
 	// Add MCP server context if any servers were requested or all are listed.

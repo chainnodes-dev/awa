@@ -5,7 +5,20 @@
       nodeStyle,
       isActive && `glow-${data.type ?? 'intermediate'}`,
     ]"
+    @mouseenter="hovered = true"
+    @mouseleave="hovered = false"
   >
+    <!-- Instructions hover tooltip -->
+    <Transition name="tooltip">
+      <div
+        v-if="hovered && data.instructions"
+        class="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+8px)] z-50 w-64 p-2.5 rounded-lg border border-border bg-surface-0 shadow-xl pointer-events-none"
+      >
+        <p class="text-[10px] text-slate-300 leading-relaxed whitespace-pre-wrap">{{ data.instructions }}</p>
+        <div class="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 rotate-45 bg-surface-0 border-r border-b border-border -mt-1"/>
+      </div>
+    </Transition>
+
     <div class="flex items-center gap-2">
       <div :class="['w-2.5 h-2.5 rounded-full shrink-0', dotColor]"/>
       <span class="text-sm font-semibold text-slate-100 leading-tight truncate">{{ data.name }}</span>
@@ -58,8 +71,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
+
+const hovered = ref(false)
 
 const props = defineProps({
   data: { type: Object, required: true },
@@ -116,3 +131,20 @@ function formatVal(v) {
   return String(v).slice(0, 24)
 }
 </script>
+
+<style scoped>
+.tooltip-enter-active,
+.tooltip-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.tooltip-enter-from,
+.tooltip-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(4px);
+}
+.tooltip-enter-to,
+.tooltip-leave-from {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+</style>

@@ -263,11 +263,13 @@
           <GeneratePanel
             v-else-if="rightTab === 'generate'"
             :yaml-source="yamlSource"
-            v-model:description="generateDescription"
+            v-model:description="meta.processDescription"
             v-model:prompt="generatePrompt"
             v-model:history="generateHistory"
             v-model:interactions="generateInteractions"
             v-model:provider="generateProvider"
+            v-model:pipeline-step="generatePipelineStep"
+            v-model:pipeline-warning="generatePipelineWarning"
             :metadata-abstract="meta.description"
             @apply="onAIApply"
           />
@@ -327,7 +329,7 @@ const { layout }  = useLayout()
 const nodes   = ref([])
 const edges   = ref([])
 const agents  = ref([])
-const meta    = reactive({ name: '', version: '1.0.0', versionNumber: 0, description: '', systemPrompt: '' })
+const meta    = reactive({ name: '', version: '1.0.0', versionNumber: 0, description: '', systemPrompt: '', processDescription: '' })
 const bbSchema = reactive({})
 const versions = ref([])
 
@@ -346,11 +348,12 @@ const flowKey           = ref(0)
 const showTimeoutEdges  = ref(true)
 
 // -- Generation Tab State (lifted for persistence) --
-const generateDescription  = ref('')
 const generatePrompt       = ref('')
 const generateHistory      = ref([])
 const generateInteractions = ref([])
 const generateProvider     = ref('')
+const generatePipelineStep    = ref(0)
+const generatePipelineWarning = ref('')
 
 const nodeTypes = shallowRef({ stateNode: StateNode })
 const edgeTypes = shallowRef({ transitionEdge: TransitionEdge })
@@ -360,7 +363,7 @@ const workflowName = computed(() => meta.name || '')
 
 const {
   fromLoad, loadDefinition, buildDefinition,
-  saveWorkflow, switchVersion, onRunClick, onAIApply, importYAML,
+  saveWorkflow, switchVersion, onRunClick, onAIApply: _onAIApply, importYAML,
 } = useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, isDirty, yamlSource, yamlError, saving, flowKey, showRunModal, view, wfStore, router })
 
 const { onYamlInput } = useCanvasSync({ nodes, edges, meta, isDirty, view, yamlSource, yamlError, flowKey, fromLoad, loadDefinition, buildDefinition })
@@ -374,6 +377,18 @@ const {
   addState, onAddState,
   addBBField, removeBBField,
 } = useCanvasActions({ nodes, edges, agents, isDirty, selected, pendingConnection, showAddState, bbSchema, fitView, layout })
+
+async function onAIApply(payload) {
+  _onAIApply(payload)
+  await nextTick()
+  await nextTick()
+  applyLayout(false)
+  // Silently save after each pipeline step so intermediate results are never lost.
+  // Skips agent-assignment checks — the workflow may not be fully wired yet.
+  if (meta.name) {
+    try { await saveWorkflow(true) } catch { /* best-effort */ }
+  }
+}
 
 // ── Load on mount ────────────────────────────────────────────────────────────
 

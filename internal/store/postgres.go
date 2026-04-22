@@ -132,9 +132,9 @@ func (s *PostgresStore) SaveDefinition(ctx context.Context, def *asmtypes.Workfl
 	}
 
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO workflow_definitions (name, version, version_number, definition, yaml_source, tenant_id)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		def.Metadata.Name, def.Metadata.Version, nextVer, defJSON, yamlSource, tenantID,
+		INSERT INTO workflow_definitions (name, version, version_number, definition, yaml_source, process_description, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		def.Metadata.Name, def.Metadata.Version, nextVer, defJSON, yamlSource, def.Metadata.ProcessDescription, tenantID,
 	)
 	return err
 }
@@ -149,9 +149,9 @@ func (s *PostgresStore) UpdateDefinition(ctx context.Context, def *asmtypes.Work
 
 	query := `
 		UPDATE workflow_definitions 
-		SET definition = $1, yaml_source = $2 
-		WHERE name = $3 AND version = $4`
-	args := []interface{}{defJSON, yamlSource, def.Metadata.Name, def.Metadata.Version}
+		SET definition = $1, yaml_source = $2, process_description = $3
+		WHERE name = $4 AND version = $5`
+	args := []interface{}{defJSON, yamlSource, def.Metadata.ProcessDescription, def.Metadata.Name, def.Metadata.Version}
 	if tenantID != "" {
 		query += " AND tenant_id = $5"
 		args = append(args, tenantID)

@@ -44,7 +44,7 @@ apiVersion: asm/v1
 kind: Workflow
 metadata:
   name: invoice-processing
-  version: 1.0.0
+  version: 1
   description: |
     End-to-end invoice processing: intake → validation → enrichment → human review → approval.
 

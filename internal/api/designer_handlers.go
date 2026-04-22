@@ -469,6 +469,136 @@ func (h *Handlers) RenderSkillHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// ── Multi-step pipeline handlers ─────────────────────────────────────────────
+
+// pipelineGeneratorFor resolves the generator for a pipeline request (provider override).
+func (h *Handlers) pipelineGeneratorFor(req designer.PipelineRequest) *designer.Generator {
+	if req.Provider != "" {
+		if p, err := h.llmRegistry.Get(req.Provider); err == nil {
+			return h.generator.WithProvider(p)
+		}
+	}
+	return h.generator
+}
+
+// requirePipelineYAML returns false and writes a 400 if current_yaml is missing.
+func requirePipelineYAML(c *gin.Context, yaml string) bool {
+	if strings.TrimSpace(yaml) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "current_yaml is required"})
+		return false
+	}
+	return true
+}
+
+func writePipelineResult(c *gin.Context, result *designer.PipelineStepResult, err error) {
+	if err != nil {
+		resp := gin.H{"error": err.Error()}
+		if result != nil {
+			resp["interactions"] = result.Interactions
+			if result.YAML != "" {
+				resp["yaml"] = result.YAML
+			}
+		}
+		c.JSON(http.StatusInternalServerError, resp)
+		return
+	}
+	out, mErr := designer.MarshalPipelineStepResult(result)
+	if mErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to serialise result"})
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// PipelineDecomposeHandler is Step 1: identify states/nodes from a process description.
+// POST /api/v1/designer/pipeline/decompose
+func (h *Handlers) PipelineDecomposeHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "no LLM provider configured"})
+		return
+	}
+	var req designer.PipelineRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.ProcessDescription) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "process_description is required"})
+		return
+	}
+	result, err := h.pipelineGeneratorFor(req).DecomposeWorkflow(c.Request.Context(), req)
+	writePipelineResult(c, result, err)
+}
+
+// PipelineCategoriseHandler is Step 2: assign correct ASM types to all nodes.
+// POST /api/v1/designer/pipeline/categorise
+func (h *Handlers) PipelineCategoriseHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "no LLM provider configured"})
+		return
+	}
+	var req designer.PipelineRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.ProcessDescription) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "process_description is required"})
+		return
+	}
+	if !requirePipelineYAML(c, req.CurrentYAML) {
+		return
+	}
+	result, err := h.pipelineGeneratorFor(req).CategoriseNodes(c.Request.Context(), req)
+	writePipelineResult(c, result, err)
+}
+
+// PipelineWireHandler is Step 3: define transitions and blackboard schema.
+// POST /api/v1/designer/pipeline/wire
+func (h *Handlers) PipelineWireHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "no LLM provider configured"})
+		return
+	}
+	var req designer.PipelineRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.ProcessDescription) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "process_description is required"})
+		return
+	}
+	if !requirePipelineYAML(c, req.CurrentYAML) {
+		return
+	}
+	result, err := h.pipelineGeneratorFor(req).WireWorkflow(c.Request.Context(), req)
+	writePipelineResult(c, result, err)
+}
+
+// PipelineImplementHandler is Step 4: generate final code for all nodes in parallel.
+// POST /api/v1/designer/pipeline/implement
+func (h *Handlers) PipelineImplementHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "no LLM provider configured"})
+		return
+	}
+	var req designer.PipelineRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.ProcessDescription) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "process_description is required"})
+		return
+	}
+	if !requirePipelineYAML(c, req.CurrentYAML) {
+		return
+	}
+	result, err := h.pipelineGeneratorFor(req).ImplementNodes(c.Request.Context(), req)
+	writePipelineResult(c, result, err)
+}
+
 // ScaffoldMCPHandler generates a Go MCP server implementation for the described tools.
 // POST /api/v1/designer/scaffold-mcp
 func (h *Handlers) ScaffoldMCPHandler(c *gin.Context) {

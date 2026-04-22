@@ -116,6 +116,15 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			designerGroup.POST("/skill/render", h.RenderSkillHandler)
 			designerGroup.GET("/prompts", h.GetPrompts)
 			designerGroup.PUT("/prompts/:id", h.UpdatePrompt)
+
+			// Multi-step pipeline (Decompose → Categorise → Wire → Implement).
+			pipeline := designerGroup.Group("/pipeline")
+			{
+				pipeline.POST("/decompose", h.PipelineDecomposeHandler)
+				pipeline.POST("/categorise", h.PipelineCategoriseHandler)
+				pipeline.POST("/wire", h.PipelineWireHandler)
+				pipeline.POST("/implement", h.PipelineImplementHandler)
+			}
 		}
 
 		// API key management — admin only.

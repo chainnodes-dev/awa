@@ -1,7 +1,8 @@
 <template>
   <div class="flex flex-col h-full overflow-hidden bg-surface-1 relative">
+
     <!-- Loading Overlay -->
-    <div v-if="analyseLoading" class="absolute inset-0 z-50 bg-surface-1/80 backdrop-blur-sm flex flex-col items-center justify-center space-y-4">
+    <div v-if="loading" class="absolute inset-0 z-50 bg-surface-1/80 backdrop-blur-sm flex flex-col items-center justify-center space-y-4">
       <div class="relative">
         <div class="w-12 h-12 border-4 border-violet-500/20 border-t-violet-500 rounded-full animate-spin"></div>
         <div class="absolute inset-0 flex items-center justify-center">
@@ -11,138 +12,187 @@
         </div>
       </div>
       <div class="flex flex-col items-center">
-        <span class="text-sm font-semibold text-slate-200">AI is thinking...</span>
-        <span class="text-[10px] text-slate-500 animate-pulse">Decomposing process into ASM states</span>
+        <span class="text-sm font-semibold text-slate-200">{{ loadingLabel }}</span>
+        <span class="text-[10px] text-slate-500 animate-pulse">{{ loadingSubLabel }}</span>
       </div>
-      <button 
-        @click="analyseLoading = false" 
+      <button
+        @click="loading = false"
         class="mt-4 px-3 py-1 text-[10px] text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-500 rounded transition-colors"
       >
-        Dismiss Overlay (Stop Waiting)
+        Dismiss Overlay
       </button>
     </div>
 
-    <!-- Tab Bar -->
+    <!-- Tab Bar: Generate | Trace -->
     <div class="flex border-b border-border shrink-0">
       <button
-        @click="activeSubTab = 'logic'"
-        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors', activeSubTab === 'logic' ? 'text-violet-400 border-b-2 border-violet-400' : 'text-slate-600 hover:text-slate-400']"
-      >
-        Logic
-      </button>
+        @click="activeTab = 'generate'"
+        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors', activeTab === 'generate' ? 'text-violet-400 border-b-2 border-violet-400' : 'text-slate-600 hover:text-slate-400']"
+      >Generate</button>
       <button
-        @click="activeSubTab = 'trace'"
-        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5', activeSubTab === 'trace' ? 'text-teal-400 border-b-2 border-teal-400' : 'text-slate-600 hover:text-slate-400']"
+        @click="activeTab = 'trace'"
+        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5', activeTab === 'trace' ? 'text-teal-400 border-b-2 border-teal-400' : 'text-slate-600 hover:text-slate-400']"
       >
         Trace
         <span v-if="interactions.length" class="flex h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" />
       </button>
     </div>
 
-    <!-- Main Content -->
-    <div v-if="activeSubTab === 'logic'" class="flex-1 flex flex-col min-h-0">
-      <div class="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-        
-        <!-- Model Selection -->
-        <div class="space-y-1.5 p-3 rounded-lg bg-surface-0/50 border border-border/50">
+    <!-- ── GENERATE TAB ──────────────────────────────────────────────── -->
+    <div v-if="activeTab === 'generate'" class="flex-1 flex flex-col min-h-0">
+      <div class="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar">
+
+        <!-- Model Provider -->
+        <div class="p-3 rounded-lg bg-surface-0/50 border border-border/50 space-y-1.5">
           <div class="flex items-center justify-between">
             <label class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Model Provider</label>
             <span v-if="activeProviderLabel" class="text-[9px] text-violet-400 font-medium tracking-wide bg-violet-400/10 px-1.5 py-0.5 rounded">{{ activeProviderLabel }}</span>
           </div>
-          <select 
+          <select
             :value="provider"
-            @change="updateVal('provider', $event.target.value)"
+            @change="emit('update:provider', $event.target.value)"
             class="input w-full text-[11px] h-8 bg-surface-1 border-border/40 focus:border-violet-500/50 transition-all font-sans"
           >
             <option value="">(Platform Default)</option>
-            <option v-for="p in enabledProviders" :key="p.id" :value="p.id">
-              {{ p.label }}
-            </option>
+            <option v-for="p in enabledProviders" :key="p.id" :value="p.id">{{ p.label }}</option>
           </select>
-          <p class="text-[9px] text-slate-600">Select an alternative model if the default is slow or offline.</p>
         </div>
-        <!-- Section 1: Process Description -->
+
+        <!-- Process Description -->
         <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Initial Process Description</label>
-            <span class="text-[9px] text-slate-600 italic">Fresh generation</span>
-          </div>
+          <label class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Process Description</label>
           <textarea
             :value="description"
-            @input="updateVal('description', $event.target.value)"
-            class="input text-[11px] h-32 resize-none font-sans leading-relaxed"
+            @input="onDescriptionInput"
+            class="input text-[11px] h-28 resize-none font-sans leading-relaxed"
             placeholder="Describe the end-to-end business process in detail..."
           />
+        </div>
+
+        <!-- Pipeline Steps -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Generation Pipeline</label>
+            <button
+              v-if="props.pipelineStep > 0"
+              @click="resetPipeline"
+              class="text-[9px] text-slate-500 hover:text-red-400 uppercase font-bold underline decoration-dotted underline-offset-2"
+            >Reset</button>
+          </div>
+
+          <!-- Step indicators -->
+          <div class="flex items-center gap-1">
+            <div v-for="(step, i) in pipelineSteps" :key="i" class="flex-1 flex flex-col items-center gap-1">
+              <div :class="[
+                'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold transition-all',
+                props.pipelineStep > i   ? 'bg-emerald-500 text-white' :
+                props.pipelineStep === i ? 'bg-violet-500 text-white ring-2 ring-violet-400/30' :
+                                           'bg-surface-0 text-slate-600 border border-border'
+              ]">
+                <svg v-if="pipelineStep > i" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span v-else>{{ i + 1 }}</span>
+              </div>
+              <span class="text-[8px] text-slate-600 text-center leading-tight">{{ step.label }}</span>
+            </div>
+          </div>
+
+          <!-- Current step description -->
+          <div v-if="props.pipelineStep < pipelineSteps.length" class="p-2.5 rounded bg-surface-0/60 border border-border/50">
+            <p class="text-[10px] text-slate-400 leading-relaxed">
+              <span class="text-violet-400 font-semibold">Step {{ props.pipelineStep + 1 }}:</span>
+              {{ pipelineSteps[props.pipelineStep].description }}
+            </p>
+          </div>
+          <div v-else class="p-2.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+            <p class="text-[10px] text-emerald-400 font-semibold">Pipeline complete — workflow is runnable.</p>
+          </div>
+        </div>
+
+        <!-- Pipeline error -->
+        <div v-if="pipelineError" class="p-2.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-mono">
+          {{ pipelineError }}
+        </div>
+
+        <!-- Soft validation warning (steps 1–3) -->
+        <div v-if="props.pipelineWarning && props.pipelineStep < 4" class="p-2.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px]">
+          <span class="font-semibold">Note:</span> {{ props.pipelineWarning }}
+        </div>
+
+        <!-- Pipeline action button -->
+        <div>
           <button
-            @click="generateFresh"
-            :disabled="analyseLoading || !description.trim()"
+            v-if="props.pipelineStep < pipelineSteps.length"
+            @click="runNextStep"
+            :disabled="loading || !description.trim()"
             class="w-full btn py-2 gap-1.5 text-xs font-semibold rounded-lg bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-900/20 transition-all disabled:opacity-40"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
+              <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
             </svg>
-            Generate Workflow
+            {{ props.pipelineStep === 0 ? 'Start: Decompose Process' : `Run Step ${props.pipelineStep + 1}: ${pipelineSteps[props.pipelineStep].label}` }}
+          </button>
+          <button
+            v-else
+            @click="resetPipeline"
+            class="w-full btn py-2 text-xs font-semibold rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-all"
+          >
+            Start Over
           </button>
         </div>
 
-        <div class="h-px bg-border/50" />
+        <!-- Divider -->
+        <div class="flex items-center gap-2 pt-1">
+          <div class="flex-1 h-px bg-border/50"/>
+          <span class="text-[9px] text-slate-600 uppercase tracking-widest font-bold">Refine</span>
+          <div class="flex-1 h-px bg-border/50"/>
+        </div>
 
-        <!-- Section 2: Refinement Prompt -->
+        <!-- Inline refinement -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Refinement Prompt</label>
+            <p class="text-[10px] text-slate-500">Request a targeted change to the current workflow.</p>
             <span v-if="history.length" class="text-[9px] text-emerald-500 font-bold uppercase tracking-tighter">History Active</span>
           </div>
           <textarea
             :value="prompt"
-            @input="updateVal('prompt', $event.target.value)"
+            @input="emit('update:prompt', $event.target.value)"
             class="input text-[11px] h-20 resize-none font-sans leading-relaxed border-indigo-500/20 focus:border-indigo-500/50"
-            placeholder="Request specific changes or tweaks..."
+            placeholder="e.g. Add an error handling branch from the validation step..."
             @keydown.enter.meta.prevent="applyRefinement"
           />
-          <button
-            @click="applyRefinement"
-            :disabled="analyseLoading || !prompt.trim()"
-            class="w-full btn py-2 gap-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all disabled:opacity-40"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-            Apply Changes
-          </button>
-        </div>
-
-        <div v-if="analyseError" class="p-2.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-mono">
-          {{ analyseError }}
-        </div>
-
-        <!-- Section 3: History (Debug) -->
-        <div v-if="history.length" class="space-y-3 pt-4 border-t border-border/50">
-          <div class="flex items-center justify-between">
-            <h3 class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Historical Context</h3>
-            <button @click="resetHistory" class="text-[9px] text-slate-500 hover:text-red-400 uppercase font-bold underline decoration-dotted underline-offset-2">Clear</button>
-          </div>
-          <div class="space-y-4">
-            <div v-for="(msg, i) in history" :key="i" class="space-y-1.5 opacity-60 hover:opacity-100 transition-opacity">
-              <div class="flex items-center gap-2">
-                <span :class="['text-[8px] font-bold uppercase tracking-widest px-1 py-0.5 rounded', msg.role === 'user' ? 'text-indigo-400 bg-indigo-400/10' : 'text-emerald-400 bg-emerald-400/10']">
-                  {{ msg.role === 'user' ? 'User' : 'AI' }}
-                </span>
-                <span class="text-[8px] text-slate-700 font-mono">Turn {{ Math.floor(i/2) + 1 }}</span>
-              </div>
-              <div class="text-[10px] text-slate-500 leading-relaxed font-mono whitespace-pre-wrap pl-2 border-l border-border/30">
-                {{ msg.content }}
-              </div>
-            </div>
+          <div class="flex gap-2">
+            <button
+              @click="applyRefinement"
+              :disabled="loading || !prompt.trim()"
+              class="flex-1 btn py-1.5 gap-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all disabled:opacity-40"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Apply
+            </button>
+            <button
+              v-if="history.length"
+              @click="clearHistory"
+              class="px-3 py-1.5 text-[10px] text-slate-500 hover:text-red-400 border border-border hover:border-red-500/30 rounded-lg transition-colors"
+              title="Clear refinement history"
+            >Clear</button>
           </div>
         </div>
+
+        <!-- Refine error -->
+        <div v-if="refineError" class="p-2.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-mono">
+          {{ refineError }}
+        </div>
+
       </div>
     </div>
 
-    <!-- Trace Content -->
-    <div v-else-if="activeSubTab === 'trace'" class="flex-1 min-h-0">
+    <!-- ── TRACE TAB ─────────────────────────────────────────────────── -->
+    <div v-else-if="activeTab === 'trace'" class="flex-1 min-h-0">
       <TraceViewer :interactions="interactions" />
     </div>
+
   </div>
 </template>
 
@@ -156,117 +206,144 @@ const authStore = useAuthStore()
 const llmStore = useLLMStore()
 
 const props = defineProps({
-  yamlSource: { type: String, default: '' },
-  description: { type: String, default: '' },
-  prompt: { type: String, default: '' },
-  history: { type: Array, default: () => [] },
-  interactions: { type: Array, default: () => [] },
-  provider: { type: String, default: '' },
-  metadataAbstract: { type: String, default: '' },
+  yamlSource:              { type: String, default: '' },
+  description:             { type: String, default: '' },
+  prompt:                  { type: String, default: '' },
+  history:                 { type: Array,  default: () => [] },
+  interactions:            { type: Array,  default: () => [] },
+  provider:                { type: String, default: '' },
+  metadataAbstract:        { type: String, default: '' },
+  pipelineStep:            { type: Number, default: 0 },
+  pipelineWarning:         { type: String, default: '' },
 })
 
 const emit = defineEmits([
-  'update:description', 
-  'update:prompt', 
-  'update:history', 
-  'update:interactions', 
+  'update:description',
+  'update:prompt',
+  'update:history',
+  'update:interactions',
   'update:provider',
-  'apply'
+  'update:pipelineStep',
+  'update:pipelineWarning',
+  'apply',
 ])
 
-// ── Role Check ──────────────────────────────────────────────────────────────
-const isAdmin = computed(() => authStore.user?.role === 'admin' || authStore.user?.role === 'super_admin')
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+const activeTab = ref('generate')
 
-// ── State ────────────────────────────────────────────────────────────────────
-const activeSubTab = ref('logic')
-const analyseLoading = ref(false)
-const analyseError = ref('')
+// ── Pipeline state ────────────────────────────────────────────────────────────
+const pipelineSteps = [
+  { label: 'Decompose',  endpoint: '/designer/pipeline/decompose',  description: 'Identify all states and add a description to every node. The canvas will show a skeleton workflow.' },
+  { label: 'Categorise', endpoint: '/designer/pipeline/categorise', description: 'Assign the correct ASM type to every node (code, script, hitl, wait, etc.). No runnable logic yet.' },
+  { label: 'Wire',       endpoint: '/designer/pipeline/wire',       description: 'Define all transitions, guards, and the blackboard schema — the shared contract for node implementations.' },
+  { label: 'Implement',  endpoint: '/designer/pipeline/implement',  description: 'Generate final code for every node in parallel using specialised prompts. Produces a runnable workflow.' },
+]
 
-function updateVal(key, val) {
-  emit(`update:${key}`, val)
+// pipelineStep and pipelineWarning are lifted to the parent so they survive tab switches.
+const pipelineError = ref('')
+
+// ── Shared loading ────────────────────────────────────────────────────────────
+const loading         = ref(false)
+const loadingLabel    = ref('AI is thinking...')
+const loadingSubLabel = ref('')
+const refineError     = ref('')
+
+// ── Pipeline actions ──────────────────────────────────────────────────────────
+function resetPipeline() {
+  emit('update:pipelineStep', 0)
+  emit('update:pipelineWarning', '')
+  pipelineError.value = ''
 }
 
-// ── Actions ──────────────────────────────────────────────────────────────────
-
-async function generateFresh() {
-  if (!props.description.trim()) return
-  
-  // Requirement: Change of initial description should start a fresh process.
-  emit('update:history', [])
-  emit('update:interactions', [])
-  
-  await performAnalyse(props.description, [])
+function onDescriptionInput(e) {
+  emit('update:description', e.target.value)
+  if (props.pipelineStep > 0) resetPipeline()
 }
 
-async function applyRefinement() {
-  if (!props.prompt.trim()) return
-  
-  await performAnalyse(props.prompt, props.history)
-}
+async function runNextStep() {
+  const step = pipelineSteps[props.pipelineStep]
+  if (!step) return
 
-async function performAnalyse(text, context) {
-  analyseLoading.value = true
-  analyseError.value = ''
-  
+  loading.value = true
+  loadingLabel.value = `Step ${props.pipelineStep + 1}: ${step.label}…`
+  loadingSubLabel.value = step.description
+  pipelineError.value = ''
+  emit('update:pipelineWarning', '')
+
   try {
-    const { data } = await api.post('/designer/skill/analyse', {
-      description: text,
-      history: context,
-      existing_yaml: props.yamlSource || '',
-      provider: props.provider || undefined,
+    const { data } = await api.post(step.endpoint, {
+      process_description: props.description,
+      current_yaml:        props.yamlSource || '',
+      provider:            props.provider || undefined,
     })
-    
-    // Update history: push current turn
-    const newHistory = [...context]
-    newHistory.push({ role: 'user', content: text })
-    newHistory.push({ role: 'assistant', content: 'Workflow updated.' })
-    emit('update:history', newHistory)
-    
-    // Clear prompt if it was a refinement
-    if (text === props.prompt) {
-      emit('update:prompt', '')
-    }
-    
-    // Interactions for trace
+
+    if (data.validation_error) emit('update:pipelineWarning', data.validation_error)
+
     emit('update:interactions', data.interactions || [])
-    
-    // Notify parent to update canvas
     emit('apply', { yamlStr: data.yaml, definition: data.definition })
-    
+    emit('update:pipelineStep', props.pipelineStep + 1)
+
   } catch (e) {
-    analyseError.value = e.response?.data?.error ?? e.message
-    
-    // Attempt to recover partial trace even on failure (e.g. to see System Prompt)
-    if (e.response?.data?.interactions) {
-      emit('update:interactions', e.response.data.interactions)
-    }
+    pipelineError.value = e.response?.data?.error ?? e.message
+    if (e.response?.data?.interactions) emit('update:interactions', e.response.data.interactions)
   } finally {
-    analyseLoading.value = false
+    loading.value = false
   }
 }
 
-function resetHistory() {
+// ── Refine actions ────────────────────────────────────────────────────────────
+async function applyRefinement() {
+  if (!props.prompt.trim()) return
+
+  loading.value = true
+  loadingLabel.value = 'Applying refinement…'
+  loadingSubLabel.value = props.prompt.slice(0, 80)
+  refineError.value = ''
+
+  try {
+    const { data } = await api.post('/designer/skill/analyse', {
+      description:   props.prompt,
+      history:       props.history,
+      existing_yaml: props.yamlSource || '',
+      provider:      props.provider || undefined,
+    })
+
+    emit('update:history', [
+      ...props.history,
+      { role: 'user',      content: props.prompt },
+      { role: 'assistant', content: 'Workflow updated.' },
+    ])
+    emit('update:prompt', '')
+    emit('update:interactions', data.interactions || [])
+    emit('apply', { yamlStr: data.yaml, definition: data.definition })
+
+  } catch (e) {
+    refineError.value = e.response?.data?.error ?? e.message
+    if (e.response?.data?.interactions) emit('update:interactions', e.response.data.interactions)
+  } finally {
+    loading.value = false
+  }
+}
+
+function clearHistory() {
   emit('update:history', [])
   emit('update:interactions', [])
 }
 
-// -- LLM Providers Logic --
-const enabledProviders = computed(() => {
-  return llmStore.PROVIDERS.filter(p => {
+// ── LLM providers ─────────────────────────────────────────────────────────────
+const enabledProviders = computed(() =>
+  llmStore.PROVIDERS.filter(p => {
     const cfg = llmStore.configs.find(c => c.provider === p.id)
     return cfg && cfg.enabled
   })
-})
+)
 
-const activeProviderLabel = computed(() => {
-  if (!props.provider) return ''
-  return llmStore.PROVIDERS.find(p => p.id === props.provider)?.label || ''
-})
+const activeProviderLabel = computed(() =>
+  props.provider ? llmStore.PROVIDERS.find(p => p.id === props.provider)?.label || '' : ''
+)
 
 onMounted(() => {
-  if (llmStore.configs.length === 0) {
-    llmStore.fetchAll()
-  }
+  if (llmStore.configs.length === 0) llmStore.fetchAll()
 })
 </script>
 

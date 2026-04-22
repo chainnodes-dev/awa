@@ -97,10 +97,11 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
       apiVersion: 'asm/v1',
       kind:       'Workflow',
       metadata: {
-        name:         meta.name,
-        version:      meta.version || 'draft',
-        description:  meta.description,
-        system_prompt: meta.systemPrompt,
+        name:                meta.name,
+        version:             meta.version || 'draft',
+        description:         meta.description,
+        system_prompt:       meta.systemPrompt,
+        process_description: meta.processDescription,
       },
       blackboard: { schema: { ...bbSchema } },
       states: nodes.value.map(n => ({
@@ -132,15 +133,20 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
     }
   }
 
-  async function saveWorkflow() {
-    if (!meta.name) { alert('Workflow name is required'); return }
+  async function saveWorkflow(skipChecks = false) {
+    if (!meta.name) {
+      if (!skipChecks) alert('Workflow name is required')
+      return
+    }
 
-    const unassigned = nodes.value.filter(n =>
-      (n.data.type === 'initial' || n.data.type === 'intermediate') && !n.data.agent
-    )
-    if (unassigned.length > 0) {
-      const names = unassigned.map(n => n.id).join(', ')
-      if (!confirm(`Warning: The following reasoning states have no agent assigned: ${names}.\n\nThese states will wait for external triggers and will NOT be automated by an LLM. Continue?`)) return
+    if (!skipChecks) {
+      const unassigned = nodes.value.filter(n =>
+        (n.data.type === 'initial' || n.data.type === 'intermediate') && !n.data.agent
+      )
+      if (unassigned.length > 0) {
+        const names = unassigned.map(n => n.id).join(', ')
+        if (!confirm(`Warning: The following reasoning states have no agent assigned: ${names}.\n\nThese states will wait for external triggers and will NOT be automated by an LLM. Continue?`)) return
+      }
     }
 
     saving.value = true
