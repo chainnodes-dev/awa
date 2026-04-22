@@ -1,15 +1,14 @@
 package asmtypes
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"text/template"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
 
-// LoadFromFile parses a workflow YAML file, expanding {{ env.VAR }} references.
+// LoadFromFile parses a workflow YAML file, expanding {{ env.VAR }} or {{ .Env.VAR }} references.
 func LoadFromFile(path string) (*WorkflowDef, string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -18,7 +17,7 @@ func LoadFromFile(path string) (*WorkflowDef, string, error) {
 	return LoadFromYAML(data)
 }
 
-// LoadFromYAML parses workflow YAML bytes, expanding {{ env.VAR }} references.
+// LoadFromYAML parses workflow YAML bytes, expanding {{ env.VAR }} or {{ .Env.VAR }} references.
 func LoadFromYAML(data []byte) (*WorkflowDef, string, error) {
 	expanded, err := expandEnv(data)
 	if err != nil {
@@ -36,41 +35,24 @@ func LoadFromYAML(data []byte) (*WorkflowDef, string, error) {
 
 	return &def, string(data), nil
 }
-
-// expandEnv replaces {{ env.KEY }} with os.Getenv("KEY").
+// expandEnv replaces {{ env.KEY }} or {{ .Env.KEY }} with os.Getenv("KEY").
+// It uses regex instead of text/template to avoid crashing on other {{...}} patterns
+// that might be present in the YAML (e.g. documentation or AI-generated placeholders).
 func expandEnv(data []byte) ([]byte, error) {
-	tmpl, err := template.New("workflow").
-		Delims("{{", "}}").
-		Funcs(template.FuncMap{
-			"env": os.Getenv,
-		}).
-		Parse(string(data))
-	if err != nil {
-		return nil, err
-	}
-
-	// Build env map for template variables like {{ env.KEY }}
-	type envWrapper struct{ Env map[string]string }
-	envMap := envWrapper{Env: envFromOS()}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, envMap); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func envFromOS() map[string]string {
-	m := make(map[string]string)
-	for _, kv := range os.Environ() {
-		for i := 0; i < len(kv); i++ {
-			if kv[i] == '=' {
-				m[kv[:i]] = kv[i+1:]
-				break
-			}
+	// Pattern 1: {{ env.VAR }} or {{ .Env.VAR }}
+	// Pattern 2: {{ env "VAR" }} or {{ env 'VAR' }}
+	re := regexp.MustCompile(`{{\s*(?:\.?env\.?|env\s+["']?)([A-Z0-9_]+)["']?\s*}}`)
+	
+	expanded := re.ReplaceAllFunc(data, func(match []byte) []byte {
+		submatches := re.FindSubmatch(match)
+		if len(submatches) < 2 {
+			return match
 		}
-	}
-	return m
+		key := string(submatches[1])
+		return []byte(os.Getenv(key))
+	})
+	
+	return expanded, nil
 }
 
 func validate(def *WorkflowDef) error {

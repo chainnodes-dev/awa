@@ -1,65 +1,40 @@
-{
-  "invoice_id": "INV-2024-001",
-  "vendor_name": "Acme GmbH",
-  "vendor_address": "Hauptstrasse 1, 10115 Berlin, Germany",
-  "amount": 15000,
-  "line_items": [
-    {
-      "description": "Software development services Q1",
-      "qty": 1,
-      "unit_price": 15000
-    }
-  ]
-}
-
-
-
-Dividend Validation Workflow
-This workflow ensures that dividend data is accurate and reliable before it impacts financial records. It combines automated checks with a critical human-in-the-loop (HITL) step for high-value transactions.
-
-Input data (Required Fields):
-Capture the Instrument ID, Gross Amount, Currency, Ex-Dividend Date, Publication Date and Payable Date. These form the "Golden Record" template.
-
-Automated Validation:
-
-Completenes Check: Ensure all required fields are populated and correctly formatted (e.g., dates in YYYY-MM-DD, amounts as positive numbers). If failed move to state rejected with reason "Incomplete or Invalid Data". Otherwise move to Logic Check.
-Logic Check: Confirm dates follow a linear timeline (Ex-Date < Payable Date). If failed move to state rejected with reason "Date Logic Error".
-
-High Value Check: If the Gross Amount > 2.00 USD, flag the record for HITL review. Otherwise, move to confirmed.
-
-HITL Step (The "High-Value" Filter):
-Let Human reviewr approve or reject. If approved move to confirmed. If rejected move to state rejected with reason "HITL Rejection".
-
-{
-  "instrument_id": "US0378331005",
-  "event_type": "Cash Dividend",
-  "gross_amount": 2.25,
-  "currency": "USD",
-  "ex_dividend_date": "2026-05-15",
-  "record_date": "2026-05-16",
-  "payable_date": "2026-06-01"
-}
-
-#parallel run
-{
-  "symbol": "AAPL"
-}
-
-# MCP test
-{
-  "amount": 14500.50,
-  "currency": "EUR",
-  "customer": "Acme Corp GmbH",
-  "invoice-nr": 202400189,
-  "lei": "529900T8BM49AURSDO55"
-}
-
-{
-  "amount": 14500.50,
-  "currency": "EUR",
-  "customer": "Solactive AG",
-  "invoice-nr": 202400189
-}
-
-len(['customer', ' lei', 'invoice-nr', 'currency', 'amount'
-]) == 5 ? "data_validated": (("lei" != nil) ? "missing_lei": "error")
+[
+  {
+    "invoice_id": "INV-2024-001",
+    "vendor_name": "Acme GmbH",
+    "vendor_address": "Hauptstrasse 1, 10115 Berlin, Germany",
+    "amount": 15000,
+    "line_items": [
+      {
+        "description": "Software development services Q1",
+        "qty": 1,
+        "unit_price": 15000
+      }
+    ]
+  },
+  {
+    "instrument_id": "US0378331005",
+    "event_type": "Cash Dividend",
+    "gross_amount": 2.25,
+    "currency": "USD",
+    "ex_dividend_date": "2026-05-15",
+    "record_date": "2026-05-16",
+    "payable_date": "2026-06-01"
+  },
+  {
+    "symbol": "AAPL"
+  },
+  {
+    "amount": 14500.50,
+    "currency": "EUR",
+    "customer": "Acme Corp GmbH",
+    "invoice-nr": 202400189,
+    "lei": "529900T8BM49AURSDO55"
+  },
+  {
+    "amount": 14500.50,
+    "currency": "EUR",
+    "customer": "Solactive AG",
+    "invoice-nr": 202400189
+  }
+]
