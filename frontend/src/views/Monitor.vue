@@ -124,11 +124,21 @@
                 <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
                 <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-              Debug
+              LLM Debug
               <span
                 v-if="runLLMCalls.length"
                 class="text-[9px] bg-accent/20 text-accent px-1 rounded-full"
               >{{ runLLMCalls.length }}</span>
+            </span>
+            <span v-else-if="tab.id === 'mcp'" class="flex items-center justify-center gap-1">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              </svg>
+              MCP Debug
+              <span
+                v-if="runMCPLogs.length"
+                class="text-[9px] bg-accent/20 text-accent px-1 rounded-full"
+              >{{ runMCPLogs.length }}</span>
             </span>
             <span v-else-if="tab.id === 'task'" class="flex items-center justify-center gap-1">
               <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/>
@@ -145,10 +155,16 @@
           class="flex-1 overflow-hidden"
         />
 
-        <!-- Debug tab (admin only) -->
+        <!-- Debug tabs (admin only) -->
         <LLMDebugPanel
           v-else-if="activeTab === 'debug'"
           :calls="runLLMCalls"
+          class="flex-1 overflow-hidden"
+        />
+
+        <MCPAuditLogPanel
+          v-else-if="activeTab === 'mcp'"
+          :logs="runMCPLogs"
           class="flex-1 overflow-hidden"
         />
         
@@ -340,6 +356,7 @@ import StateNode      from '@/components/designer/StateNode.vue'
 import BlackboardPanel from '@/components/monitor/BlackboardPanel.vue'
 import EventLog        from '@/components/monitor/EventLog.vue'
 import LLMDebugPanel   from '@/components/monitor/LLMDebugPanel.vue'
+import MCPAuditLogPanel from '@/components/monitor/MCPAuditLogPanel.vue'
 import JsonSchemaForm  from '@/components/monitor/JsonSchemaForm.vue'
 import StartRunModal from '@/components/shared/StartRunModal.vue'
 import { useExecutionStore } from '@/stores/execution'
@@ -370,6 +387,7 @@ const resolveError = ref('')
 const run          = computed(() => execStore.activeRun)
 const history      = computed(() => execStore.transitions)
 const runLLMCalls  = computed(() => execStore.llmCalls[route.params.id] ?? [])
+const runMCPLogs   = computed(() => execStore.mcpLogs[route.params.id]  ?? [])
 
 const currentStateType = computed(() => {
   if (!workflowDef.value || !run.value?.current_state) return null
@@ -393,9 +411,12 @@ const visibleTabs  = computed(() => {
     { id: 'timeline',   label: 'Timeline'   },
   ]
   if (run.value?.status === 'waiting' && currentStateType.value === 'hitl') {
-    tabs.unshift({ id: 'task', label: 'Task' })
+    tabs.push({ id: 'task', label: 'Task' })
   }
-  if (authStore.hasRole('admin')) tabs.push({ id: 'debug', label: 'Debug' })
+  if (authStore.hasRole('admin')) {
+    tabs.push({ id: 'debug', label: 'LLM Debug' })
+    tabs.push({ id: 'mcp',   label: 'MCP Debug' })
+  }
   return tabs
 })
 
@@ -428,6 +449,9 @@ function syncFromTweakJson(data) {
 async function loadRun() {
   const r = await execStore.fetchRun(route.params.id)
   await execStore.fetchHistory(route.params.id)
+  if (authStore.hasRole('admin')) {
+    await execStore.fetchMCPLogs(route.params.id)
+  }
   if (r) {
     const { definition } = await wfStore
       .fetchOne(r.workflow_name, r.workflow_version)

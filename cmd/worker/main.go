@@ -85,7 +85,7 @@ func main() {
 	}
 
 	// -- Executor (runs LLM calls inside Temporal activities) --
-	exec := executor.NewDirectExecutor(llmRegistry, bus, activeLLMProvider)
+	exec := executor.NewDirectExecutor(llmRegistry, bus, s, activeLLMProvider)
 
 	// Reload LLM registry from DB periodically to pick up UI config changes.
 	go func() {

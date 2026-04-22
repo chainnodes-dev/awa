@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"time"
+
+	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
 // MCPServer is a registered MCP server entry managed via the platform API.
@@ -38,4 +40,9 @@ type MCPServerStore interface {
 	DeleteMCPServer(ctx context.Context, id string) error
 	// HasAnyMCPServer returns true if at least one MCP server is registered for the tenant.
 	HasAnyMCPServer(ctx context.Context) (bool, error)
+
+	// RecordMCPCall persists an audit log of a communication event.
+	RecordMCPCall(ctx context.Context, log *asmtypes.MCPAuditLog) error
+	// ListMCPCalls returns the audit trail for a specific run.
+	ListMCPCalls(ctx context.Context, runID string) ([]*asmtypes.MCPAuditLog, error)
 }

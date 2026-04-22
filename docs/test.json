@@ -25,14 +25,14 @@
     "symbol": "AAPL"
   },
   {
-    "amount": 14500.50,
+    "amount": 14500.5,
     "currency": "EUR",
     "customer": "Acme Corp GmbH",
     "invoice-nr": 202400189,
     "lei": "529900T8BM49AURSDO55"
   },
   {
-    "amount": 14500.50,
+    "amount": 14500.5,
     "currency": "EUR",
     "customer": "Solactive AG",
     "invoice-nr": 202400189

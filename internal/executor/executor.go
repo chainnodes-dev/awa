@@ -16,6 +16,7 @@ import (
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/metrics"
 	"github.com/asm-platform/asm/internal/orchestrator"
+	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/internal/tools"
 	"github.com/asm-platform/asm/internal/tools/mcp"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -28,14 +29,16 @@ const maxToolIterations = 10
 type DirectExecutor struct {
 	llmRegistry  *llm.Registry
 	bus          events.Bus
+	store        store.Store
 	defaultProv  string
 	globalTools  *tools.Registry // tools available to every agent
 }
 
-func NewDirectExecutor(registry *llm.Registry, bus events.Bus, defaultProvider string) *DirectExecutor {
+func NewDirectExecutor(registry *llm.Registry, bus events.Bus, s store.Store, defaultProvider string) *DirectExecutor {
 	return &DirectExecutor{
 		llmRegistry: registry,
 		bus:         bus,
+		store:       s,
 		defaultProv: defaultProvider,
 		globalTools: tools.NewRegistry(),
 	}
@@ -100,7 +103,7 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 	}
 
 	// Load agent-specific MCP tools and merge with global tools.
-	agentRegistry, err := e.loadAgentTools(ctx, agent)
+	agentRegistry, err := e.loadAgentTools(ctx, agent, task)
 	if err != nil {
 		slog.Warn("Failed to load MCP tools", "agent", agent.Name, "error", err)
 		agentRegistry = tools.NewRegistry()
@@ -280,7 +283,7 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 //	  - name: validator
 //	    config:
 //	      mcp_servers: "{{ env.VALIDATE_MCP_URL }}"
-func (e *DirectExecutor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef) (*tools.Registry, error) {
+func (e *DirectExecutor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, task orchestrator.AgentTask) (*tools.Registry, error) {
 	reg := tools.NewRegistry()
 
 	serverList := agent.Config["mcp_servers"]
@@ -293,7 +296,33 @@ func (e *DirectExecutor) loadAgentTools(ctx context.Context, agent asmtypes.Agen
 		if serverURL == "" {
 			continue
 		}
-		serverReg, err := mcp.LoadRegistry(ctx, serverURL)
+
+		// Create an observer that records every MCP call to the database.
+		observer := func(method string, toolName string, input, output interface{}, dur time.Duration, err error) {
+			if e.store == nil {
+				return
+			}
+			log := &asmtypes.MCPAuditLog{
+				RunID:      task.RunID,
+				StateName:  task.StateDef.Name,
+				AgentName:  agent.Name,
+				ServerURL:  serverURL,
+				Method:     method,
+				ToolName:   toolName,
+				Input:      input,
+				Output:     output,
+				DurationMs: int(dur.Milliseconds()),
+				IsError:    err != nil,
+			}
+			if err != nil {
+				log.ErrorMsg = err.Error()
+			}
+			// Use a background context for recording to avoid cancelling the log
+			// if the agent's main context was already cancelled/timed out.
+			_ = e.store.RecordMCPCall(context.Background(), log)
+		}
+
+		serverReg, err := mcp.LoadRegistry(ctx, serverURL, observer)
 		if err != nil {
 			return nil, fmt.Errorf("connect to MCP server %s: %w", serverURL, err)
 		}

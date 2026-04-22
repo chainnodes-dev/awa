@@ -9,8 +9,9 @@ export const useExecutionStore = defineStore('execution', () => {
   const eventLog = ref([])         // all received events (capped at 200)
   const thinkingTokens = reactive({}) // runId → accumulated token string
   const pendingHITL = ref([])
-  // runId → array of { id, stateName, agentName, system, messages, response, timestamp }
+  // runId → array of { id, stateName, agentName, method, toolName, input, output, duration, timestamp, isError }
   const llmCalls = reactive({})
+  const mcpLogs = reactive({})
 
   async function fetchRuns(filter = {}) {
     const params = new URLSearchParams()
@@ -38,6 +39,12 @@ export const useExecutionStore = defineStore('execution', () => {
   async function fetchHistory(id) {
     const { data } = await api.get(`/runs/${id}/history`)
     transitions.value = data ?? []
+    return data
+  }
+
+  async function fetchMCPLogs(id) {
+    const { data } = await api.get(`/runs/${id}/mcp-logs`)
+    mcpLogs[id] = data ?? []
     return data
   }
 
@@ -191,8 +198,8 @@ export const useExecutionStore = defineStore('execution', () => {
   }
 
   return {
-    runs, activeRun, transitions, eventLog, thinkingTokens, pendingHITL, llmCalls,
-    fetchRuns, fetchRun, fetchHistory, fetchPendingHITL,
+    runs, activeRun, transitions, eventLog, thinkingTokens, pendingHITL, llmCalls, mcpLogs,
+    fetchRuns, fetchRun, fetchHistory, fetchPendingHITL, fetchMCPLogs,
     deleteRun, sendTrigger, resolveHITL, handleEvent
   }
 })

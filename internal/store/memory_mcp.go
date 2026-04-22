@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/asm-platform/asm/pkg/asmtypes"
 	"github.com/google/uuid"
 )
 
@@ -88,4 +89,23 @@ func (s *MemoryStore) HasAnyMCPServer(ctx context.Context) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func (s *MemoryStore) RecordMCPCall(_ context.Context, log *asmtypes.MCPAuditLog) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if log.ID == "" {
+		log.ID = uuid.NewString()
+	}
+	if log.CreatedAt.IsZero() {
+		log.CreatedAt = time.Now()
+	}
+	s.mcpLogs[log.RunID] = append(s.mcpLogs[log.RunID], log)
+	return nil
+}
+
+func (s *MemoryStore) ListMCPCalls(_ context.Context, runID string) ([]*asmtypes.MCPAuditLog, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mcpLogs[runID], nil
 }

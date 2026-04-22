@@ -12,23 +12,28 @@ import (
 	"io"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	"github.com/asm-platform/asm/internal/tools"
 )
+
+// CallObserver is a callback for tracking MCP server communication.
+type CallObserver func(method string, toolName string, input, output interface{}, dur time.Duration, err error)
 
 // Client talks to a single MCP server over HTTP JSON-RPC 2.0.
 type Client struct {
 	serverURL  string
 	httpClient *http.Client
 	idCounter  atomic.Int64
+	observer   CallObserver
 }
 
 // NewClient creates a new MCP client for the given server URL.
-// The URL must come from environment variables, not from source code.
-func NewClient(serverURL string) *Client {
+func NewClient(serverURL string, observer CallObserver) *Client {
 	return &Client{
 		serverURL:  serverURL,
 		httpClient: &http.Client{},
+		observer:   observer,
 	}
 }
 

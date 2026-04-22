@@ -64,6 +64,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			runs.GET("", h.ListRuns)
 			runs.GET("/:id", h.GetRun)
 			runs.GET("/:id/history", h.GetRunHistory)
+			runs.GET("/:id/mcp-logs", h.GetMCPLogs)
 			runs.POST("", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.StartRun)
 			runs.POST("/:id/trigger", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.TriggerRun)
 			runs.POST("/:id/signal", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.SignalHITL)

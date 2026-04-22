@@ -33,6 +33,8 @@ type MemoryStore struct {
 	eventSubs    map[string]*EventSubscription // key: id
 	apiKeys      map[string]*APIKey            // key: id
 	apiKeysByHash map[string]string            // hash → id
+
+	mcpLogs       map[string][]*asmtypes.MCPAuditLog // key: runID
 }
 
 type defEntry struct {
@@ -58,6 +60,7 @@ func NewMemoryStore() *MemoryStore {
 		eventSubs:     make(map[string]*EventSubscription),
 		apiKeys:       make(map[string]*APIKey),
 		apiKeysByHash: make(map[string]string),
+		mcpLogs:       make(map[string][]*asmtypes.MCPAuditLog),
 	}
 }
 

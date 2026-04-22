@@ -93,6 +93,7 @@ func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*
 		return nil, fmt.Errorf("current_yaml is required for the categorise step")
 	}
 	system := g.prompts.Get(PromptIDCategorise, categoriseSystemPrompt())
+	system += g.buildMCPSection(req.MCPServers)
 	system += pipelineOutputFormat()
 
 	userMsg := fmt.Sprintf(
@@ -112,6 +113,7 @@ func (g *Generator) WireWorkflow(ctx context.Context, req PipelineRequest) (*Pip
 		return nil, fmt.Errorf("current_yaml is required for the wire step")
 	}
 	system := g.prompts.Get(PromptIDWire, wireSystemPrompt())
+	system += g.buildMCPSection(req.MCPServers)
 	system += pipelineOutputFormat()
 
 	userMsg := fmt.Sprintf(
@@ -196,6 +198,7 @@ func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*P
 	}
 
 	finishSystem := g.prompts.Get(PromptIDImplFinish, implementFinishSystemPrompt())
+	finishSystem += g.buildMCPSection(req.MCPServers)
 	finishSystem += pipelineOutputFormat()
 	finishMsg := fmt.Sprintf(
 		"Original process description:\n\n%s\n\nWorkflow with code and script nodes already implemented (remaining nodes need finalising):\n\n```yaml\n%s\n```",
@@ -479,10 +482,11 @@ assign the correct ASM type to every state.
 
 ## Classification rules
 
-1. Prefer 'code' over 'intermediate' for anything deterministic
-2. Prefer 'script' over 'code' for logic that fits in a single expr-lang expression
-3. Use 'intermediate' only when the step genuinely requires LLM reasoning
-4. 'initial' and 'terminal' should stay as determined by the structure
+1. **Prioritize MCP Servers**: If a step requires external data retrieval or an external action (e.g., looking up a company in GLEIF, checking a stock price, sending an email) and a matching tool is available in the **MCP Servers** list, categorize that state as 'intermediate' so an agent can handle the tool interaction.
+2. Prefer 'code' over 'intermediate' for internal deterministic computation — math, string manipulation, data transformation.
+3. Prefer 'script' over 'code' for logic that fits in a single expr-lang expression.
+4. Use 'intermediate' only when the step genuinely requires LLM reasoning or an MCP tool call.
+5. 'initial' and 'terminal' should stay as determined by the structure.
 
 ## Placeholder implementations for non-intermediate types
 
@@ -515,6 +519,7 @@ states:
 - Do NOT change state names, instructions, or transitions
 - Do NOT change the type of 'initial' or 'terminal' states
 - Do NOT generate a blackboard schema yet
+- **Timeouts**: If a step implies a time limit (e.g., "must be approved within 2 days"), note that it will need a 'timeout' and 'on_timeout' field in the next step.
 - Output the complete updated YAML with all types correctly assigned
 `
 }
@@ -542,7 +547,9 @@ transitions:
     guard: "amount > 100" # Use quotes for expressions
 ` + "```" + `
 
-- Use meaningful trigger names (e.g. 'approved', 'rejected', 'error', 'timeout')
+- Use meaningful trigger names (e.g. 'approved', 'rejected', 'error', 'timeout_occurred')
+- **HITL Nodes**: MUST have both 'approved' and 'rejected' triggers unless specified otherwise.
+- **Timeouts**: For any state requiring a time limit, set 'timeout: "<duration>"' (e.g. "1h") and 'on_timeout: timeout_occurred' on the state. Add a matching transition from that state with 'trigger: timeout_occurred'.
 - Add guards (expr-lang conditions) where conditional branching is needed
 - Add parallel fan-out with 'to_nodes' where steps can run concurrently
 - Ensure every non-terminal state has at least one outgoing transition
@@ -550,7 +557,9 @@ transitions:
 
 ## 2. Blackboard schema
 
-Define ALL fields required as inputs or produced as outputs.
+Define ONLY the fields required as initial inputs to start the workflow or those needing a specific default value.
+
+**CRITICAL**: Do NOT include fields that are produced or updated during the runtime of the workflow (e.g., by LLM agents, scripts, or tool calls). The platform handles dynamic field creation automatically.
 
 **Critical YAML format rules for Blackboard Schema:**
 The 'schema' field MUST be a YAML map (object), NOT a list (sequence):
@@ -574,7 +583,13 @@ Available field types: 'string', 'number', 'bool', 'object'
 
 Do NOT add fields that are only used internally by LLM agents.
 
-## 3. Update instructions for non-intermediate nodes
+## 3. Identify MCP Tool Requirements
+
+For every 'intermediate' node (agent) that was categorized to use an MCP server:
+- Explicitly mention the name of the required MCP server and the specific tool in the 'instructions' field.
+- The next step (Implementation) will use this to correctly wire the agent.
+
+## 4. Update instructions for non-intermediate nodes
 
 For each code/script/hitl/wait/emit_event node, update the 'instructions' field to include:
 - A clear description of what the node does
@@ -609,11 +624,15 @@ Your task is to implement the remaining nodes and produce a clean, complete, run
 3. **wait nodes**: Replace the placeholder condition with a real expr-lang expression,
    or set 'on_event' + 'on_event_match' for event-driven waiting.
 
-4. **emit_event nodes**: Set a meaningful 'event_name' (e.g. "invoice.approved") and
+4. **Timeouts**: Ensure every node with a 'timeout' field also has a valid 'on_timeout: timeout_occurred' field and a matching transition.
+
+5. **emit_event nodes**: Set a meaningful 'event_name' (e.g. "invoice.approved") and
    include relevant 'payload_fields' from the blackboard schema.
 
-5. **Agents block**: Ensure all agents have appropriate entries. Set 'model: ""' to use
-   the platform default. Only add MCP tools where genuinely needed.
+6. **Agents block**: Ensure all agents have appropriate entries. 
+   - Set 'model: ""' to designate the use of the platform default.
+   - **MCP Servers**: For any agent requiring external tools, add the logical name of the required MCP server to its 'mcp_servers' list (e.g., ` + "`mcp_servers: [\"gleif-server\"]`" + `).
+   - Use the "Available MCP Servers" list provided in the system context to find the correct names.
 
 ## Rules
 

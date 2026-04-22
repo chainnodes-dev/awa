@@ -1,5 +1,9 @@
 package asmtypes
 
+import (
+	"time"
+)
+
 // WorkflowDef is the root of a workflow YAML manifest.
 type WorkflowDef struct {
 	APIVersion  string        `yaml:"apiVersion"  json:"apiVersion"`
@@ -191,4 +195,21 @@ func (w *WorkflowDef) TransitionsFrom(from string) []Transition {
 		}
 	}
 	return out
+}
+
+// MCPAuditLog represents a single communication event with an MCP server.
+type MCPAuditLog struct {
+	ID         string      `json:"id"`
+	RunID      string      `json:"run_id,omitempty"`
+	StateName  string      `json:"state_name,omitempty"`
+	AgentName  string      `json:"agent_name,omitempty"`
+	ServerURL  string      `json:"server_url"`
+	Method     string      `json:"method"`
+	ToolName   string      `json:"tool_name,omitempty"`
+	Input      interface{} `json:"input"`
+	Output     interface{} `json:"output"`
+	IsError    bool        `json:"is_error"`
+	ErrorMsg   string      `json:"error_msg,omitempty"`
+	DurationMs int         `json:"duration_ms"`
+	CreatedAt  time.Time   `json:"created_at"`
 }

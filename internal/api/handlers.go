@@ -257,3 +257,13 @@ func (h *Handlers) GetPendingHITL(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, requests)
 }
+
+func (h *Handlers) GetMCPLogs(c *gin.Context) {
+	runID := c.Param("id")
+	logs, err := h.store.ListMCPCalls(c.Request.Context(), runID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, logs)
+}

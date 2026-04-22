@@ -28,8 +28,8 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (json.RawMess
 // tools.Registry pre-populated with them.
 // serverURL must be a resolved value from an environment variable — never a
 // hardcoded string.
-func LoadRegistry(ctx context.Context, serverURL string) (*tools.Registry, error) {
-	c := NewClient(serverURL)
+func LoadRegistry(ctx context.Context, serverURL string, observer CallObserver) (*tools.Registry, error) {
+	c := NewClient(serverURL, observer)
 	toolList, err := c.ListTools(ctx)
 	if err != nil {
 		return nil, err

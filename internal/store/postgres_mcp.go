@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/asm-platform/asm/pkg/asmtypes"
 	"github.com/google/uuid"
 )
 
@@ -89,4 +90,52 @@ func (s *PostgresStore) HasAnyMCPServer(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("has any MCP server: %w", err)
 	}
 	return count > 0, nil
+}
+
+func (s *PostgresStore) RecordMCPCall(ctx context.Context, log *asmtypes.MCPAuditLog) error {
+	if log.ID == "" {
+		log.ID = uuid.NewString()
+	}
+	if log.CreatedAt.IsZero() {
+		log.CreatedAt = time.Now()
+	}
+
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO mcp_audit_logs (
+			id, run_id, state_name, agent_name, server_url, method, tool_name, 
+			input, output, is_error, error_msg, duration_ms, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		log.ID, log.RunID, log.StateName, log.AgentName, log.ServerURL, log.Method, log.ToolName,
+		log.Input, log.Output, log.IsError, log.ErrorMsg, log.DurationMs, log.CreatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("record MCP call: %w", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) ListMCPCalls(ctx context.Context, runID string) ([]*asmtypes.MCPAuditLog, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, run_id, state_name, agent_name, server_url, method, tool_name, 
+		        input, output, is_error, error_msg, duration_ms, created_at
+		 FROM mcp_audit_logs WHERE run_id=$1 ORDER BY created_at ASC`, runID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list MCP calls: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*asmtypes.MCPAuditLog
+	for rows.Next() {
+		log := &asmtypes.MCPAuditLog{}
+		err := rows.Scan(
+			&log.ID, &log.RunID, &log.StateName, &log.AgentName, &log.ServerURL, &log.Method, &log.ToolName,
+			&log.Input, &log.Output, &log.IsError, &log.ErrorMsg, &log.DurationMs, &log.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, log)
+	}
+	return out, rows.Err()
 }

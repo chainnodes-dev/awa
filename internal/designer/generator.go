@@ -223,7 +223,9 @@ states:
     script: { trigger: 'amount > 1000 ? "review" : "approve"', updates: { vat: "amount * 0.19" } }
   - name: CALC_JS      # code: JavaScript executed via goja
     type: code
-    code: { code: "bb.v = bb.v * 1.1; return {trigger: 'ok'}" }
+    instructions: "Concise node description. Task: verify input; triggers: [ok, error]"
+    timeout: "1h"       # Optional duration (e.g. 10m, 1h, 2d)
+    on_timeout: timeout_occurred # Required if timeout is set
   - name: MANUAL_STEP  # hitl: human-in-the-loop approval
     type: hitl
     assignee: "team-name"
@@ -237,6 +239,12 @@ transitions:
     to: NEXT           # Single target
     trigger: go
     guard: "amount > 0" # Optional logic
+  - from: MANUAL_STEP
+    to: SUCCESS
+    trigger: approved
+  - from: MANUAL_STEP
+    to: REJECTED
+    trigger: rejected
   - from: BRANCH
     to_nodes: [A, B]   # Parallel fan-out
     trigger: split
@@ -254,7 +262,7 @@ agents:
 4. **Code Nodes**: The 'code' block MUST be an object with a nested 'code' field: `+"`code: { code: \"...\" }`"+`.
 5. **Expressions**: NEVER use literal placeholders like "expr". Provide valid expr-lang logic.
 6. **Instructions**: Start each 'instructions' field with a concise 1-sentence node description for the human designer, followed by the specific task and available triggers for the agent.
-7. **Blackboard Minimalist**: Only define fields in 'blackboard.schema' that are required as initial input or need a specific default value. LLM agents can read/write any other fields dynamically.
+7. **Blackboard Minimalist**: Only define fields in 'blackboard.schema' that are required as initial input or need a specific default value. NEVER include fields that are produced or updated during workflow runtime (agents/scripts handle these dynamically).
 8. **Config**: Every value in 'agents.config' MUST be a string. Use '` + "`" + `{{ env.VAR }}` + "`" + `' for env vars.
 9. **Abstracts**: Always generate/preserve a professional 1-sentence 'metadata.description'.
 10. **States Format**: The 'states' field MUST be a YAML list (array), NOT a map.

@@ -83,16 +83,24 @@
           <!-- Step indicators -->
           <div class="flex items-center gap-1">
             <div v-for="(step, i) in pipelineSteps" :key="i" class="flex-1 flex flex-col items-center gap-1">
-              <div :class="[
-                'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold transition-all',
-                props.pipelineStep > i   ? 'bg-emerald-500 text-white' :
-                props.pipelineStep === i ? 'bg-violet-500 text-white ring-2 ring-violet-400/30' :
-                                           'bg-surface-0 text-slate-600 border border-border'
-              ]">
+              <button
+                @click="runStep(i)"
+                :disabled="loading || (i > 0 && !description.trim())"
+                :class="[
+                  'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold transition-all',
+                  props.pipelineStep > i   ? 'bg-emerald-500 text-white cursor-pointer hover:scale-110 active:scale-95' :
+                  props.pipelineStep === i ? 'bg-violet-500 text-white ring-2 ring-violet-400/30 cursor-pointer hover:scale-110 active:scale-95' :
+                                             'bg-surface-0 text-slate-600 border border-border cursor-pointer hover:border-violet-500/50 hover:text-slate-300'
+                ]"
+                :title="`Run Step ${i + 1}: ${step.label}`"
+              >
                 <svg v-if="pipelineStep > i" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                 <span v-else>{{ i + 1 }}</span>
-              </div>
-              <span class="text-[8px] text-slate-600 text-center leading-tight">{{ step.label }}</span>
+              </button>
+              <span :class="[
+                'text-[8px] text-center leading-tight transition-colors',
+                props.pipelineStep === i ? 'text-violet-400 font-bold' : 'text-slate-600'
+              ]">{{ step.label }}</span>
             </div>
           </div>
 
@@ -122,7 +130,7 @@
         <div>
           <button
             v-if="props.pipelineStep < pipelineSteps.length"
-            @click="runNextStep"
+            @click="runStep(props.pipelineStep)"
             :disabled="loading || !description.trim()"
             class="w-full btn py-2 gap-1.5 text-xs font-semibold rounded-lg bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-900/20 transition-all disabled:opacity-40"
           >
@@ -260,12 +268,24 @@ function onDescriptionInput(e) {
   if (props.pipelineStep > 0) resetPipeline()
 }
 
-async function runNextStep() {
-  const step = pipelineSteps[props.pipelineStep]
+async function runStep(index) {
+  const step = pipelineSteps[index]
   if (!step) return
 
+  // Prerequisite check: index 0 needs description, others need description + existing YAML
+  if (index === 0 && !props.description.trim()) {
+    pipelineError.value = "Process description is required."
+    return
+  }
+  if (index > 0 && (!props.description.trim() || !props.yamlSource.trim())) {
+    pipelineError.value = index > 0 && !props.yamlSource.trim() 
+      ? "Existing YAML is required for this step. Run earlier steps first or import YAML."
+      : "Process description is required."
+    return
+  }
+
   loading.value = true
-  loadingLabel.value = `Step ${props.pipelineStep + 1}: ${step.label}…`
+  loadingLabel.value = `Step ${index + 1}: ${step.label}…`
   loadingSubLabel.value = step.description
   pipelineError.value = ''
   emit('update:pipelineWarning', '')
@@ -281,7 +301,11 @@ async function runNextStep() {
 
     emit('update:interactions', data.interactions || [])
     emit('apply', { yamlStr: data.yaml, definition: data.definition })
-    emit('update:pipelineStep', props.pipelineStep + 1)
+    
+    // Advance pipeline step if we just finished the current one
+    if (index === props.pipelineStep) {
+      emit('update:pipelineStep', index + 1)
+    }
 
   } catch (e) {
     pipelineError.value = e.response?.data?.error ?? e.message
