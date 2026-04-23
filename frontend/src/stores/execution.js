@@ -62,6 +62,14 @@ export const useExecutionStore = defineStore('execution', () => {
     await fetchPendingHITL()
   }
 
+  async function terminateRun(id) {
+    await api.post(`/runs/${id}/terminate`)
+    // Optionally local update, but WebSocket event will normally handle it
+    const idx = runs.value.findIndex(r => r.id === id)
+    if (idx !== -1) runs.value[idx].status = 'cancelled'
+    if (activeRun.value?.id === id) activeRun.value.status = 'cancelled'
+  }
+
   // Called by useWebSocket when a new event arrives
   function handleEvent(event) {
     // Append to global event log (cap at 200)
@@ -76,7 +84,8 @@ export const useExecutionStore = defineStore('execution', () => {
         break
 
       case 'run.completed':
-      case 'run.failed': {
+      case 'run.failed':
+      case 'run.cancelled': {
         // Payload shape differs between direct mode {run: {...}} and
         // Temporal mode {run_id, error}. Normalise to a run-id + error string.
         const runId  = data.run?.id ?? data.run_id
@@ -88,11 +97,17 @@ export const useExecutionStore = defineStore('execution', () => {
         } else {
           // Temporal mode: patch status + failure_reason in place
           if (idx !== -1) {
-            runs.value[idx].status = type === 'run.failed' ? 'failed' : 'complete'
+            runs.value[idx].status = type === 'run.failed' ? 'failed' : 
+                                     type === 'run.cancelled' ? 'cancelled' : 'complete'
             if (errMsg) runs.value[idx].failure_reason = errMsg
           }
           if (activeRun.value?.id === runId) {
-            activeRun.value = { ...activeRun.value, status: type === 'run.failed' ? 'failed' : 'complete', failure_reason: errMsg }
+            activeRun.value = { 
+              ...activeRun.value, 
+              status: type === 'run.failed' ? 'failed' : 
+                      type === 'run.cancelled' ? 'cancelled' : 'complete', 
+              failure_reason: errMsg 
+            }
           }
         }
         break
@@ -200,6 +215,6 @@ export const useExecutionStore = defineStore('execution', () => {
   return {
     runs, activeRun, transitions, eventLog, thinkingTokens, pendingHITL, llmCalls, mcpLogs,
     fetchRuns, fetchRun, fetchHistory, fetchPendingHITL, fetchMCPLogs,
-    deleteRun, sendTrigger, resolveHITL, handleEvent
+    deleteRun, terminateRun, sendTrigger, resolveHITL, handleEvent
   }
 })

@@ -191,6 +191,14 @@ func (h *Handlers) DeleteRun(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *Handlers) TerminateRun(c *gin.Context) {
+	if err := h.engine.TerminateRun(c.Request.Context(), c.Param("id")); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *Handlers) GetRunHistory(c *gin.Context) {
 	transitions, err := h.store.ListTransitions(c.Request.Context(), c.Param("id"))
 	if err != nil {

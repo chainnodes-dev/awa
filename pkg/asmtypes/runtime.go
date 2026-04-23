@@ -11,6 +11,7 @@ const (
 	RunWaiting  RunStatus = "waiting"   // paused at a HITL state
 	RunComplete RunStatus = "complete"
 	RunFailed   RunStatus = "failed"
+	RunCancelled RunStatus = "cancelled"
 )
 
 // WorkflowRun is a live instance of a WorkflowDef.

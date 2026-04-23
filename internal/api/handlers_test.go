@@ -53,6 +53,9 @@ func (s *stubTemporalClient) SendTriggerSignal(_ context.Context, _, _ string, _
 func (s *stubTemporalClient) SendHITLSignal(_ context.Context, _ string, _ asmtypes.HITLSignal) error {
 	return nil
 }
+func (s *stubTemporalClient) TerminateWorkflow(_ context.Context, _ string) error {
+	return nil
+}
 func (s *stubTemporalClient) Close() {}
 
 // testEnv bundles all test dependencies together.

@@ -3,7 +3,6 @@ package orchestrator
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/store"
@@ -18,12 +17,6 @@ type mockExecutor struct {
 
 func (m *mockExecutor) Execute(_ context.Context, task AgentTask) (*asmtypes.AgentOutput, error) {
 	return m.fn(task)
-}
-
-func fixedOutput(trigger string, updates map[string]interface{}) *mockExecutor {
-	return &mockExecutor{fn: func(_ AgentTask) (*asmtypes.AgentOutput, error) {
-		return &asmtypes.AgentOutput{Trigger: trigger, BlackboardUpdates: updates}, nil
-	}}
 }
 
 // --- workflow fixtures ---
@@ -44,66 +37,6 @@ transitions:
   - from: start
     to: done
     trigger: finish
-`
-
-// agentWorkflow: initial -[agent fires "next"]-> review -> terminal.
-const agentWorkflowYAML = `
-apiVersion: asm/v1
-kind: Workflow
-metadata:
-  name: agent-wf
-  version: v1
-agents:
-  - name: classifier
-    model: claude-3-haiku-20240307
-states:
-  - name: start
-    type: initial
-    agent: classifier
-  - name: review
-    type: intermediate
-  - name: done
-    type: terminal
-transitions:
-  - from: start
-    to: review
-    trigger: next
-  - from: review
-    to: done
-    trigger: finish
-`
-
-// guardedWorkflow: start -[pass guard]-> approved; start -[fail guard]-> rejected.
-const guardedWorkflowYAML = `
-apiVersion: asm/v1
-kind: Workflow
-metadata:
-  name: guarded-wf
-  version: v1
-blackboard:
-  schema:
-    score:
-      type: number
-states:
-  - name: start
-    type: initial
-    agent: scorer
-  - name: approved
-    type: terminal
-  - name: rejected
-    type: terminal
-agents:
-  - name: scorer
-    model: claude-3-haiku-20240307
-transitions:
-  - from: start
-    to: approved
-    trigger: evaluated
-    guard: "score >= 80"
-  - from: start
-    to: rejected
-    trigger: evaluated
-    guard: "score < 80"
 `
 
 // hitlWorkflow: initial -> hitl state (waits for human) -> terminal.
@@ -155,35 +88,6 @@ func newEngine() (*Engine, store.Store, *MockTemporalClient) {
 	bus := events.NewLocalBus()
 	mock := &MockTemporalClient{}
 	return NewEngine(s, bus, mock), s, mock
-}
-
-func waitForStatus(t *testing.T, s store.Store, runID string, want asmtypes.RunStatus, timeout time.Duration) *asmtypes.WorkflowRun {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		run, err := s.GetRun(context.Background(), runID)
-		if err == nil && run.Status == want {
-			return run
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	run, _ := s.GetRun(context.Background(), runID)
-	t.Fatalf("timed out waiting for status %q (current: %q)", want, run.Status)
-	return nil
-}
-
-func waitForState(t *testing.T, s store.Store, runID, want string, timeout time.Duration) {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		run, err := s.GetRun(context.Background(), runID)
-		if err == nil && run.CurrentState == want {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	run, _ := s.GetRun(context.Background(), runID)
-	t.Fatalf("timed out waiting for state %q (current: %q)", want, run.CurrentState)
 }
 
 // --- tests ---

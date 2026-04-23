@@ -10,6 +10,7 @@ type MockTemporalClient struct {
 	OnStartWorkflow      func(run *asmtypes.WorkflowRun, def *asmtypes.WorkflowDef) (string, error)
 	OnSendTriggerSignal  func(temporalID, trigger string, payload map[string]interface{}) error
 	OnSendHITLSignal     func(temporalID string, sig asmtypes.HITLSignal) error
+	OnTerminateWorkflow  func(temporalID string) error
 }
 
 func (m *MockTemporalClient) StartWorkflow(ctx context.Context, run *asmtypes.WorkflowRun, def *asmtypes.WorkflowDef) (string, error) {
@@ -29,6 +30,13 @@ func (m *MockTemporalClient) SendTriggerSignal(ctx context.Context, temporalID, 
 func (m *MockTemporalClient) SendHITLSignal(ctx context.Context, temporalID string, sig asmtypes.HITLSignal) error {
 	if m.OnSendHITLSignal != nil {
 		return m.OnSendHITLSignal(temporalID, sig)
+	}
+	return nil
+}
+
+func (m *MockTemporalClient) TerminateWorkflow(ctx context.Context, temporalID string) error {
+	if m.OnTerminateWorkflow != nil {
+		return m.OnTerminateWorkflow(temporalID)
 	}
 	return nil
 }

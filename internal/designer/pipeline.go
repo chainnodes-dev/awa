@@ -355,9 +355,11 @@ func patchImplementations(yamlStr string, codeJobs []codeJobResult, scriptJobs [
 		}
 		name, _ := state["name"].(string)
 		if res, ok := codeByName[name]; ok {
+			// Ensure we always produce the nested {code: {code: "..."}} structure
 			state["code"] = map[string]interface{}{"code": res.Code}
 		}
 		if res, ok := scriptByName[name]; ok {
+			// Ensure we always produce the nested {script: {trigger: "...", updates: [...]}} structure
 			script := map[string]interface{}{"trigger": res.Trigger}
 			if len(res.Updates) > 0 {
 				script["updates"] = res.Updates
@@ -613,8 +615,9 @@ Your task is to implement the remaining nodes and produce a clean, complete, run
 
 ## What needs implementing
 
-1. **intermediate nodes**: Write a production-quality 'instructions' prompt for the LLM agent.
-   Include: clear task description, relevant blackboard fields, and the exact trigger names to fire.
+1. **intermediate nodes**: 
+   - Assign an ` + "`agent`" + ` by name (e.g., ` + "`agent: researcher`" + `). Ensure this agent is defined in the top-level ` + "`agents:`" + ` block.
+   - Write a production-quality ` + "`instructions`" + ` prompt for the LLM agent. Include: clear task description, relevant blackboard fields, and the exact trigger names to fire.
 
 2. **hitl nodes**:
    - Set a real 'assignee' (e.g. "finance-team", "approvers", "managers")
@@ -633,6 +636,40 @@ Your task is to implement the remaining nodes and produce a clean, complete, run
    - Set 'model: ""' to designate the use of the platform default.
    - **MCP Servers**: For any agent requiring external tools, add the logical name of the required MCP server to its 'mcp_servers' list (e.g., ` + "`mcp_servers: [\"gleif-server\"]`" + `).
    - Use the "Available MCP Servers" list provided in the system context to find the correct names.
+
+## Node Structure Requirements
+
+**CRITICAL**: Strictly adhere to the following object structures. Do NOT flatten these into strings.
+
+### type: code
+Must have a ` + "`code`" + ` object with a nested ` + "`code`" + ` string field.
+` + "```yaml" + `
+# CORRECT
+- name: MY_CODE_NODE
+  type: code
+  code:
+    code: "return {trigger: 'done'};" # Nested key
+
+# WRONG (causes unmarshal error)
+- name: MY_CODE_NODE
+  type: code
+  code: "return {trigger: 'done'};" # DO NOT DO THIS
+` + "```" + `
+
+### type: script
+Must have a ` + "`script`" + ` object with a nested ` + "`trigger`" + ` (and optionally ` + "`updates`" + `) field.
+` + "```yaml" + `
+# CORRECT
+- name: MY_SCRIPT_NODE
+  type: script
+  script:
+    trigger: "blackboard.amount > 100"
+
+# WRONG
+- name: MY_SCRIPT_NODE
+  type: script
+  script: "blackboard.amount > 100" # DO NOT DO THIS
+` + "```" + `
 
 ## Rules
 

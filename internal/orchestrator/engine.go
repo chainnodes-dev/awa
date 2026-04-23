@@ -36,6 +36,7 @@ type TemporalEngineClient interface {
 	StartWorkflow(ctx context.Context, run *asmtypes.WorkflowRun, def *asmtypes.WorkflowDef) (temporalID string, err error)
 	SendTriggerSignal(ctx context.Context, temporalID, trigger string, payload map[string]interface{}) error
 	SendHITLSignal(ctx context.Context, temporalID string, sig asmtypes.HITLSignal) error
+	TerminateWorkflow(ctx context.Context, temporalID string) error
 	Close()
 }
 
@@ -154,53 +155,38 @@ func (e *Engine) DeleteRun(ctx context.Context, id string) error {
 	return e.store.DeleteRun(ctx, id)
 }
 
-
-// EvalGuard evaluates an expr-lang expression against blackboard data.
-// Exported so the Temporal workflow package can reuse it without duplication.
-// evalScript evaluates a ScriptDef against the current blackboard and returns
-// an AgentOutput containing the computed trigger and blackboard updates.
-// Uses the same expr-lang evaluator as EvalGuard.
-func (e *Engine) evalScript(ctx context.Context, state *asmtypes.StateDef, bb map[string]interface{}) (*asmtypes.AgentOutput, error) {
-	if state.Script == nil {
-		return nil, fmt.Errorf("state '%s' has type 'script' but no script definition", state.Name)
-	}
-	script := state.Script
-
-	// Evaluate the trigger expression → must produce a string.
-	triggerProg, err := expr.Compile(script.Trigger, expr.Env(bb), expr.AllowUndefinedVariables())
+// TerminateRun stops a running workflow in Temporal and updates its status to cancelled.
+func (e *Engine) TerminateRun(ctx context.Context, id string) error {
+	run, err := e.store.GetRun(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("compile trigger expr '%s': %w", script.Trigger, err)
-	}
-	triggerResult, err := expr.Run(triggerProg, bb)
-	if err != nil {
-		return nil, fmt.Errorf("run trigger expr '%s': %w", script.Trigger, err)
-	}
-	trigger, ok := triggerResult.(string)
-	if !ok {
-		return nil, fmt.Errorf("trigger expr '%s' must evaluate to a string, got %T", script.Trigger, triggerResult)
+		return fmt.Errorf("load run: %w", err)
 	}
 
-	// Evaluate each blackboard update expression.
-	updates := make(map[string]interface{})
-	for field, exprStr := range script.Updates {
-		prog, err := expr.Compile(exprStr, expr.Env(bb), expr.AllowUndefinedVariables())
-		if err != nil {
-			return nil, fmt.Errorf("compile update expr for '%s': %w", field, err)
+	// Immediate termination in Temporal if it's currently active.
+	if run.TemporalID != "" && (run.Status == asmtypes.RunRunning || run.Status == asmtypes.RunWaiting || run.Status == asmtypes.RunPending) {
+		if err := e.temporal.TerminateWorkflow(ctx, run.TemporalID); err != nil {
+			slog.Warn("Failed to terminate temporal workflow", "run_id", id, "temporal_id", run.TemporalID, "error", err)
+			// Continue to update DB status anyway to reflect user intent.
 		}
-		val, err := expr.Run(prog, bb)
-		if err != nil {
-			return nil, fmt.Errorf("run update expr for '%s': %w", field, err)
-		}
-		updates[field] = val
 	}
 
-	return &asmtypes.AgentOutput{
-		Trigger:           trigger,
-		BlackboardUpdates: updates,
-		Reasoning:         fmt.Sprintf("script: %s", script.Trigger),
-	}, nil
+	now := time.Now()
+	run.Status = asmtypes.RunCancelled
+	run.UpdatedAt = now
+	run.CompletedAt = &now
+
+	if err := e.store.UpdateRun(ctx, run); err != nil {
+		return fmt.Errorf("update run status: %w", err)
+	}
+
+	_ = e.bus.Publish(ctx, events.New(events.RunCancelled, events.RunCancelledPayload{Run: run}))
+	metrics.RunsActive.WithLabelValues(run.WorkflowName).Dec()
+
+	return nil
 }
 
+
+// EvalGuard evaluates an expr-lang expression against blackboard data.
 // EvalScript evaluates a state's ScriptDef against the blackboard.
 // It is a pure deterministic function; safe to call inline in Temporal workflows.
 func EvalScript(state *asmtypes.StateDef, bb map[string]interface{}) (*asmtypes.AgentOutput, error) {

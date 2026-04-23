@@ -85,6 +85,11 @@ func (e *EngineClient) SendHITLSignal(ctx context.Context, temporalID string, si
 	})
 }
 
+// TerminateWorkflow immediately stops a running Temporal workflow.
+func (e *EngineClient) TerminateWorkflow(ctx context.Context, temporalID string) error {
+	return e.client.TerminateWorkflow(ctx, temporalID, "", "User terminated workflow")
+}
+
 // Close releases the underlying Temporal client connection.
 func (e *EngineClient) Close() {
 	e.client.Close()

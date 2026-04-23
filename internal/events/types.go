@@ -12,6 +12,7 @@ const (
 	RunCreated        = "run.created"
 	RunCompleted      = "run.completed"
 	RunFailed         = "run.failed"
+	RunCancelled      = "run.cancelled"
 	StateChanged      = "state.changed"
 	BlackboardUpdated = "blackboard.updated"
 	AgentThinking     = "agent.thinking"     // LLM token stream
@@ -39,6 +40,10 @@ type Event struct {
 // Payloads
 
 type RunCreatedPayload struct {
+	Run *asmtypes.WorkflowRun `json:"run"`
+}
+
+type RunCancelledPayload struct {
 	Run *asmtypes.WorkflowRun `json:"run"`
 }
 

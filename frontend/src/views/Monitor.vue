@@ -47,6 +47,14 @@
         Fire Trigger
       </button>
 
+      <!-- Termination -->
+      <button v-if="canTerminate" @click="stopRun" class="btn text-xs bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="mr-1">
+          <rect x="6" y="6" width="12" height="12"/>
+        </svg>
+        Stop
+      </button>
+
       <button @click="loadRun" class="btn-ghost p-1.5" title="Refresh">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="23 4 23 10 17 10"/>
@@ -399,6 +407,11 @@ const currentStateDef = computed(() => {
   return workflowDef.value.states?.find(s => s.name === run.value.current_state)
 })
 
+const canTerminate = computed(() => {
+  if (!run.value) return false
+  return ['pending', 'running', 'waiting'].includes(run.value.status)
+})
+
 const currentFormSchema = computed(() => currentStateDef.value?.form_schema)
 
 const blackboardSchema = computed(() => {
@@ -549,6 +562,16 @@ async function fireTrigger() {
   await execStore.sendTrigger(route.params.id, triggerName.value)
   showTriggerModal.value = false
   triggerName.value = ''
+}
+
+async function stopRun() {
+  if (!confirm('Are you sure you want to stop this run? This action cannot be undone.')) return
+  try {
+    await execStore.terminateRun(route.params.id)
+  } catch (err) {
+    const msg = err?.response?.data?.error ?? err?.message ?? 'Failed to stop run'
+    alert(msg)
+  }
 }
 
 function onEditClick() {

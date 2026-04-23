@@ -68,6 +68,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			runs.POST("", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.StartRun)
 			runs.POST("/:id/trigger", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.TriggerRun)
 			runs.POST("/:id/signal", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.SignalHITL)
+			runs.POST("/:id/terminate", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.TerminateRun)
 			runs.DELETE("/:id", auth.RequireRole(auth.RoleAdmin), h.DeleteRun)
 		}
 
