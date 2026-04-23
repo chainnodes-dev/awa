@@ -13,6 +13,13 @@ var ProviderDefaultModels = map[string]string{
 	"openai":    "gpt-4o",
 	"grok":      "grok-3",
 	"deepseek":  "deepseek-chat",
+	"mistral":   "mistral-large-latest",
+	"groq":      "llama-3.1-70b-versatile",
+	"together":  "meta-llama/Llama-3-70b-chat-hf",
+	"fireworks": "accounts/fireworks/models/llama-v3p1-70b-instruct",
+	"cohere":    "command-r-plus",
+	"qwen":      "qwen-plus",
+	"glm":       "glm-4-plus",
 	"gemini":    "gemini-2.0-flash",
 	"ollama":    "llama3.2",
 }
@@ -28,6 +35,20 @@ func ProviderEndpoint(provider string) string {
 		return "https://api.deepseek.com/v1/chat/completions"
 	case "gemini":
 		return "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+	case "mistral":
+		return "https://api.mistral.ai/v1/chat/completions"
+	case "groq":
+		return "https://api.groq.com/openai/v1/chat/completions"
+	case "together":
+		return "https://api.together.xyz/v1/chat/completions"
+	case "fireworks":
+		return "https://api.fireworks.ai/inference/v1/chat/completions"
+	case "cohere":
+		return "https://api.cohere.com/compatibility/v1/chat/completions"
+	case "qwen":
+		return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+	case "glm":
+		return "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 	default:
 		return ""
 	}

@@ -391,17 +391,17 @@ func (h *Handlers) CodegenHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// AnalyseSkillHandler decomposes a skill description into an ASM workflow YAML.
-// POST /api/v1/designer/skill/analyse
-func (h *Handlers) AnalyseSkillHandler(c *gin.Context) {
+// ProcessAnalyseHandler decomposes a process description into an ASM workflow YAML.
+// POST /api/v1/designer/process/analyse
+func (h *Handlers) ProcessAnalyseHandler(c *gin.Context) {
 	if h.generator == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "skill analysis is not available: no LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)",
+			"error": "process analysis is not available: no LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)",
 		})
 		return
 	}
 
-	var req designer.AnalyseSkillRequest
+	var req designer.ProcessAnalyseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -419,7 +419,7 @@ func (h *Handlers) AnalyseSkillHandler(c *gin.Context) {
 		}
 	}
 
-	result, err := gen.AnalyseSkill(c.Request.Context(), req)
+	result, err := gen.AnalyseProcess(c.Request.Context(), req)
 	if err != nil {
 		resp := gin.H{"error": err.Error()}
 		if result != nil {
@@ -441,17 +441,17 @@ func (h *Handlers) AnalyseSkillHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// RenderSkillHandler converts a WorkflowDef YAML into a human-readable skill description.
-// POST /api/v1/designer/skill/render
-func (h *Handlers) RenderSkillHandler(c *gin.Context) {
+// ProcessSummariseHandler converts a WorkflowDef YAML into a human-readable process summary.
+// POST /api/v1/designer/process/summarise
+func (h *Handlers) ProcessSummariseHandler(c *gin.Context) {
 	if h.generator == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "skill rendering is not available: no LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)",
+			"error": "process summarisation is not available: no LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)",
 		})
 		return
 	}
 
-	var req designer.RenderSkillRequest
+	var req designer.ProcessSummariseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -461,7 +461,7 @@ func (h *Handlers) RenderSkillHandler(c *gin.Context) {
 		return
 	}
 
-	result, err := h.generator.RenderSkill(c.Request.Context(), req)
+	result, err := h.generator.SummariseProcess(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

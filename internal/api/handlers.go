@@ -41,8 +41,9 @@ func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTSer
 
 func (h *Handlers) ListWorkflows(c *gin.Context) {
 	filter := store.DefinitionFilter{
-		Limit:  queryInt(c, "limit", 50),
-		Offset: queryInt(c, "offset", 0),
+		Limit:        queryInt(c, "limit", 50),
+		Offset:       queryInt(c, "offset", 0),
+		ReusableOnly: c.Query("reusable") == "true",
 	}
 	defs, err := h.store.ListDefinitions(c.Request.Context(), filter)
 	if err != nil {

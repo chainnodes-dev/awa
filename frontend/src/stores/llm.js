@@ -13,6 +13,13 @@ export const useLLMStore = defineStore('llm', () => {
     { id: 'grok',      label: 'Grok (xAI)',    needsKey: true,  needsURL: false },
     { id: 'deepseek',  label: 'Deepseek',      needsKey: true,  needsURL: false },
     { id: 'gemini',    label: 'Gemini',         needsKey: true,  needsURL: false },
+    { id: 'mistral',   label: 'Mistral AI',    needsKey: true,  needsURL: false },
+    { id: 'groq',      label: 'Groq',          needsKey: true,  needsURL: false },
+    { id: 'together',  label: 'Together AI',   needsKey: true,  needsURL: false },
+    { id: 'fireworks', label: 'Fireworks AI',  needsKey: true,  needsURL: false },
+    { id: 'cohere',    label: 'Cohere',        needsKey: true,  needsURL: false },
+    { id: 'qwen',      label: 'Qwen (Alibaba)',needsKey: true,  needsURL: false },
+    { id: 'glm',       label: 'GLM (Zhipu)',   needsKey: true,  needsURL: false },
     { id: 'ollama',    label: 'Ollama (local)', needsKey: false, needsURL: true  },
   ]
 
@@ -21,6 +28,13 @@ export const useLLMStore = defineStore('llm', () => {
     openai:    'gpt-4o',
     grok:      'grok-3',
     deepseek:  'deepseek-chat',
+    mistral:   'mistral-large-latest',
+    groq:      'llama-3.1-70b-versatile',
+    together:  'meta-llama/Llama-3-70b-chat-hf',
+    fireworks: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+    cohere:    'command-r-plus',
+    qwen:      'qwen-plus',
+    glm:       'glm-4-plus',
     gemini:    'gemini-2.0-flash',
     ollama:    'llama3.2',
   }

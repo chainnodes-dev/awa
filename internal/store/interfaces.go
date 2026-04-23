@@ -31,8 +31,9 @@ func TenantIDFromContext(ctx context.Context) string {
 
 // DefinitionFilter controls which workflow definitions are returned by ListDefinitions.
 type DefinitionFilter struct {
-	Limit  int // 0 = no limit
-	Offset int
+	Limit        int // 0 = no limit
+	Offset       int
+	ReusableOnly bool // If true, only return workflows marked as reusable
 }
 
 // VersionSummary is a lightweight record returned by ListDefinitionVersions.
@@ -86,7 +87,6 @@ type Store interface {
 	TenantStore
 	MCPServerStore
 	LLMConfigStore
-	SkillStore
 	EventSubscriptionStore
 	APIKeyStore
 	Close() error

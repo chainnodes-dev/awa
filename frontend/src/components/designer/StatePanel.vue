@@ -20,7 +20,7 @@
         <option value="script">script</option>
         <option value="code">code</option>
         <optgroup label="──────────────"></optgroup>
-        <option value="skill_call">skill_call</option>
+        <option value="skill_call">subprocess</option>
         <optgroup label="──────────────"></optgroup>
         <option value="hitl">hitl</option>
         <option value="wait">wait</option>
@@ -183,20 +183,20 @@
       </div>
     </template>
 
-    <!-- Skill Call section -->
+    <!-- Sub-Process section -->
     <template v-if="form.type === 'skill_call'">
       <div class="pt-3 border-t border-border space-y-2.5">
-        <h4 class="text-xs font-semibold text-violet-400/80 uppercase tracking-wider">Skill Call</h4>
+        <h4 class="text-xs font-semibold text-violet-400/80 uppercase tracking-wider">Sub-Process Call</h4>
         <p class="text-[10px] text-slate-600 leading-relaxed">
           Invoke another workflow as a child skill. The child runs to completion
           before this state transitions.
         </p>
 
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">Skill</label>
-          <SkillPicker
+          <label class="text-xs text-slate-500">Reusable Process</label>
+          <ProcessPicker
             v-model="form.skill_ref"
-            @skill-selected="onSkillSelected"
+            @process-selected="onProcessSelected"
           />
         </div>
 
@@ -218,16 +218,13 @@
           />
         </div>
 
-        <SkillInputMappingEditor
-          label="Input Mappings — child port ← parent bb field"
-          :mappings="form.skill_input_mappings"
-          @update:mappings="form.skill_input_mappings = $event"
+        <ProcessMappingEditor
+          label="Input Mappings (to sub-process)"
+          v-model:mappings="form.skill_input_mappings"
         />
-
-        <SkillInputMappingEditor
-          label="Output Mappings — parent bb field ← child port"
-          :mappings="form.skill_output_mappings"
-          @update:mappings="form.skill_output_mappings = $event"
+        <ProcessMappingEditor
+          label="Output Mappings (from sub-process)"
+          v-model:mappings="form.skill_output_mappings"
         />
       </div>
     </template>
@@ -274,6 +271,13 @@
             <option value="grok">Grok (xAI)</option>
             <option value="deepseek">Deepseek</option>
             <option value="gemini">Gemini</option>
+            <option value="mistral">Mistral AI</option>
+            <option value="groq">Groq</option>
+            <option value="together">Together AI</option>
+            <option value="fireworks">Fireworks AI</option>
+            <option value="cohere">Cohere</option>
+            <option value="qwen">Qwen (Alibaba)</option>
+            <option value="glm">GLM (Zhipu)</option>
             <option value="ollama">Ollama (local)</option>
           </select>
         </div>
@@ -368,8 +372,8 @@ import AgentCombobox from './AgentCombobox.vue'
 import CodeEditor from './CodeEditor.vue'
 import CodeEditorModal from './CodeEditorModal.vue'
 import MCPServerPicker from './MCPServerPicker.vue'
-import SkillInputMappingEditor from './SkillInputMappingEditor.vue'
-import SkillPicker from './SkillPicker.vue'
+import ProcessMappingEditor from './ProcessMappingEditor.vue'
+import ProcessPicker from './ProcessPicker.vue'
 import JsonSchemaForm from '@/components/monitor/JsonSchemaForm.vue'
 
 // Starter template shown when a new code state is created.
@@ -397,24 +401,24 @@ const emit = defineEmits(['update', 'delete'])
 
 const STATE_TYPES = ['initial', 'terminal', 'intermediate', 'script', 'code', 'hitl', 'wait']
 
-// When a skill is selected from the picker, pre-populate the mapping rows
-// with the skill's declared port names (bbField left blank for the user to fill).
+// When a process is selected from the picker, pre-populate the mapping rows
+// with the process's declared port names (bbField left blank for the user to fill).
 // Only populates rows that aren't already filled to preserve manual edits.
-function onSkillSelected(sk) {
-  if (!sk) return
-  if (sk.inputs?.length) {
+function onProcessSelected(p) {
+  if (!p) return
+  if (p.inputs?.length) {
     const existing = new Set(form.skill_input_mappings.map(m => m.name))
-    sk.inputs.forEach(p => {
-      if (!existing.has(p.name)) {
-        form.skill_input_mappings.push({ name: p.name, bbField: '' })
+    p.inputs.forEach(port => {
+      if (!existing.has(port.name)) {
+        form.skill_input_mappings.push({ name: port.name, bbField: '' })
       }
     })
   }
-  if (sk.outputs?.length) {
+  if (p.outputs?.length) {
     const existing = new Set(form.skill_output_mappings.map(m => m.name))
-    sk.outputs.forEach(p => {
-      if (!existing.has(p.name)) {
-        form.skill_output_mappings.push({ name: p.name, bbField: '' })
+    p.outputs.forEach(port => {
+      if (!existing.has(port.name)) {
+        form.skill_output_mappings.push({ name: port.name, bbField: '' })
       }
     })
   }

@@ -325,7 +325,7 @@ async function applyRefinement() {
   refineError.value = ''
 
   try {
-    const { data } = await api.post('/designer/skill/analyse', {
+    const { data } = await api.post('/designer/process/analyse', {
       description:   props.prompt,
       history:       props.history,
       existing_yaml: props.yamlSource || '',

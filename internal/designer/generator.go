@@ -57,19 +57,18 @@ type GenerateResult struct {
 type Generator struct {
 	provider llm.Provider
 	registry []MCPServerEntry
-	skStore  store.SkillStore
+	wfStore  store.WorkflowStore
 	prompts  *PromptManager
 }
 
 // NewGenerator creates a Generator backed by the given LLM provider.
 // registry should come from LoadMCPRegistry().
-// skStore may be nil; when provided it is used by AnalyseSkill to inject
-// the registered skill catalog into the prompt so the LLM can emit skill_call nodes.
-func NewGenerator(provider llm.Provider, registry []MCPServerEntry, skStore store.SkillStore) *Generator {
+// wfStore is used to inject the reusable process catalog into prompts.
+func NewGenerator(provider llm.Provider, registry []MCPServerEntry, wfStore store.WorkflowStore) *Generator {
 	return &Generator{
 		provider: provider,
 		registry: registry,
-		skStore:  skStore,
+		wfStore:  wfStore,
 		prompts:  NewPromptManager(),
 	}
 }
@@ -79,7 +78,7 @@ func (g *Generator) WithProvider(p llm.Provider) *Generator {
 	return &Generator{
 		provider: p,
 		registry: g.registry,
-		skStore:  g.skStore,
+		wfStore:  g.wfStore,
 		prompts:  g.prompts,
 	}
 }

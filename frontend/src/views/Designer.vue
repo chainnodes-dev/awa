@@ -203,9 +203,33 @@
                     <span class="text-xs font-mono text-slate-300">v{{ meta.versionNumber }}</span>
                     <span class="text-[10px] text-slate-600 flex-1 text-right">auto-incremented on save</span>
                   </div>
-                  <textarea v-model="meta.description" class="input h-16 resize-none" placeholder="Description" @input="isDirty=true"/>
+                  <textarea v-model="meta.description" class="input h-16 resize-none" placeholder="Description (short abstract)" @input="isDirty=true"/>
+                  <label class="flex items-center gap-2 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20 cursor-pointer hover:bg-indigo-500/10 transition-colors group">
+                    <input type="checkbox" v-model="meta.reusable" class="accent-indigo-500" @change="isDirty=true" />
+                    <div class="flex-1">
+                      <div class="text-xs font-semibold text-indigo-300 group-hover:text-indigo-200 transition-colors">Mark as Reusable</div>
+                      <div class="text-[10px] text-slate-600">Enables this workflow to be called as a sub-process by others.</div>
+                    </div>
+                  </label>
                 </div>
               </div>
+
+              <!-- Reusable configuration -->
+              <template v-if="meta.reusable">
+                <div class="space-y-4">
+                  <IOPortEditor
+                    title="Inputs"
+                    :ports="meta.inputs"
+                    show-required
+                    @change="isDirty = true"
+                  />
+                  <IOPortEditor
+                    title="Outputs"
+                    :ports="meta.outputs"
+                    @change="isDirty = true"
+                  />
+                </div>
+              </template>
 
               <div class="space-y-2">
                 <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Blackboard Schema</h3>
@@ -311,6 +335,7 @@ import EdgePanel              from '@/components/designer/EdgePanel.vue'
 import BBFieldModal           from '@/components/designer/BBFieldModal.vue'
 import AddStateModal          from '@/components/designer/AddStateModal.vue'
 import GeneratePanel          from '@/components/designer/GeneratePanel.vue'
+import IOPortEditor           from '@/components/designer/IOPortEditor.vue'
 
 import { useWorkflowStore } from '@/stores/workflows'
 import { useWorkflowIO }    from '@/composables/useWorkflowIO'
@@ -329,7 +354,10 @@ const { layout }  = useLayout()
 const nodes   = ref([])
 const edges   = ref([])
 const agents  = ref([])
-const meta    = reactive({ name: '', version: '1.0.0', versionNumber: 0, description: '', systemPrompt: '', processDescription: '' })
+const meta    = reactive({ 
+  name: '', version: '1.0.0', versionNumber: 0, description: '', systemPrompt: '', processDescription: '',
+  reusable: false, inputs: [], outputs: [], capabilities: []
+})
 const bbSchema = reactive({})
 const versions = ref([])
 

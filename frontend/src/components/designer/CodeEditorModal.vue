@@ -60,7 +60,7 @@ const overlay = ref(null)
 const editorHeight = computed(() => 'calc(100vh - 88px)')
 
 const resolvedTitle = computed(() =>
-  props.title || props.stateName || (props.language === 'text' ? 'Skill Description' : 'Code')
+  props.title || props.stateName || (props.language === 'text' ? 'Process Description' : 'Code')
 )
 
 const iconClass   = computed(() => props.language === 'text' ? 'text-violet-400' : 'text-teal-400')

@@ -6,13 +6,16 @@ import (
 
 // WorkflowDef is the root of a workflow YAML manifest.
 type WorkflowDef struct {
-	APIVersion  string        `yaml:"apiVersion"  json:"apiVersion"`
-	Kind        string        `yaml:"kind"        json:"kind"`
-	Metadata    WorkflowMeta  `yaml:"metadata"    json:"metadata"`
-	Blackboard  BlackboardDef `yaml:"blackboard"  json:"blackboard"`
-	States      []StateDef    `yaml:"states"      json:"states"`
-	Transitions []Transition  `yaml:"transitions" json:"transitions"`
-	Agents      []AgentDef    `yaml:"agents"      json:"agents"`
+	APIVersion   string           `yaml:"apiVersion"   json:"apiVersion"`
+	Kind         string           `yaml:"kind"         json:"kind"`
+	Metadata     WorkflowMeta     `yaml:"metadata"     json:"metadata"`
+	Inputs       []SkillPortDef   `yaml:"inputs,omitempty" json:"inputs,omitempty"`
+	Outputs      []SkillPortDef   `yaml:"outputs,omitempty" json:"outputs,omitempty"`
+	Capabilities []CapabilityDecl `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
+	Blackboard   BlackboardDef    `yaml:"blackboard"   json:"blackboard"`
+	States       []StateDef       `yaml:"states"       json:"states"`
+	Transitions  []Transition     `yaml:"transitions"  json:"transitions"`
+	Agents       []AgentDef       `yaml:"agents"       json:"agents"`
 }
 
 type WorkflowMeta struct {
@@ -29,6 +32,8 @@ type WorkflowMeta struct {
 	Schedule           string `yaml:"schedule,omitempty"            json:"schedule,omitempty"`
 	SystemPrompt       string `yaml:"system_prompt,omitempty"       json:"system_prompt,omitempty"`
 	ProcessDescription string `yaml:"process_description,omitempty" json:"process_description,omitempty"`
+	// Reusable indicates if this workflow can be invoked as a sub-process (Skill) by other workflows.
+	Reusable bool `yaml:"reusable,omitempty" json:"reusable,omitempty"`
 }
 
 // BlackboardDef defines the typed schema of the shared blackboard.
@@ -37,9 +42,22 @@ type BlackboardDef struct {
 }
 
 type FieldDef struct {
-	Type     string      `yaml:"type"               json:"type"`     // string | number | bool | object
+	Type     string      `yaml:"type"               json:"type"` // string | number | bool | object
 	Required bool        `yaml:"required,omitempty" json:"required"`
 	Default  interface{} `yaml:"default,omitempty"  json:"default,omitempty"`
+}
+
+// SkillPortDef describes a single typed input or output port of a reusable workflow.
+type SkillPortDef struct {
+	Name        string `yaml:"name"                  json:"name"`
+	Type        string `yaml:"type"                  json:"type"` // string | number | bool | object
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Required    bool   `yaml:"required,omitempty"    json:"required,omitempty"`
+}
+
+// CapabilityDecl declares a dependency on a named MCP server.
+type CapabilityDecl struct {
+	MCPServer string `yaml:"mcp_server" json:"mcp_server"`
 }
 
 // StateType classifies the role of a state in the machine.
@@ -104,6 +122,20 @@ type EmitEventDef struct {
 	// CompletionTrigger is the transition trigger fired after the event is emitted.
 	// Defaults to "emitted".
 	CompletionTrigger string `yaml:"completion_trigger,omitempty" json:"completion_trigger,omitempty"`
+}
+
+// SkillCallDef describes a delegation to another reusable workflow.
+type SkillCallDef struct {
+	// SkillRef is the name of the workflow/process to invoke.
+	SkillRef          string            `yaml:"skill_ref"                     json:"skill_ref"`
+	// CompletionTrigger is fired when the sub-process completes successfully.
+	CompletionTrigger string            `yaml:"completion_trigger,omitempty"  json:"completion_trigger,omitempty"`
+	// FailureTrigger is fired if the sub-process fails or is terminated.
+	FailureTrigger    string            `yaml:"failure_trigger,omitempty"     json:"failure_trigger,omitempty"`
+	// InputMappings maps parent blackboard fields to sub-process input ports.
+	InputMappings     map[string]string `yaml:"input_mappings,omitempty"      json:"input_mappings,omitempty"`
+	// OutputMappings maps sub-process output ports back to parent blackboard fields.
+	OutputMappings    map[string]string `yaml:"output_mappings,omitempty"     json:"output_mappings,omitempty"`
 }
 
 // ScriptDef defines deterministic inline logic for a state of type "script".

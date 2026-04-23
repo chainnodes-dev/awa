@@ -26,9 +26,6 @@ type MemoryStore struct {
 	refreshTokens map[string]*RefreshToken // key: TokenHash
 	mcpServers    map[string]*MCPServer    // key: id
 	llmConfigs    map[string]*LLMConfig    // key: tenantID:provider
-	skills        map[string]*Skill        // key: tenantID:name
-	// skillDeps records dependency edges: callerSkillID → set of dependsOnSkillIDs.
-	skillDeps     map[string]map[string]bool
 	// Phase-4 stores.
 	eventSubs    map[string]*EventSubscription // key: id
 	apiKeys      map[string]*APIKey            // key: id
@@ -55,8 +52,6 @@ func NewMemoryStore() *MemoryStore {
 		refreshTokens: make(map[string]*RefreshToken),
 		mcpServers:    make(map[string]*MCPServer),
 		llmConfigs:    make(map[string]*LLMConfig),
-		skills:        make(map[string]*Skill),
-		skillDeps:     make(map[string]map[string]bool),
 		eventSubs:     make(map[string]*EventSubscription),
 		apiKeys:       make(map[string]*APIKey),
 		apiKeysByHash: make(map[string]string),
@@ -251,6 +246,9 @@ func (s *MemoryStore) ListDefinitions(ctx context.Context, filter DefinitionFilt
 	prefix := tenantID + ":"
 	for k, e := range s.definitions {
 		if tenantID == "" || (len(k) >= len(prefix) && k[:len(prefix)] == prefix) {
+			if filter.ReusableOnly && !e.def.Metadata.Reusable {
+				continue
+			}
 			existing, ok := latest[e.def.Metadata.Name]
 			if !ok || e.def.Metadata.VersionNumber > existing.Metadata.VersionNumber {
 				latest[e.def.Metadata.Name] = e.def

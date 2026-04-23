@@ -96,16 +96,6 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			llmCfg.POST("/:provider/test", h.TestLLMConnection)
 		}
 
-		// Skill Registry — readable by all authenticated users; write requires operator/admin.
-		api.GET("/skills", h.ListSkills)
-		api.GET("/skills/:name", h.GetSkill)
-		api.GET("/skills/:name/dependents", h.ListSkillDependents)
-		skillsWrite := api.Group("/skills", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator))
-		{
-			skillsWrite.POST("", h.CreateSkill)
-			skillsWrite.PUT("/:name", h.UpdateSkill)
-			skillsWrite.DELETE("/:name", h.DeleteSkill)
-		}
 
 		// AI Workflow Designer — operator/admin only.
 		designerGroup := api.Group("/designer", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator))
@@ -114,10 +104,10 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			designerGroup.POST("/scaffold", h.ScaffoldHandler)
 			designerGroup.POST("/scaffold-mcp", h.ScaffoldMCPHandler)
 			designerGroup.POST("/codegen", h.CodegenHandler)
-			designerGroup.POST("/skill/analyse", h.AnalyseSkillHandler)
-			designerGroup.POST("/skill/render", h.RenderSkillHandler)
 			designerGroup.GET("/prompts", h.GetPrompts)
 			designerGroup.PUT("/prompts/:id", h.UpdatePrompt)
+			designerGroup.POST("/process/analyse", h.ProcessAnalyseHandler)
+			designerGroup.POST("/process/summarise", h.ProcessSummariseHandler)
 
 			// Multi-step pipeline (Decompose → Categorise → Wire → Implement).
 			pipeline := designerGroup.Group("/pipeline")
@@ -147,10 +137,10 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 		}
 	}
 
-	// External skill invocation — accepts JWT OR API key (no role restriction beyond auth).
+	// External process invocation — accepts JWT OR API key (no role restriction beyond auth).
 	invoke := r.Group("/api/v1/invoke", RequireAuthOrAPIKey(jwtSvc, h.store))
 	{
-		invoke.POST("/:name", h.InvokeSkill)
-		invoke.GET("/:name/runs/:run_id", h.GetSkillInvocation)
+		invoke.POST("/:name", h.InvokeProcess)
+		invoke.GET("/:name/runs/:run_id", h.GetProcessInvocation)
 	}
 }

@@ -17,6 +17,11 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
     meta.versionNumber = def.metadata?.version_number ?? 0
     meta.description   = def.metadata?.description    ?? ''
     meta.systemPrompt  = def.metadata?.system_prompt  ?? ''
+    meta.reusable      = def.metadata?.reusable       ?? false
+    
+    meta.inputs       = (def.inputs       ?? []).map(p => ({ ...p }))
+    meta.outputs      = (def.outputs      ?? []).map(p => ({ ...p }))
+    meta.capabilities = (def.capabilities ?? []).map(c => ({ ...c }))
 
     for (const k in bbSchema) delete bbSchema[k]
     if (def.blackboard?.schema) Object.assign(bbSchema, def.blackboard.schema)
@@ -102,7 +107,11 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
         description:         meta.description,
         system_prompt:       meta.systemPrompt,
         process_description: meta.processDescription,
+        reusable:            meta.reusable || false,
       },
+      inputs:       meta.inputs?.length       ? meta.inputs       : undefined,
+      outputs:      meta.outputs?.length      ? meta.outputs      : undefined,
+      capabilities: meta.capabilities?.length ? meta.capabilities : undefined,
       blackboard: { schema: { ...bbSchema } },
       states: nodes.value.map(n => ({
         name:         n.id,

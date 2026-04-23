@@ -195,6 +195,13 @@ function providerEndpoint(id) {
     deepseek:  'api.deepseek.com',
     gemini:    'generativelanguage.googleapis.com',
     anthropic: 'api.anthropic.com',
+    mistral:   'api.mistral.ai',
+    groq:      'api.groq.com',
+    together:  'api.together.xyz',
+    fireworks: 'api.fireworks.ai',
+    cohere:    'api.cohere.ai',
+    qwen:      'dashscope.aliyuncs.com',
+    glm:       'open.bigmodel.cn',
   }
   return map[id] ?? ''
 }

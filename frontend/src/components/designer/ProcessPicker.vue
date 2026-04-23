@@ -10,8 +10,8 @@
         <svg class="text-violet-400/60 shrink-0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
         </svg>
-        <span v-if="selected" class="font-mono text-xs text-slate-200 flex-1 truncate">{{ selected.name }}</span>
-        <span v-else class="text-xs text-slate-600 flex-1">— select a skill —</span>
+        <span v-if="selected" class="font-mono text-xs text-slate-200 flex-1 truncate">{{ selected.metadata.name }}</span>
+        <span v-else class="text-xs text-slate-600 flex-1">— select a process —</span>
         <svg class="text-slate-600 shrink-0 transition-transform" :class="open && 'rotate-180'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
@@ -28,7 +28,7 @@
             ref="searchInput"
             v-model="query"
             class="input text-xs py-1 w-full"
-            placeholder="Search skills…"
+            placeholder="Search reusable processes…"
             @keydown.esc="open = false"
             @keydown.enter.prevent="selectFirst"
           />
@@ -36,34 +36,27 @@
 
         <div class="max-h-52 overflow-y-auto">
           <div v-if="loading" class="px-3 py-4 text-xs text-slate-600 text-center">Loading…</div>
-          <div v-else-if="!filtered.length" class="px-3 py-4 text-xs text-slate-600 text-center italic">No skills found</div>
+          <div v-else-if="!filtered.length" class="px-3 py-4 text-xs text-slate-600 text-center italic">No reusable processes found</div>
           <button
-            v-for="sk in filtered"
-            :key="sk.name"
+            v-for="p in filtered"
+            :key="p.metadata.name"
             type="button"
             class="w-full text-left px-3 py-2.5 hover:bg-white/5 transition-colors border-b border-border/40 last:border-0"
-            @click="pick(sk)"
+            @click="pick(p)"
           >
             <div class="flex items-center gap-2 mb-0.5">
-              <span class="font-mono text-xs text-violet-400 font-medium">{{ sk.name }}</span>
-              <span v-if="sk.inputs?.length || sk.outputs?.length" class="text-[9px] text-slate-600">
-                {{ sk.inputs?.length || 0 }}↓ {{ sk.outputs?.length || 0 }}↑
+              <span class="font-mono text-xs text-violet-400 font-medium">{{ p.metadata.name }}</span>
+              <span v-if="p.inputs?.length || p.outputs?.length" class="text-[9px] text-slate-600">
+                {{ p.inputs?.length || 0 }}↓ {{ p.outputs?.length || 0 }}↑
               </span>
             </div>
-            <p v-if="sk.description" class="text-[10px] text-slate-500 leading-snug line-clamp-1">{{ sk.description }}</p>
+            <p v-if="p.metadata.description" class="text-[10px] text-slate-500 leading-snug line-clamp-1">{{ p.metadata.description }}</p>
           </button>
-        </div>
-
-        <!-- Footer link -->
-        <div class="px-3 py-2 border-t border-border bg-surface-0">
-          <RouterLink to="/skills" class="text-[10px] text-indigo-400/70 hover:text-indigo-400 transition-colors" @click="open = false">
-            Manage skill registry ↗
-          </RouterLink>
         </div>
       </div>
     </div>
 
-    <!-- Selected skill summary + clear -->
+    <!-- Selected process summary + clear -->
     <template v-if="selected">
       <div class="rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2.5 space-y-1.5">
         <!-- Port info -->
@@ -87,8 +80,7 @@
         </div>
         <!-- Workflow ref + clear -->
         <div class="flex items-center gap-2 pt-0.5">
-          <span v-if="selected.workflow_ref" class="text-[10px] text-slate-500 font-mono flex-1 truncate">→ {{ selected.workflow_ref }}</span>
-          <span v-else class="text-[10px] text-amber-500/70 flex-1 italic">no workflow linked</span>
+          <span class="text-[10px] text-slate-500 font-mono flex-1 truncate">Ver: {{ selected.metadata.version }}</span>
           <button type="button" class="text-[10px] text-slate-600 hover:text-red-400 transition-colors" @click="clear">Clear</button>
         </div>
       </div>
@@ -98,55 +90,52 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { RouterLink } from 'vue-router'
 import { api } from '@/stores/auth'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' }, // the resolved skill_ref (workflow_ref)
+  modelValue: { type: String, default: '' }, // the resolved process name
 })
-const emit = defineEmits(['update:modelValue', 'skill-selected'])
+const emit = defineEmits(['update:modelValue', 'process-selected'])
 
 const open        = ref(false)
 const query       = ref('')
 const loading     = ref(false)
-const skills      = ref([])
+const processes   = ref([])
 const root        = ref(null)
 const searchInput = ref(null)
 
 const selected = computed(() =>
-  skills.value.find(sk => sk.workflow_ref === props.modelValue || sk.name === props.modelValue) ?? null
+  processes.value.find(p => p.metadata.name === props.modelValue) ?? null
 )
 
 const filtered = computed(() => {
   const q = query.value.toLowerCase()
-  if (!q) return skills.value
-  return skills.value.filter(sk =>
-    sk.name.toLowerCase().includes(q) || sk.description?.toLowerCase().includes(q)
+  if (!q) return processes.value
+  return processes.value.filter(p =>
+    p.metadata.name.toLowerCase().includes(q) || p.metadata.description?.toLowerCase().includes(q)
   )
 })
 
-async function fetchSkills() {
+async function fetchProcesses() {
   loading.value = true
   try {
-    const { data } = await api.get('/skills')
-    skills.value = data ?? []
+    const { data } = await api.get('/workflows?reusable=true')
+    processes.value = data ?? []
   } catch { /* non-fatal */ } finally {
     loading.value = false
   }
 }
 
-function pick(sk) {
+function pick(p) {
   open.value  = false
   query.value = ''
-  // Prefer workflow_ref as the ref value; fall back to skill name
-  const ref = sk.workflow_ref || sk.name
-  emit('update:modelValue', ref)
-  emit('skill-selected', sk)
+  emit('update:modelValue', p.metadata.name)
+  emit('process-selected', p)
 }
 
 function clear() {
   emit('update:modelValue', '')
-  emit('skill-selected', null)
+  emit('process-selected', null)
 }
 
 function selectFirst() {
@@ -167,7 +156,7 @@ function onClickOutside(e) {
 }
 onMounted(() => {
   document.addEventListener('mousedown', onClickOutside)
-  fetchSkills()
+  fetchProcesses()
 })
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onClickOutside)

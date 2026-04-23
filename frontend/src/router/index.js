@@ -43,12 +43,6 @@ const routes = [
     meta: { title: 'Monitor' }
   },
   {
-    path: '/skills',
-    name: 'Skills',
-    component: () => import('@/views/Skills.vue'),
-    meta: { title: 'Skills' }
-  },
-  {
     path: '/mcp-servers',
     name: 'MCPServers',
     component: () => import('@/views/MCPServers.vue'),

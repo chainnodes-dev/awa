@@ -269,6 +269,7 @@ export const WorkflowCard = defineComponent({
         h('div', { class: 'flex items-center gap-2 mb-1' }, [
           h('span', { class: 'font-medium text-slate-200 text-sm' }, def.metadata.name),
           h('span', { class: 'badge bg-white/5 text-slate-500 font-mono' }, def.metadata.version?.toString().startsWith('v') ? def.metadata.version : `v${def.metadata.version}`),
+          def.metadata.reusable ? h('span', { class: 'badge bg-violet-500/10 text-violet-400 font-bold tracking-wider text-[9px]' }, 'REUSABLE') : null
         ]),
         h('p', { class: 'text-xs text-slate-500 truncate' }, def.metadata.description || `${def.states?.length ?? 0} states · ${def.agents?.length ?? 0} agents`),
       ]),

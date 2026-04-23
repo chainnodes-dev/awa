@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -131,10 +132,15 @@ func (s *PostgresStore) SaveDefinition(ctx context.Context, def *asmtypes.Workfl
 		return err
 	}
 
+	inputsJSON, _ := json.Marshal(def.Inputs)
+	outputsJSON, _ := json.Marshal(def.Outputs)
+	capsJSON, _ := json.Marshal(def.Capabilities)
+
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO workflow_definitions (name, version, version_number, definition, yaml_source, process_description, tenant_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		def.Metadata.Name, def.Metadata.Version, nextVer, defJSON, yamlSource, def.Metadata.ProcessDescription, tenantID,
+		INSERT INTO workflow_definitions (name, version, version_number, definition, yaml_source, process_description, inputs, outputs, capabilities, reusable, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		def.Metadata.Name, def.Metadata.Version, nextVer, defJSON, yamlSource, def.Metadata.ProcessDescription,
+		inputsJSON, outputsJSON, capsJSON, def.Metadata.Reusable, tenantID,
 	)
 	return err
 }
@@ -147,13 +153,21 @@ func (s *PostgresStore) UpdateDefinition(ctx context.Context, def *asmtypes.Work
 		return err
 	}
 
+	inputsJSON, _ := json.Marshal(def.Inputs)
+	outputsJSON, _ := json.Marshal(def.Outputs)
+	capsJSON, _ := json.Marshal(def.Capabilities)
+
 	query := `
 		UPDATE workflow_definitions 
-		SET definition = $1, yaml_source = $2, process_description = $3
-		WHERE name = $4 AND version = $5`
-	args := []interface{}{defJSON, yamlSource, def.Metadata.ProcessDescription, def.Metadata.Name, def.Metadata.Version}
+		SET definition = $1, yaml_source = $2, process_description = $3, inputs = $4, outputs = $5, capabilities = $6, reusable = $7
+		WHERE name = $8 AND version = $9`
+	args := []interface{}{
+		defJSON, yamlSource, def.Metadata.ProcessDescription,
+		inputsJSON, outputsJSON, capsJSON, def.Metadata.Reusable,
+		def.Metadata.Name, def.Metadata.Version,
+	}
 	if tenantID != "" {
-		query += " AND tenant_id = $5"
+		query += " AND tenant_id = $10"
 		args = append(args, tenantID)
 	}
 
@@ -244,17 +258,23 @@ func (s *PostgresStore) GetLatestDefinition(ctx context.Context, name string) (*
 
 func (s *PostgresStore) ListDefinitions(ctx context.Context, filter DefinitionFilter) ([]*asmtypes.WorkflowDef, error) {
 	tenantID := TenantIDFromContext(ctx)
-	// Return only the latest version of each workflow using DISTINCT ON.
-	// Select the SQL-level version column as well, since the version inside the
-	// JSONB definition may be stale for rows created before the auto-versioning migration.
 	query := `SELECT DISTINCT ON (name) definition, version_number, version FROM workflow_definitions`
 	var args []interface{}
 	i := 1
+	var where []string
 	if tenantID != "" {
-		query += fmt.Sprintf(" WHERE tenant_id=$%d", i)
+		where = append(where, fmt.Sprintf("tenant_id=$%d", i))
 		args = append(args, tenantID)
 		i++
 	}
+	if filter.ReusableOnly {
+		where = append(where, "reusable=TRUE")
+	}
+
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+
 	query += " ORDER BY name, version_number DESC"
 	// Wrap in a subquery so LIMIT/OFFSET apply after DISTINCT ON.
 	if filter.Limit > 0 || filter.Offset > 0 {

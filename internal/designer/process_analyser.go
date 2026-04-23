@@ -11,9 +11,9 @@ import (
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
-// AnalyseSkillRequest is the input to the skill → workflow decomposer.
-type AnalyseSkillRequest struct {
-	// Description is the natural-language description of what the skill does.
+// ProcessAnalyseRequest is the input to the process → workflow decomposer.
+type ProcessAnalyseRequest struct {
+	// Description is the natural-language description of what the process does.
 	Description string `json:"description" binding:"required"`
 	// Inputs is the typed I/O contract the caller declares.
 	Inputs []asmtypes.SkillPortDef `json:"inputs,omitempty"`
@@ -30,42 +30,53 @@ type AnalyseSkillRequest struct {
 	Provider string `json:"provider,omitempty"`
 }
 
-// AnalyseSkillResult holds the generated workflow.
-type AnalyseSkillResult struct {
+// ProcessAnalyseResult holds the generated workflow.
+type ProcessAnalyseResult struct {
 	YAML         string                `json:"yaml"`
 	Definition   *asmtypes.WorkflowDef `json:"definition"`
 	Interactions []llm.Message         `json:"interactions"`
 }
 
-// AnalyseSkill decomposes a skill description into a WorkflowDef YAML.
+// ProcessSummariseRequest is the input to the workflow → summary generator.
+type ProcessSummariseRequest struct {
+	// WorkflowYAML is the raw YAML to be summarised.
+	WorkflowYAML string `json:"workflow_yaml" binding:"required"`
+}
+
+// ProcessSummariseResult holds the generated summary.
+type ProcessSummariseResult struct {
+	Summary      string        `json:"summary"`
+	Interactions []llm.Message `json:"interactions"`
+}
+
+// AnalyseProcess decomposes a process description into a WorkflowDef YAML.
 // It classifies each step as:
 //   - intermediate (LLM reasoning required)
 //   - code         (programmatic transformation)
 //   - script       (simple deterministic expression)
 //   - hitl         (requires human input)
 //   - wait         (event-driven pause)
-//   - skill_call   (delegates to a registered skill in the catalog)
+//   - skill_call   (delegates to another reusable process)
 //
 // On YAML validation failure the LLM is retried once with the error.
-func (g *Generator) AnalyseSkill(ctx context.Context, req AnalyseSkillRequest) (*AnalyseSkillResult, error) {
-	// Fetch the registered skill catalog so the LLM can reuse existing skills
-	// instead of reimplementing their logic inline.
-	var registeredSkills []*store.Skill
-	if g.skStore != nil {
+func (g *Generator) AnalyseProcess(ctx context.Context, req ProcessAnalyseRequest) (*ProcessAnalyseResult, error) {
+	// Fetch the catalog of reusable workflows so the LLM can leverage them
+	// via skill_call nodes instead of reimplementing logic inline.
+	var reusableWorkflows []*asmtypes.WorkflowDef
+	if g.wfStore != nil {
 		var err error
-		registeredSkills, err = g.skStore.ListSkills(ctx)
+		reusableWorkflows, err = g.wfStore.ListDefinitions(ctx, store.DefinitionFilter{ReusableOnly: true})
 		if err != nil {
-			// Non-fatal: log and proceed without registry context.
-			slog.Warn("skill analyser: failed to list registered skills", "error", err)
+			slog.Warn("process analyser: failed to list reusable workflows", "error", err)
 		}
 	}
 
-	system := g.buildSkillAnalyserPrompt(req.MCPServers, registeredSkills)
+	system := g.buildProcessAnalyserPrompt(req.MCPServers, reusableWorkflows)
 	if req.ExistingYAML != "" {
 		system += g.refinementAddendum()
 	}
 
-	userMsg := g.buildSkillUserMsg(req)
+	userMsg := g.buildProcessUserMsg(req)
 	messages := make([]llm.Message, 0, len(req.History)+1)
 	for _, m := range req.History {
 		messages = append(messages, llm.Message{Role: m.Role, Content: m.Content})
@@ -82,7 +93,7 @@ func (g *Generator) AnalyseSkill(ctx context.Context, req AnalyseSkillRequest) (
 		MaxTokens:    g.provider.MaxOutputTokens(),
 	})
 	if err != nil {
-		return &AnalyseSkillResult{Interactions: interaction}, fmt.Errorf("LLM call failed: %w", err)
+		return &ProcessAnalyseResult{Interactions: interaction}, fmt.Errorf("LLM call failed: %w", err)
 	}
 
 	interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
@@ -90,96 +101,109 @@ func (g *Generator) AnalyseSkill(ctx context.Context, req AnalyseSkillRequest) (
 	yamlStr, def, err := g.extractAndValidate(resp.Content)
 	if err != nil {
 		// No automatic retry.
-		return &AnalyseSkillResult{
+		return &ProcessAnalyseResult{
 			YAML:         yamlStr,
 			Definition:   def,
 			Interactions: interaction,
 		}, fmt.Errorf("generated workflow is invalid: %w", err)
 	}
 
-	return &AnalyseSkillResult{
+	return &ProcessAnalyseResult{
 		YAML:         yamlStr,
 		Definition:   def,
 		Interactions: interaction,
 	}, nil
 }
 
-// buildSkillAnalyserPrompt produces the system prompt for the skill decomposer.
-// It reuses the standard YAML schema prompt but adds skill-specific decomposition rules
-// and, when the skill catalog is non-empty, a section listing registered skills so the
-// LLM can delegate to them via skill_call nodes instead of reimplementing logic inline.
-func (g *Generator) buildSkillAnalyserPrompt(mcpServers []string, registeredSkills []*store.Skill) string {
-	// Start from the standard schema prompt (which already documents all state types,
-	// transitions, guards, MCP server syntax, and validation rules).
+// SummariseProcess converts a WorkflowDef YAML into a human-readable process summary.
+func (g *Generator) SummariseProcess(ctx context.Context, req ProcessSummariseRequest) (*ProcessSummariseResult, error) {
+	system := "You are a process summarisation engine. Convert the provided ASM workflow YAML into a professional, human-readable summary that explains the business logic, roles involved, and expected outcomes."
+	userMsg := fmt.Sprintf("Summarise this workflow:\n\n```yaml\n%s\n```", req.WorkflowYAML)
+
+	messages := []llm.Message{
+		{Role: "user", Content: userMsg},
+	}
+
+	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+		SystemPrompt: system,
+		Messages:     messages,
+		MaxTokens:    1024,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("summarisation failed: %w", err)
+	}
+
+	return &ProcessSummariseResult{
+		Summary:      resp.Content,
+		Interactions: append([]llm.Message{{Role: "system", Content: system}, {Role: "user", Content: userMsg}}, llm.Message{Role: "assistant", Content: resp.Content}),
+	}, nil
+}
+
+// buildProcessAnalyserPrompt produces the system prompt for the workflow decomposer.
+func (g *Generator) buildProcessAnalyserPrompt(mcpServers []string, registeredProcesses []*asmtypes.WorkflowDef) string {
+	// Start from the standard schema prompt.
 	base := g.buildSystemPrompt(mcpServers)
 
-	// Prepend skill-specific decomposition instructions.
-	preamble := g.prompts.Get(PromptIDSkill, `You are a skill decomposition engine for the ASM (Agentic State Machine) platform.
+	// Prepend decomposition instructions.
+	preamble := g.prompts.Get(PromptIDSkill, `You are a process decomposition engine for the ASM (Agentic State Machine) platform.
 
-Your task is to analyse a skill description and convert it into an optimal ASM workflow.
-A "skill" is a reusable capability described in natural language or code. Your job is to:
+Your task is to analyse a process description and convert it into an optimal ASM workflow.
+A "process" is a workflow that may be reusable. Your job is to:
 
-1. **Decompose** the skill into atomic, sequential (or branching) steps.
+1. **Decompose** the process into atomic, sequential (or branching) steps.
 2. **Classify** each step into the most efficient state type:
-   - Use **skill_call** FIRST when a registered skill in the catalog (see below) already
+   - Use **skill_call** FIRST when a reusable sub-process in the catalog (see below) already
      implements the required capability. This is always preferred over reimplementing
      the same logic inline.
    - Use **intermediate** (LLM agent) ONLY when genuine reasoning, judgment, or language
      understanding is required that cannot be expressed deterministically and no
-     registered skill covers it.
+     reusable process covers it.
    - Use **code** (JavaScript) when the step requires computation, transformation, loops,
-     or complex conditional logic that the LLM would otherwise do wastefully.
-   - Use **script** (expr-lang) for simple single-expression routing or field updates
-     (e.g. "if amount > 1000 route to review").
+     or complex conditional logic.
+   - Use **script** (expr-lang) for simple single-expression routing or field updates.
    - Use **hitl** when the step explicitly requires a human decision.
    - Use **wait** when the step must pause until external data arrives.
 3. **Identify data dependencies** — what each step reads and writes on the blackboard.
-   These become the blackboard schema fields.
 4. **Honour the declared I/O contract** — all declared input ports MUST appear as
    blackboard fields; all declared output ports MUST be written before terminal states.
-5. **Abstract Generation** — Populate "metadata.description" with a concise, professional 1-sentence abstract of the workflow's purpose. **IMPORTANT**: If an existing workflow is provided and it already has a description that is more than a placeholder, PRESERVE it. Only generate a new abstract if it is missing or empty.
-6. **Minimise LLM usage** — prefer code, script, or skill_call nodes over intermediate
-   nodes wherever possible. This reduces cost, latency, and non-determinism.
+5. **Abstract Generation** — Populate "metadata.description" with a concise 1-sentence abstract. PRESERVE existing descriptions if present.
+6. **Minimise LLM usage** — prefer code, script, or skill_call nodes where possible.
 
-Think step by step before writing the YAML. Ask yourself for each step:
-"Does a registered skill already do this?" If yes, use skill_call.
+Ask yourself for each step:
+"Does a reusable process already do this?" If yes, use skill_call.
 "Can this be expressed without an LLM?" If yes, use code or script.
 
 `) + base
 
-	// Inject the registered skill catalog when the registry is non-empty.
-	if len(registeredSkills) > 0 {
-		preamble += g.buildSkillCatalogSection(registeredSkills)
+	if len(registeredProcesses) > 0 {
+		preamble += g.buildProcessCatalogSection(registeredProcesses)
 	}
 
 	return preamble
 }
 
-// buildSkillCatalogSection renders the registered skill catalog as a prompt section.
-// Each entry shows the skill name, description, and typed I/O ports so the LLM can
-// decide whether to delegate to it via a skill_call node.
-func (g *Generator) buildSkillCatalogSection(skills []*store.Skill) string {
+// buildProcessCatalogSection renders the reusable process catalog as a prompt section.
+func (g *Generator) buildProcessCatalogSection(processes []*asmtypes.WorkflowDef) string {
 	var sb strings.Builder
 
 	sb.WriteString(`
-## Registered Skills (Skill Catalog)
+## Reusable Process Catalog
 
-The following skills are already implemented and registered in the platform. When a step
-in the workflow you are designing matches one of these skills, you MUST emit a **skill_call**
+The following processes are already implemented and marked as reusable. When a step
+in the workflow you are designing matches one of these, you MUST emit a **skill_call**
 state that delegates to it — do NOT reimplement the same logic inline.
 
 For each skill_call state:
-- Set "skill_ref" to the skill name shown below.
-- Map the parent blackboard fields to the skill's input ports via "input_mappings".
-- Map the skill's output ports back to parent blackboard fields via "output_mappings".
-- Choose a "completion_trigger" and optionally a "failure_trigger".
+- Set "skill_ref" to the process name shown below.
+- Map the parent blackboard fields to the sub-process's input ports via "input_mappings".
+- Map the sub-process's output ports back to parent blackboard fields via "output_mappings".
 
 `)
 
-	for _, s := range skills {
-		sb.WriteString(fmt.Sprintf("### %s\n", s.Name))
-		if s.Description != "" {
-			sb.WriteString(s.Description + "\n\n")
+	for _, s := range processes {
+		sb.WriteString(fmt.Sprintf("### %s\n", s.Metadata.Name))
+		if s.Metadata.Description != "" {
+			sb.WriteString(s.Metadata.Description + "\n\n")
 		}
 
 		if len(s.Inputs) > 0 {
@@ -214,24 +238,23 @@ For each skill_call state:
 	return sb.String()
 }
 
-// buildSkillUserMsg constructs the user message with the full skill context.
-func (g *Generator) buildSkillUserMsg(req AnalyseSkillRequest) string {
+// buildProcessUserMsg constructs the user message with the full context.
+func (g *Generator) buildProcessUserMsg(req ProcessAnalyseRequest) string {
 	var sb strings.Builder
 
 	if req.ExistingYAML != "" {
-		sb.WriteString("Refine the following workflow to better implement the skill described below.\n\n")
+		sb.WriteString("Refine the following workflow to better implement the process described below.\n\n")
 		sb.WriteString("## Current Workflow\n\n```yaml\n")
 		sb.WriteString(req.ExistingYAML)
 		sb.WriteString("\n```\n\n")
 	}
 
-	sb.WriteString("## Skill Description\n\n")
+	sb.WriteString("## Process Description\n\n")
 	sb.WriteString(req.Description)
 	sb.WriteString("\n\n")
 
 	if len(req.Inputs) > 0 {
 		sb.WriteString("## Input Contract\n\n")
-		sb.WriteString("The workflow MUST accept these inputs via the blackboard (required fields at run start):\n\n")
 		for _, p := range req.Inputs {
 			req := ""
 			if p.Required {
@@ -248,7 +271,6 @@ func (g *Generator) buildSkillUserMsg(req AnalyseSkillRequest) string {
 
 	if len(req.Outputs) > 0 {
 		sb.WriteString("## Output Contract\n\n")
-		sb.WriteString("The workflow MUST write these fields to the blackboard before reaching any terminal state:\n\n")
 		for _, p := range req.Outputs {
 			sb.WriteString(fmt.Sprintf("- `%s` (%s)", p.Name, p.Type))
 			if p.Description != "" {
@@ -259,8 +281,7 @@ func (g *Generator) buildSkillUserMsg(req AnalyseSkillRequest) string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("Decompose this skill into the most efficient ASM workflow. ")
-	sb.WriteString("Prefer code and script nodes over LLM agents wherever the logic is deterministic. ")
+	sb.WriteString("Decompose this into the most efficient ASM workflow. ")
 	sb.WriteString("Return only the YAML.\n")
 
 	return sb.String()
