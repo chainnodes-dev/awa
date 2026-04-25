@@ -20,7 +20,7 @@
         <option value="script">script</option>
         <option value="code">code</option>
         <optgroup label="──────────────"></optgroup>
-        <option value="skill_call">subprocess</option>
+        <option value="subprocess">subprocess</option>
         <optgroup label="──────────────"></optgroup>
         <option value="hitl">hitl</option>
         <option value="wait">wait</option>
@@ -132,7 +132,7 @@
     </template>
 
     <!-- Agent field -->
-    <template v-if="form.type !== 'script' && form.type !== 'wait' && form.type !== 'code' && form.type !== 'skill_call'">
+    <template v-if="form.type !== 'script' && form.type !== 'wait' && form.type !== 'code' && form.type !== 'subprocess'">
       <div class="space-y-1">
         <label class="text-xs text-slate-500">Agent</label>
         <div class="space-y-1.5">
@@ -184,47 +184,57 @@
     </template>
 
     <!-- Sub-Process section -->
-    <template v-if="form.type === 'skill_call'">
+    <template v-if="form.type === 'subprocess'">
       <div class="pt-3 border-t border-border space-y-2.5">
         <h4 class="text-xs font-semibold text-violet-400/80 uppercase tracking-wider">Sub-Process Call</h4>
         <p class="text-[10px] text-slate-600 leading-relaxed">
-          Invoke another workflow as a child skill. The child runs to completion
+          Invoke another workflow as a child process. The child runs to completion
           before this state transitions.
         </p>
 
-        <div class="space-y-1">
-          <label class="text-xs text-slate-500">Reusable Process</label>
-          <ProcessPicker
-            v-model="form.skill_ref"
-            @process-selected="onProcessSelected"
-          />
+        <div class="flex gap-2">
+          <div class="space-y-1 flex-[2]">
+            <label class="text-xs text-slate-500">Reusable Process</label>
+            <ProcessPicker
+              v-model="form.process_ref"
+              @process-selected="onProcessSelected"
+            />
+          </div>
+          <div class="space-y-1 flex-1">
+            <label class="text-xs text-slate-500">Version</label>
+            <input
+              class="input font-mono text-xs"
+              v-model="form.process_version"
+              placeholder="latest"
+            />
+          </div>
         </div>
 
         <div class="space-y-1">
           <label class="text-xs text-slate-500">Completion Trigger</label>
           <input
             class="input font-mono text-xs"
-            v-model="form.skill_completion_trigger"
-            placeholder="skill_done"
+            v-model="form.completion_trigger"
+            placeholder="done"
           />
         </div>
 
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">Failure Trigger <span class="text-slate-600 font-normal">(optional, default: skill_failed)</span></label>
+          <label class="text-xs text-slate-500">Failure Trigger <span class="text-slate-600 font-normal">(optional)</span></label>
           <input
             class="input font-mono text-xs"
-            v-model="form.skill_failure_trigger"
-            placeholder="skill_failed"
+            v-model="form.failure_trigger"
+            placeholder="subprocess_failed"
           />
         </div>
 
         <ProcessMappingEditor
           label="Input Mappings (to sub-process)"
-          v-model:mappings="form.skill_input_mappings"
+          v-model:mappings="form.input_mappings"
         />
         <ProcessMappingEditor
           label="Output Mappings (from sub-process)"
-          v-model:mappings="form.skill_output_mappings"
+          v-model:mappings="form.output_mappings"
         />
       </div>
     </template>
@@ -259,7 +269,7 @@
     </div>
 
     <!-- Agent config section -->
-    <template v-if="form.type !== 'script' && form.type !== 'skill_call' && form.agent">
+    <template v-if="form.type !== 'script' && form.type !== 'subprocess' && form.agent">
       <div class="pt-3 border-t border-border space-y-2.5">
         <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Agent Config</h4>
         <div class="space-y-1">
@@ -399,7 +409,8 @@ const props = defineProps({
 })
 const emit = defineEmits(['update', 'delete'])
 
-const STATE_TYPES = ['initial', 'terminal', 'intermediate', 'script', 'code', 'hitl', 'wait']
+// Supported state types: initial, terminal, intermediate, script, code, hitl, wait, subprocess
+const STATE_TYPES = ['initial', 'terminal', 'intermediate', 'script', 'code', 'hitl', 'wait', 'subprocess']
 
 // When a process is selected from the picker, pre-populate the mapping rows
 // with the process's declared port names (bbField left blank for the user to fill).
@@ -407,24 +418,24 @@ const STATE_TYPES = ['initial', 'terminal', 'intermediate', 'script', 'code', 'h
 function onProcessSelected(p) {
   if (!p) return
   if (p.inputs?.length) {
-    const existing = new Set(form.skill_input_mappings.map(m => m.name))
+    const existing = new Set(form.input_mappings.map(m => m.name))
     p.inputs.forEach(port => {
       if (!existing.has(port.name)) {
-        form.skill_input_mappings.push({ name: port.name, bbField: '' })
+        form.input_mappings.push({ name: port.name, bbField: '' })
       }
     })
   }
   if (p.outputs?.length) {
-    const existing = new Set(form.skill_output_mappings.map(m => m.name))
+    const existing = new Set(form.output_mappings.map(m => m.name))
     p.outputs.forEach(port => {
       if (!existing.has(port.name)) {
-        form.skill_output_mappings.push({ name: port.name, bbField: '' })
+        form.output_mappings.push({ name: port.name, bbField: '' })
       }
     })
   }
 }
 
-// Helper to convert skill_call mappings object { portName: bbField } → array of { name, bbField }
+// Helper to convert subprocess mappings object { portName: bbField } → array of { name, bbField }
 function mappingsToArray(obj) {
   if (!obj) return []
   return Object.entries(obj).map(([name, bbField]) => ({ name, bbField }))
@@ -443,12 +454,13 @@ const form = reactive({
     ? Object.entries(props.node.script.updates).map(([k, v]) => ({ key: k, expr: v }))
     : [],
   code: props.node.code?.code ?? defaultCodeTemplate,
-  // skill_call fields
-  skill_ref:                 props.node.skill_ref            ?? '',
-  skill_completion_trigger:  props.node.skill_completion_trigger ?? 'skill_done',
-  skill_failure_trigger:     props.node.skill_failure_trigger    ?? '',
-  skill_input_mappings:      mappingsToArray(props.node.skill_call?.input_mappings),
-  skill_output_mappings:     mappingsToArray(props.node.skill_call?.output_mappings),
+  // subprocess fields
+  process_ref:        props.node.subprocess?.process_ref     ?? '',
+  process_version:    props.node.subprocess?.process_version ?? '',
+  completion_trigger: props.node.subprocess?.completion_trigger || (props.node.type === 'subprocess' ? 'done' : ''),
+  failure_trigger:    props.node.subprocess?.failure_trigger    || '',
+  input_mappings:     mappingsToArray(props.node.subprocess?.input_mappings),
+  output_mappings:    mappingsToArray(props.node.subprocess?.output_mappings),
   form_schema: props.node.form_schema ? JSON.stringify(props.node.form_schema, null, 2) : '',
 })
 
@@ -588,28 +600,29 @@ function onApply() {
     code:     form.code || '',
   } : undefined
 
-  const skillCallDef = form.type === 'skill_call' ? {
-    skill_ref:          form.skill_ref          || '',
-    completion_trigger: form.skill_completion_trigger || 'skill_done',
-    failure_trigger:    form.skill_failure_trigger   || undefined,
-    input_mappings:     mappingsToObject(form.skill_input_mappings),
-    output_mappings:    mappingsToObject(form.skill_output_mappings),
+  const subprocessDef = form.type === 'subprocess' ? {
+    process_ref:        form.process_ref        || '',
+    process_version:    form.process_version    || undefined,
+    completion_trigger: form.completion_trigger || 'done',
+    failure_trigger:    form.failure_trigger    || undefined,
+    input_mappings:     mappingsToObject(form.input_mappings),
+    output_mappings:    mappingsToObject(form.output_mappings),
   } : undefined
 
   const nodeData = {
     name:         form.name,
     type:         form.type,
     instructions: form.instructions || undefined,
-    agent:        (form.type !== 'script' && form.type !== 'wait' && form.type !== 'code' && form.type !== 'skill_call') ? (form.agent || undefined) : undefined,
+    agent:        (form.type !== 'script' && form.type !== 'wait' && form.type !== 'code' && form.type !== 'subprocess') ? (form.agent || undefined) : undefined,
     script:       scriptDef,
     code:         codeDef,
     condition:    form.type === 'wait' ? (form.condition || undefined) : undefined,
     timeout:      form.timeout    || undefined,
     on_timeout:   form.on_timeout || undefined,
-    skill_call:   skillCallDef,
+    subprocess:   subprocessDef,
     form_schema:  form.type === 'hitl' && form.form_schema ? JSON.parse(form.form_schema) : undefined,
   }
-  const agentData = (form.type !== 'script' && form.type !== 'code' && form.type !== 'skill_call' && form.agent) ? {
+  const agentData = (form.type !== 'script' && form.type !== 'code' && form.type !== 'subprocess' && form.agent) ? {
     name:       form.agent,
     model:      agentForm.model      || undefined,
     task_queue: agentForm.task_queue || undefined,

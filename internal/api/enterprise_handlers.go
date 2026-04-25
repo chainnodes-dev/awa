@@ -1,0 +1,280 @@
+package api
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/asm-platform/asm/internal/enterprise"
+	"github.com/asm-platform/asm/internal/store"
+)
+
+// SetLicenseRequest holds the incoming license token.
+type SetLicenseRequest struct {
+	Token string `json:"token" binding:"required"`
+}
+
+// SetLicense updates the license token for the active tenant.
+func (h *Handlers) SetLicense(c *gin.Context) {
+	var req SetLicenseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tenantID := store.TenantIDFromContext(c.Request.Context())
+	if tenantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	// 1. Verify the token first if a verifier is configured.
+	if h.licenseVerifier != nil {
+		claims, err := h.licenseVerifier.Verify(req.Token)
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("invalid license: %v", err)})
+			return
+		}
+
+		// Ensure the license is actually for THIS tenant.
+		if claims.TenantID != "" && claims.TenantID != tenantID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "license tenant mismatch"})
+			return
+		}
+	}
+
+	// 2. Persist to DB.
+	if err := h.store.UpdateTenantLicense(c.Request.Context(), tenantID, req.Token); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 3. Audit Log.
+	_ = enterprise.RecordAction(c.Request.Context(), h.store, enterprise.ActionLicenseUpdated, map[string]interface{}{
+		"token_received": true,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "license updated"})
+}
+
+// GetLicenseStatus returns the current license tier and metadata for the active tenant.
+func (h *Handlers) GetLicenseStatus(c *gin.Context) {
+	tenantID := store.TenantIDFromContext(c.Request.Context())
+	if tenantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	tenant, err := h.store.GetTenant(c.Request.Context(), tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// If no token, return default free tier status.
+	if tenant.LicenseToken == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"tier":      "free",
+			"managed":   false,
+			"features":  []string{"basic_execution"},
+		})
+		return
+	}
+
+	// If we have a token, decode it to show status.
+	if h.licenseVerifier == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"tier":    "unknown",
+			"error":   "license verifier not configured on server",
+			"token_present": true,
+		})
+		return
+	}
+
+	claims, err := h.licenseVerifier.Verify(tenant.LicenseToken)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"tier":  "invalid",
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Also fetch current usage counts.
+	currentWF, _ := h.store.CountDefinitions(c.Request.Context())
+	
+	since := time.Now().Add(-enterprise.MonthlyLookback)
+	currentRuns, _ := h.store.CountRuns(c.Request.Context(), store.RunFilter{
+		StartedFrom: &since,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"tier":              claims.Tier,
+		"issued_at":         claims.IssuedAt,
+		"expires_at":        claims.ExpiresAt,
+		"features":          claims.Features,
+		"max_runs":          claims.MaxRuns,
+		"current_runs":      currentRuns,
+		"max_workflows":     claims.MaxWorkflows,
+		"current_workflows": currentWF,
+		"managed":           true,
+	})
+}
+
+// UpdateBranding handles the configuration of tenant name and logo.
+func (h *Handlers) UpdateBranding(c *gin.Context) {
+	tenantID := store.TenantIDFromContext(c.Request.Context())
+	if tenantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	var req struct {
+		Name    string `json:"name" binding:"required"`
+		LogoURL string `json:"logo_url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.store.UpdateTenantBranding(c.Request.Context(), tenantID, req.Name, req.LogoURL); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	_ = enterprise.RecordAction(c.Request.Context(), h.store, enterprise.ActionBrandingUpdated, map[string]interface{}{
+		"name": req.Name,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "branding updated"})
+}
+
+// GetBranding returns the tenant's custom name and logo.
+func (h *Handlers) GetBranding(c *gin.Context) {
+	tenantID := store.TenantIDFromContext(c.Request.Context())
+	if tenantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	tenant, err := h.store.GetTenant(c.Request.Context(), tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"name":     tenant.Name,
+		"logo_url": tenant.LogoURL,
+	})
+}
+
+// UpdateSecrets updates tenant-scoped environment variables/secrets.
+func (h *Handlers) UpdateSecrets(c *gin.Context) {
+	tenantID := store.TenantIDFromContext(c.Request.Context())
+	if tenantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	var secrets map[string]string
+	if err := c.ShouldBindJSON(&secrets); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.store.UpdateTenantSecrets(c.Request.Context(), tenantID, secrets); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	_ = enterprise.RecordAction(c.Request.Context(), h.store, enterprise.ActionSecretsUpdated, map[string]interface{}{
+		"keys":   len(secrets),
+	})
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "secrets updated"})
+}
+
+// GetSecrets returns the keys of the tenant's secrets (values are masked).
+func (h *Handlers) GetSecrets(c *gin.Context) {
+	tenantID := store.TenantIDFromContext(c.Request.Context())
+	if tenantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	tenant, err := h.store.GetTenant(c.Request.Context(), tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	masked := make(map[string]string)
+	for k := range tenant.Secrets {
+		masked[k] = "****"
+	}
+
+	c.JSON(http.StatusOK, masked)
+}
+
+// ListAuditLogs returns the audit trail for the tenant.
+func (h *Handlers) ListAuditLogs(c *gin.Context) {
+	tenantID := store.TenantIDFromContext(c.Request.Context())
+	if tenantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	logs, err := h.store.ListAuditLogs(c.Request.Context(), tenantID, 50, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, logs)
+}
+
+// GetAnalytics returns performance metrics for the tenant.
+func (h *Handlers) GetAnalytics(c *gin.Context) {
+	tenantID := store.TenantIDFromContext(c.Request.Context())
+	if tenantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	stats, err := h.store.GetRunStats(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	_ = enterprise.RecordAction(c.Request.Context(), h.store, enterprise.ActionAnalyticsViewed, nil)
+
+	c.JSON(http.StatusOK, stats)
+}
+
+// SetIDPConfig handles the configuration of external OIDC providers.
+func (h *Handlers) SetIDPConfig(c *gin.Context) {
+	tenantID := store.TenantIDFromContext(c.Request.Context())
+	if tenantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	var req store.IDPConfig
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.TenantID = tenantID
+
+	if err := h.store.UpsertTenantIDPConfig(c.Request.Context(), &req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "IDP configuration updated"})
+}

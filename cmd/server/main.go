@@ -166,7 +166,7 @@ func main() {
 
 	// -- Engine --
 	engine := orchestrator.NewEngine(s, bus, temporalEngine)
-	slog.Info("Executor mode: temporal",
+	slog.Info("Temporal connected",
 		"address", cfg.TemporalAddress,
 		"namespace", cfg.TemporalNamespace,
 		"queue", cfg.TemporalTaskQueue)

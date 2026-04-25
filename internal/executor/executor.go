@@ -25,8 +25,8 @@ import (
 // maxToolIterations caps the tool-calling loop to prevent runaway agents.
 const maxToolIterations = 10
 
-// DirectExecutor runs agent activities in-process without Temporal.
-type DirectExecutor struct {
+// Executor runs agent activities.
+type Executor struct {
 	llmRegistry  *llm.Registry
 	bus          events.Bus
 	store        store.Store
@@ -34,8 +34,8 @@ type DirectExecutor struct {
 	globalTools  *tools.Registry // tools available to every agent
 }
 
-func NewDirectExecutor(registry *llm.Registry, bus events.Bus, s store.Store, defaultProvider string) *DirectExecutor {
-	return &DirectExecutor{
+func NewExecutor(registry *llm.Registry, bus events.Bus, s store.Store, defaultProvider string) *Executor {
+	return &Executor{
 		llmRegistry: registry,
 		bus:         bus,
 		store:       s,
@@ -45,22 +45,28 @@ func NewDirectExecutor(registry *llm.Registry, bus events.Bus, s store.Store, de
 }
 
 // RegisterTool adds a tool to the global registry, making it available to all agents.
-func (e *DirectExecutor) RegisterTool(t tools.Tool) {
+func (e *Executor) RegisterTool(t tools.Tool) {
 	e.globalTools.Register(t)
 }
 
-func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTask) (*asmtypes.AgentOutput, error) {
+func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*asmtypes.AgentOutput, error) {
 	agent := task.AgentDef
 	start := time.Now()
 
 	result := func(err error) {
 		dur := time.Since(start).Seconds()
-		metrics.AgentDurationSeconds.WithLabelValues(task.StateDef.Name, agent.Name).Observe(dur)
+		metrics.AgentDurationSeconds.WithLabelValues(task.StateDef.Name, agent.Name, task.TenantID).Observe(dur)
 		lbl := "success"
 		if err != nil {
 			lbl = "error"
 		}
-		metrics.AgentExecutionsTotal.WithLabelValues(task.StateDef.Name, agent.Name, lbl).Inc()
+		metrics.AgentExecutionsTotal.WithLabelValues(task.StateDef.Name, agent.Name, lbl, task.TenantID).Inc()
+	}
+
+	// Load tenant secrets for tool/prompt use.
+	var secrets map[string]string
+	if tenant, err := e.store.GetTenant(ctx, task.TenantID); err == nil {
+		secrets = tenant.Secrets
 	}
 
 	// Resolve LLM provider: per-agent config → registry default → env default → ollama fallback.
@@ -95,7 +101,7 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 	validTriggersStr := strings.Join(validTriggers, ", ")
 
 	// Build system prompt.
-	system, err := e.buildSystemPrompt(agent, task, validTriggers, validTriggersStr)
+	system, err := e.buildSystemPrompt(agent, task, validTriggers, validTriggersStr, secrets)
 	if err != nil {
 		err = fmt.Errorf("build system prompt: %w", err)
 		result(err)
@@ -283,7 +289,7 @@ func (e *DirectExecutor) Execute(ctx context.Context, task orchestrator.AgentTas
 //	  - name: validator
 //	    config:
 //	      mcp_servers: "{{ env.VALIDATE_MCP_URL }}"
-func (e *DirectExecutor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, task orchestrator.AgentTask) (*tools.Registry, error) {
+func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, task orchestrator.AgentTask) (*tools.Registry, error) {
 	reg := tools.NewRegistry()
 
 	serverList := agent.Config["mcp_servers"]
@@ -333,7 +339,7 @@ func (e *DirectExecutor) loadAgentTools(ctx context.Context, agent asmtypes.Agen
 	return reg, nil
 }
 
-func (e *DirectExecutor) executeTool(ctx context.Context, reg *tools.Registry, name string, inputJSON json.RawMessage) (json.RawMessage, error) {
+func (e *Executor) executeTool(ctx context.Context, reg *tools.Registry, name string, inputJSON json.RawMessage) (json.RawMessage, error) {
 	t, err := reg.Get(name)
 	if err != nil {
 		return nil, fmt.Errorf("tool '%s' not available: %w", name, err)
@@ -372,7 +378,7 @@ func toLLMTools(ts []tools.Tool) []llm.Tool {
 	return out
 }
 
-func (e *DirectExecutor) buildSystemPrompt(agent asmtypes.AgentDef, task orchestrator.AgentTask, validTriggers []string, validTriggersStr string) (string, error) {
+func (e *Executor) buildSystemPrompt(agent asmtypes.AgentDef, task orchestrator.AgentTask, validTriggers []string, validTriggersStr string, secrets map[string]string) (string, error) {
 	basePrompt := agentSystemPrompt
 
 	// File-based prompt template takes priority (complex, multi-paragraph prompts).
@@ -401,6 +407,7 @@ func (e *DirectExecutor) buildSystemPrompt(agent asmtypes.AgentDef, task orchest
 		"Rules":            agent.Rules,
 		"ValidTriggers":    validTriggers,
 		"ValidTriggersStr": validTriggersStr,
+		"Secrets":          secrets,
 	})
 	return buf.String(), nil
 }

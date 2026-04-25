@@ -48,11 +48,21 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!user.value && !!sessionStorage.getItem('access_token'))
   const role = computed(() => user.value?.role ?? null)
 
-  function hasRole(r) {
-    if (r === 'viewer') return isAuthenticated.value
-    if (r === 'operator') return ['operator', 'admin', 'super_admin'].includes(role.value)
-    if (r === 'admin') return ['admin', 'super_admin'].includes(role.value)
-    return false
+  function hasRole(allowed) {
+    if (!isAuthenticated.value) return false
+    const myRole = role.value
+    if (myRole === 'super_admin') return true
+
+    const check = (r) => {
+      if (r === 'viewer') return true
+      if (r === 'runner') return ['runner', 'operator', 'admin'].includes(myRole)
+      if (r === 'editor') return ['editor', 'operator', 'admin'].includes(myRole)
+      if (r === 'admin')  return myRole === 'admin'
+      return myRole === r
+    }
+
+    if (Array.isArray(allowed)) return allowed.some(check)
+    return check(allowed)
   }
 
   async function login(username, password) {

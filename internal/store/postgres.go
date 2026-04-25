@@ -44,37 +44,59 @@ func (s *PostgresStore) CreateTenant(ctx context.Context, t *Tenant) error {
 		t.CreatedAt = time.Now()
 	}
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO tenants (id, name, slug, created_at) VALUES ($1,$2,$3,$4)`,
-		t.ID, t.Name, t.Slug, t.CreatedAt,
+		`INSERT INTO tenants (id, name, slug, license_token, created_at) VALUES ($1,$2,$3,$4,$5)`,
+		t.ID, t.Name, t.Slug, t.LicenseToken, t.CreatedAt,
 	)
 	return err
 }
 
 func (s *PostgresStore) GetTenant(ctx context.Context, id string) (*Tenant, error) {
 	var t Tenant
+	var logoURL, licenseToken *string
+	var secretsBytes []byte
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, name, slug, created_at FROM tenants WHERE id=$1`, id,
-	).Scan(&t.ID, &t.Name, &t.Slug, &t.CreatedAt)
+		`SELECT id, name, slug, logo_url, secrets, license_token, created_at FROM tenants WHERE id=$1`, id,
+	).Scan(&t.ID, &t.Name, &t.Slug, &logoURL, &secretsBytes, &licenseToken, &t.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("tenant '%s' not found: %w", id, err)
+	}
+	if logoURL != nil {
+		t.LogoURL = *logoURL
+	}
+	if licenseToken != nil {
+		t.LicenseToken = *licenseToken
+	}
+	if len(secretsBytes) > 0 {
+		_ = json.Unmarshal(secretsBytes, &t.Secrets)
 	}
 	return &t, nil
 }
 
 func (s *PostgresStore) GetTenantBySlug(ctx context.Context, slug string) (*Tenant, error) {
 	var t Tenant
+	var logoURL, licenseToken *string
+	var secretsBytes []byte
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, name, slug, created_at FROM tenants WHERE slug=$1`, slug,
-	).Scan(&t.ID, &t.Name, &t.Slug, &t.CreatedAt)
+		`SELECT id, name, slug, logo_url, secrets, license_token, created_at FROM tenants WHERE slug=$1`, slug,
+	).Scan(&t.ID, &t.Name, &t.Slug, &logoURL, &secretsBytes, &licenseToken, &t.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("tenant '%s' not found: %w", slug, err)
+	}
+	if logoURL != nil {
+		t.LogoURL = *logoURL
+	}
+	if licenseToken != nil {
+		t.LicenseToken = *licenseToken
+	}
+	if len(secretsBytes) > 0 {
+		_ = json.Unmarshal(secretsBytes, &t.Secrets)
 	}
 	return &t, nil
 }
 
 func (s *PostgresStore) ListTenants(ctx context.Context) ([]*Tenant, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, name, slug, created_at FROM tenants ORDER BY created_at ASC`)
+		`SELECT id, name, slug, logo_url, secrets, license_token, created_at FROM tenants ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -82,17 +104,111 @@ func (s *PostgresStore) ListTenants(ctx context.Context) ([]*Tenant, error) {
 	var out []*Tenant
 	for rows.Next() {
 		var t Tenant
-		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.CreatedAt); err != nil {
+		var logoURL, licenseToken *string
+		var secretsBytes []byte
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &logoURL, &secretsBytes, &licenseToken, &t.CreatedAt); err != nil {
 			return nil, err
+		}
+		if logoURL != nil {
+			t.LogoURL = *logoURL
+		}
+		if licenseToken != nil {
+			t.LicenseToken = *licenseToken
+		}
+		if len(secretsBytes) > 0 {
+			_ = json.Unmarshal(secretsBytes, &t.Secrets)
 		}
 		out = append(out, &t)
 	}
 	return out, nil
 }
 
+
 func (s *PostgresStore) DeleteTenant(ctx context.Context, id string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM tenants WHERE id=$1`, id)
 	return err
+}
+
+func (s *PostgresStore) UpdateTenantBranding(ctx context.Context, id, name, logoURL string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE tenants SET name=$2, logo_url=$3 WHERE id=$1`, id, name, logoURL)
+	return err
+}
+
+func (s *PostgresStore) UpdateTenantSecrets(ctx context.Context, id string, secrets map[string]string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE tenants SET secrets=$2 WHERE id=$1`, id, secrets)
+	return err
+}
+
+func (s *PostgresStore) UpdateTenantLicense(ctx context.Context, id, token string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE tenants SET license_token=$2 WHERE id=$1`, id, token)
+	return err
+}
+
+func (s *PostgresStore) GetTenantIDPConfig(ctx context.Context, tenantID string) (*IDPConfig, error) {
+	var cfg IDPConfig
+	var roleMapping []byte
+	err := s.pool.QueryRow(ctx,
+		`SELECT tenant_id, issuer_url, client_id, client_secret, role_mapping, active FROM tenant_idp_configs WHERE tenant_id=$1`,
+		tenantID,
+	).Scan(&cfg.TenantID, &cfg.IssuerURL, &cfg.ClientID, &cfg.ClientSecret, &roleMapping, &cfg.Active)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(roleMapping, &cfg.RoleMapping); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func (s *PostgresStore) UpsertTenantIDPConfig(ctx context.Context, cfg *IDPConfig) error {
+	roleMapping, _ := json.Marshal(cfg.RoleMapping)
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO tenant_idp_configs (tenant_id, issuer_url, client_id, client_secret, role_mapping, active)
+		 VALUES ($1,$2,$3,$4,$5,$6)
+		 ON CONFLICT (tenant_id) DO UPDATE SET
+		 issuer_url = EXCLUDED.issuer_url,
+		 client_id = EXCLUDED.client_id,
+		 client_secret = EXCLUDED.client_secret,
+		 role_mapping = EXCLUDED.role_mapping,
+		 active = EXCLUDED.active,
+		 updated_at = CURRENT_TIMESTAMP`,
+		cfg.TenantID, cfg.IssuerURL, cfg.ClientID, cfg.ClientSecret, roleMapping, cfg.Active,
+	)
+	return err
+}
+
+func (s *PostgresStore) RecordAuditLog(ctx context.Context, entry *AuditLog) error {
+	details, _ := json.Marshal(entry.Details)
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO audit_logs (tenant_id, user_id, action, details, ip_address) VALUES ($1,$2,$3,$4,$5)`,
+		entry.TenantID, entry.UserID, entry.Action, details, entry.IPAddress,
+	)
+	return err
+}
+
+func (s *PostgresStore) ListAuditLogs(ctx context.Context, tenantID string, limit, offset int) ([]*AuditLog, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, tenant_id, user_id, action, details, ip_address, created_at
+		 FROM audit_logs WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+		tenantID, limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*AuditLog
+	for rows.Next() {
+		var l AuditLog
+		var details []byte
+		err := rows.Scan(&l.ID, &l.TenantID, &l.UserID, &l.Action, &details, &l.IPAddress, &l.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal(details, &l.Details)
+		out = append(out, &l)
+	}
+	return out, nil
 }
 
 func (s *PostgresStore) HasAnyTenant(ctx context.Context) (bool, error) {
@@ -353,6 +469,19 @@ func (s *PostgresStore) DeleteDefinition(ctx context.Context, name, version stri
 	return err
 }
 
+func (s *PostgresStore) CountDefinitions(ctx context.Context) (int, error) {
+	tenantID := TenantIDFromContext(ctx)
+	query := `SELECT COUNT(DISTINCT name) FROM workflow_definitions`
+	var args []interface{}
+	if tenantID != "" {
+		query += " WHERE tenant_id=$1"
+		args = append(args, tenantID)
+	}
+	var count int
+	err := s.pool.QueryRow(ctx, query, args...).Scan(&count)
+	return count, err
+}
+
 // -- RunStore --
 
 func (s *PostgresStore) CreateRun(ctx context.Context, run *asmtypes.WorkflowRun) error {
@@ -539,6 +668,64 @@ func (s *PostgresStore) ListTransitions(ctx context.Context, runID string) ([]*a
 			r.AgentOutput = &output
 		}
 		out = append(out, &r)
+	}
+	return out, nil
+}
+
+func (s *PostgresStore) CountRuns(ctx context.Context, filter RunFilter) (int, error) {
+	query := `SELECT COUNT(*) FROM workflow_runs WHERE TRUE`
+	var args []interface{}
+	i := 1
+	if filter.TenantID != "" {
+		query += fmt.Sprintf(" AND tenant_id=$%d", i)
+		args = append(args, filter.TenantID)
+		i++
+	}
+	if filter.WorkflowName != "" {
+		query += fmt.Sprintf(" AND workflow_name=$%d", i)
+		args = append(args, filter.WorkflowName)
+		i++
+	}
+	if filter.Status != "" {
+		query += fmt.Sprintf(" AND status=$%d", i)
+		args = append(args, string(filter.Status))
+		i++
+	}
+	if filter.StartedFrom != nil {
+		query += fmt.Sprintf(" AND started_at >= $%d", i)
+		args = append(args, *filter.StartedFrom)
+		i++
+	}
+	if filter.StartedTo != nil {
+		query += fmt.Sprintf(" AND started_at <= $%d", i)
+		args = append(args, *filter.StartedTo)
+		i++
+	}
+
+	var count int
+	err := s.pool.QueryRow(ctx, query, args...).Scan(&count)
+	return count, err
+}
+
+func (s *PostgresStore) GetRunStats(ctx context.Context) (map[string]int, error) {
+	tenantID := TenantIDFromContext(ctx)
+	rows, err := s.pool.Query(ctx,
+		`SELECT status, count(*) FROM workflow_runs WHERE tenant_id=$1 GROUP BY status`,
+		tenantID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]int)
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		out[status] = count
 	}
 	return out, nil
 }

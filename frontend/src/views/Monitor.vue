@@ -152,16 +152,38 @@
               <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/>
               Task
             </span>
+            <span v-else-if="tab.id === 'snapshot'" class="flex items-center justify-center gap-1">
+               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
+                  <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+               </svg>
+               Snapshot
+            </span>
             <span v-else>{{ tab.label }}</span>
           </button>
         </div>
 
-        <!-- Blackboard tab -->
+        <!-- Blackboard tab (Live) -->
         <BlackboardPanel
           v-if="activeTab === 'blackboard'"
           :blackboard="run?.blackboard"
           class="flex-1 overflow-hidden"
         />
+
+        <!-- Snapshot tab (Historical) -->
+        <div v-else-if="activeTab === 'snapshot' && selectedTransition" class="flex-1 flex flex-col overflow-hidden">
+           <div class="px-4 py-2 border-b border-border bg-indigo-500/5 flex items-center justify-between">
+              <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Historical State</span>
+              <button @click="selectedTransition = null; activeTab = 'blackboard'" class="text-[9px] text-slate-500 hover:text-slate-300">Close</button>
+           </div>
+           <div v-if="selectedTransition.agent_output?.reasoning" class="p-3 border-b border-border bg-surface-2">
+              <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Agent Reasoning</h4>
+              <p class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap leading-relaxed">{{ selectedTransition.agent_output.reasoning }}</p>
+           </div>
+           <BlackboardPanel
+             :blackboard="selectedTransition.blackboard_snapshot"
+             class="flex-1 overflow-hidden"
+           />
+        </div>
 
         <!-- Debug tabs (admin only) -->
         <LLMDebugPanel
@@ -259,16 +281,22 @@
             <div
               v-for="(t, i) in history"
               :key="i"
-              class="relative pl-8 pb-4 last:pb-2"
+              class="group relative pl-8 pb-4 last:pb-2 cursor-pointer"
+              @click="inspectTransition(t)"
             >
               <!-- Timeline dot -->
-              <div class="absolute left-1.5 top-1.5 w-[11px] h-[11px] rounded-full border-2 border-indigo-500 bg-surface-1 z-10"/>
+              <div 
+                :class="[
+                  'absolute left-1.5 top-1.5 w-[11px] h-[11px] rounded-full border-2 z-10 transition-all',
+                  selectedTransition?.id === t.id ? 'border-accent bg-accent scale-125' : 'border-indigo-500 bg-surface-1 group-hover:border-accent'
+                ]"
+              />
 
               <!-- Content -->
-              <div class="space-y-1">
+              <div :class="['space-y-1 transition-opacity', selectedTransition && selectedTransition.id !== t.id ? 'opacity-40' : 'opacity-100']">
                 <!-- State arrived at -->
-                <div class="flex items-baseline gap-1.5">
-                  <span class="text-xs font-mono font-medium text-slate-200">{{ t.to_state }}</span>
+                <div class="flex items-baseline gap-1.5 font-display">
+                  <span class="text-xs font-bold text-slate-200">{{ t.to_state }}</span>
                 </div>
 
                 <!-- Trigger badge + origin -->
@@ -391,6 +419,7 @@ const showBlackboardTweak = ref(false)
 const tweakView = ref('form')
 const editedBlackboard = ref({})
 const resolveError = ref('')
+const selectedTransition = ref(null)
 
 const run          = computed(() => execStore.activeRun)
 const history      = computed(() => execStore.transitions)
@@ -429,6 +458,9 @@ const visibleTabs  = computed(() => {
   if (authStore.hasRole('admin')) {
     tabs.push({ id: 'debug', label: 'LLM Debug' })
     tabs.push({ id: 'mcp',   label: 'MCP Debug' })
+  }
+  if (selectedTransition.value) {
+    tabs.push({ id: 'snapshot', label: 'Snapshot' })
   }
   return tabs
 })
@@ -577,6 +609,16 @@ async function stopRun() {
 function onEditClick() {
   if (!run.value) return
   router.push(`/designer/${run.value.workflow_name}/${run.value.workflow_version}`)
+}
+
+function inspectTransition(t) {
+  if (selectedTransition.value?.id === t.id) {
+    selectedTransition.value = null
+    activeTab.value = 'blackboard'
+  } else {
+    selectedTransition.value = t
+    activeTab.value = 'snapshot'
+  }
 }
 
 // ── Formatting ────────────────────────────────────────────────────────────────

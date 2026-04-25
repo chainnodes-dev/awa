@@ -480,7 +480,7 @@ assign the correct ASM type to every state.
 | hitl | A human must take an action or approve something |
 | wait | Pause until an external event arrives or a condition is met |
 | emit_event | Fire a platform event to trigger other workflows |
-| skill_call | Invoke a registered sub-workflow/skill |
+| subprocess | Invoke a registered sub-workflow (process) |
 
 ## Classification rules
 

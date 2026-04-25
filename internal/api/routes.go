@@ -29,6 +29,10 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 		authGroup.POST("/login", h.Login)
 		authGroup.POST("/refresh", h.RefreshToken)
 		authGroup.POST("/logout", auth.RequireAuth(jwtSvc), h.Logout)
+		
+		// OIDC / OAuth2.0
+		authGroup.GET("/oidc/login", h.OIDCLogin)
+		authGroup.GET("/oidc/callback", h.OIDCCallback)
 	}
 
 	// ── Protected ────────────────────────────────────────────────────────────
@@ -54,8 +58,8 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			wf.GET("/:name/versions", h.ListWorkflowVersions)
 			wf.GET("/:name/v/:version", h.GetWorkflowByVersion)
 			wf.GET("/:name/:version", h.GetWorkflow)
-			wf.POST("", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.CreateWorkflow)
-			wf.DELETE("/:name/:version", auth.RequireRole(auth.RoleAdmin), h.DeleteWorkflow)
+			wf.POST("", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor, auth.RoleOperator), h.CreateWorkflow)
+			wf.DELETE("/:name/:version", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor), h.DeleteWorkflow)
 		}
 
 		// Workflow runs.
@@ -65,10 +69,10 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			runs.GET("/:id", h.GetRun)
 			runs.GET("/:id/history", h.GetRunHistory)
 			runs.GET("/:id/mcp-logs", h.GetMCPLogs)
-			runs.POST("", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.StartRun)
-			runs.POST("/:id/trigger", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.TriggerRun)
-			runs.POST("/:id/signal", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.SignalHITL)
-			runs.POST("/:id/terminate", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator), h.TerminateRun)
+			runs.POST("", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.StartRun)
+			runs.POST("/:id/trigger", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.TriggerRun)
+			runs.POST("/:id/signal", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.SignalHITL)
+			runs.POST("/:id/terminate", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.TerminateRun)
 			runs.DELETE("/:id", auth.RequireRole(auth.RoleAdmin), h.DeleteRun)
 		}
 
@@ -77,7 +81,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 
 		// MCP Server Registry — readable by all authenticated users; write requires admin.
 		api.GET("/mcp-servers", h.ListMCPServers)
-		mcpServers := api.Group("/mcp-servers", auth.RequireRole(auth.RoleAdmin))
+		mcpServers := api.Group("/mcp-servers", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor))
 		{
 			mcpServers.POST("", h.CreateMCPServer)
 			mcpServers.POST("/discover", h.DiscoverMCPServer)
@@ -86,8 +90,8 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			mcpServers.POST("/:id/ping", h.PingMCPServer)
 		}
 
-		// LLM provider configuration — admin only.
-		llmCfg := api.Group("/llm-configs", auth.RequireRole(auth.RoleAdmin))
+		// LLM provider configuration — admin/editor.
+		llmCfg := api.Group("/llm-configs", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor))
 		{
 			llmCfg.GET("", h.ListLLMConfigs)
 			llmCfg.PUT("/:provider", h.UpsertLLMConfig)
@@ -97,8 +101,8 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 		}
 
 
-		// AI Workflow Designer — operator/admin only.
-		designerGroup := api.Group("/designer", auth.RequireRole(auth.RoleAdmin, auth.RoleOperator))
+		// AI Workflow Designer — editor/operator/admin only.
+		designerGroup := api.Group("/designer", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor, auth.RoleOperator))
 		{
 			designerGroup.POST("/generate", h.GenerateWorkflow)
 			designerGroup.POST("/scaffold", h.ScaffoldHandler)
@@ -134,6 +138,26 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			tenants.GET("", h.ListTenants)
 			tenants.GET("/:id", h.GetTenant)
 			tenants.DELETE("/:id", h.DeleteTenant)
+		}
+
+		// Enterprise Licensing & Branding
+		ent := api.Group("/enterprise")
+		{
+			// Branding is visible to all logged-in users for UI consistency.
+			ent.GET("/branding", h.GetBranding)
+
+			// Config and status require admin.
+			entAdmin := ent.Group("", auth.RequireRole(auth.RoleAdmin))
+			{
+				entAdmin.POST("/license", h.SetLicense)
+				entAdmin.GET("/status", h.GetLicenseStatus)
+				entAdmin.POST("/branding", h.UpdateBranding)
+				entAdmin.GET("/secrets", h.GetSecrets)
+				entAdmin.POST("/secrets", h.UpdateSecrets)
+				entAdmin.GET("/audit-logs", h.ListAuditLogs)
+				entAdmin.GET("/analytics", h.GetAnalytics)
+				entAdmin.PUT("/oidc", h.SetIDPConfig)
+			}
 		}
 	}
 

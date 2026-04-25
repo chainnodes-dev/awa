@@ -151,6 +151,7 @@ import { useRouter, RouterLink } from 'vue-router'
 import { useWorkflowStore } from '@/stores/workflows'
 import { useExecutionStore } from '@/stores/execution'
 import { useAuthStore } from '@/stores/auth'
+import { useEnterpriseStore } from '@/stores/enterprise'
 
 import StartRunModal from '@/components/shared/StartRunModal.vue'
 
@@ -158,6 +159,7 @@ const router = useRouter()
 const wfStore = useWorkflowStore()
 const execStore = useExecutionStore()
 const authStore = useAuthStore()
+const entStore = useEnterpriseStore()
 const selectedDef = ref(null)
 
 // Run filters — default "Started from" to today
@@ -211,19 +213,26 @@ async function confirmDeleteAll() {
   }
 }
 
-onMounted(() => {
-  wfStore.fetchAll()
-  applyFilters()
-  execStore.fetchPendingHITL()
+onMounted(async () => {
+  await Promise.all([
+    wfStore.fetchAll(),
+    execStore.fetchRuns(),
+    execStore.fetchPendingHITL(),
+    entStore.fetchAnalytics()
+  ])
 })
 
 const stats = computed(() => {
-  const runs = execStore.runs
+  const analytics = entStore.analytics || {}
+  const total = Object.values(analytics).reduce((a, b) => a + b, 0)
+  const completed = analytics.complete || 0
+  const successRate = total > 0 ? Math.round((completed / total) * 100) : 0
+
   return [
-    { label: 'Total Workflows', value: wfStore.definitions.length, color: 'indigo' },
-    { label: 'Active Runs',     value: runs.filter(r => r.status === 'running').length,  color: 'blue' },
-    { label: 'Awaiting HITL',   value: runs.filter(r => r.status === 'waiting').length,  color: 'amber' },
-    { label: 'Completed Today', value: runs.filter(r => r.status === 'complete').length, color: 'green' },
+    { label: 'Saved Designs', value: wfStore.definitions.length, color: 'indigo' },
+    { label: 'Active Runs', value: analytics.running || 0, color: 'emerald' },
+    { label: 'Avg Success', value: `${successRate}%`, color: 'blue' },
+    { label: 'Open HITL', value: execStore.pendingHITL.length, color: 'amber' }
   ]
 })
 

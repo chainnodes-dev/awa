@@ -11,6 +11,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/asm-platform/asm/internal/config"
+	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor"
 	"github.com/asm-platform/asm/internal/executor/llm"
@@ -63,7 +64,7 @@ func main() {
 		}
 		s = pgStore
 	} else {
-		slog.Error("DATABASE_URL is required in temporal mode")
+		slog.Error("DATABASE_URL is required")
 		os.Exit(1)
 	}
 	defer s.Close()
@@ -85,7 +86,7 @@ func main() {
 	}
 
 	// -- Executor (runs LLM calls inside Temporal activities) --
-	exec := executor.NewDirectExecutor(llmRegistry, bus, s, activeLLMProvider)
+	exec := executor.NewExecutor(llmRegistry, bus, s, activeLLMProvider)
 
 	// Reload LLM registry from DB periodically to pick up UI config changes.
 	go func() {
@@ -111,7 +112,17 @@ func main() {
 	defer temporalClient.Close()
 
 	// -- Activities + Worker --
-	acts := temporalpkg.NewActivities(s, bus, exec, temporalClient)
+	var verifier *enterprise.Verifier
+	if cfg.LicensePublicKey != "" {
+		pub, err := enterprise.ParseRSAPublicKey(cfg.LicensePublicKey)
+		if err != nil {
+			slog.Error("Failed to parse license public key", "error", err)
+		} else {
+			verifier = enterprise.NewVerifier(pub)
+		}
+	}
+
+	acts := temporalpkg.NewActivities(s, bus, exec, temporalClient, verifier)
 	w := temporalpkg.NewWorker(temporalClient, cfg.TemporalTaskQueue, acts)
 
 	// Graceful shutdown on SIGINT / SIGTERM.

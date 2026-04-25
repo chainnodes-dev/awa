@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/asm-platform/asm/internal/auth"
 	"github.com/asm-platform/asm/internal/designer"
+	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
@@ -29,12 +32,21 @@ type Handlers struct {
 	jwtSvc      *auth.JWTService
 	// generator is nil when no LLM key is configured.
 	generator   *designer.Generator
-	scheduler   SchedulerAdder
-	llmRegistry *llm.Registry
+	scheduler       SchedulerAdder
+	llmRegistry     *llm.Registry
+	licenseVerifier *enterprise.Verifier
 }
 
-func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, sched SchedulerAdder, llmReg *llm.Registry) *Handlers {
-	return &Handlers{engine: engine, store: s, jwtSvc: jwtSvc, generator: gen, scheduler: sched, llmRegistry: llmReg}
+func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier) *Handlers {
+	return &Handlers{
+		engine:          engine,
+		store:           s,
+		jwtSvc:          jwtSvc,
+		generator:       gen,
+		scheduler:       sched,
+		llmRegistry:     llmReg,
+		licenseVerifier: verifier,
+	}
 }
 
 // -- Workflow Definitions --
@@ -76,6 +88,11 @@ func (h *Handlers) CreateWorkflow(c *gin.Context) {
 	def, yamlSource, err := asmtypes.LoadFromYAML([]byte(body.YAML))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.checkCreateWorkflowLimit(c); err != nil {
+		c.JSON(http.StatusPaymentRequired, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -220,6 +237,11 @@ func (h *Handlers) StartRun(c *gin.Context) {
 		return
 	}
 
+	if err := h.checkRunLimit(c); err != nil {
+		c.JSON(http.StatusPaymentRequired, gin.H{"error": err.Error()})
+		return
+	}
+
 	run, err := h.engine.StartRun(c.Request.Context(), body.WorkflowName, body.WorkflowVersion, body.Input)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -275,4 +297,64 @@ func (h *Handlers) GetMCPLogs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, logs)
+}
+// -- License Gating Helpers --
+
+func (h *Handlers) getLicenseClaims(ctx context.Context) (*enterprise.LicenseClaims, error) {
+	tenantID := store.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenant context missing")
+	}
+	tenant, err := h.store.GetTenant(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if tenant.LicenseToken == "" {
+		return &enterprise.LicenseClaims{Tier: enterprise.TierFree, MaxWorkflows: 5, MaxRuns: 100}, nil
+	}
+	return h.licenseVerifier.Verify(tenant.LicenseToken)
+}
+
+func (h *Handlers) checkCreateWorkflowLimit(c *gin.Context) error {
+	claims, err := h.getLicenseClaims(c.Request.Context())
+	if err != nil {
+		return err
+	}
+	if claims.MaxWorkflows == 0 { // Unlimited
+		return nil
+	}
+
+	count, err := h.store.CountDefinitions(c.Request.Context())
+	if err != nil {
+		return err
+	}
+	if count >= claims.MaxWorkflows {
+		return fmt.Errorf("tier limit reached: maximum %d workflows allowed for your tier", claims.MaxWorkflows)
+	}
+	return nil
+}
+
+func (h *Handlers) checkRunLimit(c *gin.Context) error {
+	claims, err := h.getLicenseClaims(c.Request.Context())
+	if err != nil {
+		return err
+	}
+	if claims.MaxRuns == 0 { // Unlimited
+		return nil
+	}
+
+	now := time.Now()
+	beginningOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	filter := store.RunFilter{
+		TenantID:    store.TenantIDFromContext(c.Request.Context()),
+		StartedFrom: &beginningOfMonth,
+	}
+	count, err := h.store.CountRuns(c.Request.Context(), filter)
+	if err != nil {
+		return err
+	}
+	if count >= claims.MaxRuns {
+		return fmt.Errorf("tier limit reached: maximum %d runs per month allowed for your tier", claims.MaxRuns)
+	}
+	return nil
 }

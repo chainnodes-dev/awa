@@ -21,9 +21,6 @@ type Config struct {
 	TemporalNamespace string
 	TemporalTaskQueue string
 
-	// Execution
-	ExecutorMode string // "direct" | "temporal"
-
 	// LLM
 	LLMProvider  string // "anthropic" | "openai" | "ollama"
 	AnthropicKey string
@@ -40,7 +37,8 @@ type Config struct {
 	// Auth
 	JWTSecret     string // HS256 signing key — must be set in production
 	AdminUsername string // seed admin username on first boot
-	AdminPassword string // seed admin password on first boot
+	AdminPassword    string // seed admin password on first boot
+	LicensePublicKey string // PEM-encoded RSA public key for verification
 
 	// Logging
 	LogLevel string
@@ -55,7 +53,6 @@ func Load() *Config {
 		TemporalAddress:   getEnv("TEMPORAL_ADDRESS", "localhost:7233"),
 		TemporalNamespace: getEnv("TEMPORAL_NAMESPACE", "default"),
 		TemporalTaskQueue: getEnv("TEMPORAL_TASK_QUEUE", "asm-workers"),
-		ExecutorMode:      getEnv("EXECUTOR_MODE", "direct"),
 		LLMProvider:       getEnv("LLM_PROVIDER", ""),
 		AnthropicKey:      getEnv("ANTHROPIC_API_KEY", ""),
 		OpenAIKey:         getEnv("OPENAI_API_KEY", ""),
@@ -69,6 +66,7 @@ func Load() *Config {
 		AdminUsername:     getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:     getEnv("ADMIN_PASSWORD", "pwd"),
 		LogLevel:          getEnv("LOG_LEVEL", "info"),
+		LicensePublicKey:  getEnv("LICENSE_PUBLIC_KEY", ""),
 	}
 }
 

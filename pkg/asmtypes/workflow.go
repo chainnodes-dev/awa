@@ -9,8 +9,8 @@ type WorkflowDef struct {
 	APIVersion   string           `yaml:"apiVersion"   json:"apiVersion"`
 	Kind         string           `yaml:"kind"         json:"kind"`
 	Metadata     WorkflowMeta     `yaml:"metadata"     json:"metadata"`
-	Inputs       []SkillPortDef   `yaml:"inputs,omitempty" json:"inputs,omitempty"`
-	Outputs      []SkillPortDef   `yaml:"outputs,omitempty" json:"outputs,omitempty"`
+	Inputs       []PortDef        `yaml:"inputs,omitempty" json:"inputs,omitempty"`
+	Outputs      []PortDef        `yaml:"outputs,omitempty" json:"outputs,omitempty"`
 	Capabilities []CapabilityDecl `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
 	Blackboard   BlackboardDef    `yaml:"blackboard"   json:"blackboard"`
 	States       []StateDef       `yaml:"states"       json:"states"`
@@ -47,8 +47,8 @@ type FieldDef struct {
 	Default  interface{} `yaml:"default,omitempty"  json:"default,omitempty"`
 }
 
-// SkillPortDef describes a single typed input or output port of a reusable workflow.
-type SkillPortDef struct {
+// PortDef describes a single typed input or output port of a reusable workflow.
+type PortDef struct {
 	Name        string `yaml:"name"                  json:"name"`
 	Type        string `yaml:"type"                  json:"type"` // string | number | bool | object
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
@@ -71,7 +71,7 @@ const (
 	StateScript       StateType = "script"     // Deterministic expr-lang evaluation; no LLM
 	StateWait         StateType = "wait"       // Pauses until a condition is met or timeout
 	StateCode         StateType = "code"       // User-defined JavaScript executed via goja
-	StateSkillCall    StateType = "skill_call" // Invokes another skill as a child workflow
+	StateSubProcess   StateType = "subprocess" // Invokes another process as a child workflow
 	StateEmitEvent    StateType = "emit_event" // Fires a named platform event to the bus
 )
 
@@ -92,8 +92,8 @@ type StateDef struct {
 	OnCondition string `yaml:"on_condition,omitempty" json:"on_condition,omitempty"`
 	// Code is set when type == "code" (JavaScript executed via goja).
 	Code *CodeDef `yaml:"code,omitempty" json:"code,omitempty"`
-	// SkillCall is set when type == "skill_call".
-	SkillCall *SkillCallDef `yaml:"skill_call,omitempty" json:"skill_call,omitempty"`
+	// SubProcess is set when type == "subprocess".
+	SubProcess *SubProcessDef `yaml:"subprocess,omitempty" json:"subprocess,omitempty"`
 	// EmitEvent is set when type == "emit_event".
 	EmitEvent *EmitEventDef `yaml:"emit_event,omitempty" json:"emit_event,omitempty"`
 	// OnEvent names a platform event that will wake this wait state.
@@ -124,18 +124,20 @@ type EmitEventDef struct {
 	CompletionTrigger string `yaml:"completion_trigger,omitempty" json:"completion_trigger,omitempty"`
 }
 
-// SkillCallDef describes a delegation to another reusable workflow.
-type SkillCallDef struct {
-	// SkillRef is the name of the workflow/process to invoke.
-	SkillRef          string            `yaml:"skill_ref"                     json:"skill_ref"`
+// SubProcessDef describes a delegation to another reusable workflow.
+type SubProcessDef struct {
+	// ProcessRef is the name of the workflow/process to invoke.
+	ProcessRef string `yaml:"process_ref"                     json:"process_ref"`
+	// ProcessVersion is an optional specific version to invoke (default: "latest").
+	ProcessVersion string `yaml:"process_version,omitempty"       json:"process_version,omitempty"`
 	// CompletionTrigger is fired when the sub-process completes successfully.
-	CompletionTrigger string            `yaml:"completion_trigger,omitempty"  json:"completion_trigger,omitempty"`
+	CompletionTrigger string `yaml:"completion_trigger,omitempty"  json:"completion_trigger,omitempty"`
 	// FailureTrigger is fired if the sub-process fails or is terminated.
-	FailureTrigger    string            `yaml:"failure_trigger,omitempty"     json:"failure_trigger,omitempty"`
+	FailureTrigger string `yaml:"failure_trigger,omitempty"     json:"failure_trigger,omitempty"`
 	// InputMappings maps parent blackboard fields to sub-process input ports.
-	InputMappings     map[string]string `yaml:"input_mappings,omitempty"      json:"input_mappings,omitempty"`
+	InputMappings map[string]string `yaml:"input_mappings,omitempty"      json:"input_mappings,omitempty"`
 	// OutputMappings maps sub-process output ports back to parent blackboard fields.
-	OutputMappings    map[string]string `yaml:"output_mappings,omitempty"     json:"output_mappings,omitempty"`
+	OutputMappings map[string]string `yaml:"output_mappings,omitempty"     json:"output_mappings,omitempty"`
 }
 
 // ScriptDef defines deterministic inline logic for a state of type "script".

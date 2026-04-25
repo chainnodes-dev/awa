@@ -37,16 +37,22 @@ type HITLResolutionPayload struct {
 
 // UpdateRunParams is the activity input for updating a run's persisted state.
 type UpdateRunParams struct {
-	RunID        string
-	CurrentState string
-	Status       asmtypes.RunStatus
-	Blackboard   map[string]interface{}
-	IsTerminal   bool // set CompletedAt when true
+	RunID           string
+	TenantID        string // for metrics
+	WorkflowName    string // for metrics
+	WorkflowVersion string // for metrics
+	CurrentState    string
+	Status          asmtypes.RunStatus
+	Blackboard      map[string]interface{}
+	IsTerminal      bool // set CompletedAt when true
 }
 
 // RecordTransitionParams is the activity input for appending a transition record.
 type RecordTransitionParams struct {
-	Record *asmtypes.TransitionRecord
+	TenantID        string // for metrics
+	WorkflowName    string // for metrics
+	WorkflowVersion string // for metrics
+	Record          *asmtypes.TransitionRecord
 }
 
 // PublishEventParams is the activity input for publishing a bus event.
@@ -62,31 +68,40 @@ type CreateHITLParams struct {
 
 // ExecuteAgentParams is the activity input for running an LLM agent.
 type ExecuteAgentParams struct {
-	RunID      string
-	AgentDef   asmtypes.AgentDef
-	StateDef   asmtypes.StateDef
-	Blackboard map[string]interface{}
-	Def        *asmtypes.WorkflowDef
+	RunID           string
+	TenantID        string
+	WorkflowName    string // for metrics
+	WorkflowVersion string // for metrics
+	AgentDef        asmtypes.AgentDef
+	StateDef        asmtypes.StateDef
+	Blackboard      map[string]interface{}
+	Def             *asmtypes.WorkflowDef
 }
 
 // ExecuteCodeParams is the activity input for running a user JavaScript code node.
 type ExecuteCodeParams struct {
-	RunID         string
-	StateDef      asmtypes.StateDef
-	Blackboard    map[string]interface{}
-	ValidTriggers []string
+	RunID           string
+	TenantID        string
+	WorkflowName    string // for metrics
+	WorkflowVersion string // for metrics
+	StateDef        asmtypes.StateDef
+	Blackboard      map[string]interface{}
+	ValidTriggers   []string
 }
 
-// LoadWorkflowDefParams is the activity input for loading the latest WorkflowDef by name.
-// Used by skill_call states to resolve the child workflow before launching it.
+// LoadWorkflowDefParams is the activity input for loading a WorkflowDef by name and version.
+// Used by subprocess states to resolve the child workflow before launching it.
 type LoadWorkflowDefParams struct {
+	TenantID     string
 	WorkflowName string
+	Version      string // optional; empty string triggers latest lookup
 }
 
 // GetRunBlackboardParams is the activity input for reading the terminal blackboard of a run.
 // Used after a child skill workflow completes to extract its output fields.
 type GetRunBlackboardParams struct {
-	RunID string
+	TenantID string
+	RunID    string
 }
 
 // RegisterEventSubscriptionParams is the activity input for registering a wait-on-event subscription.

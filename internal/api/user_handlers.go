@@ -42,7 +42,7 @@ func (h *Handlers) CreateUser(c *gin.Context) {
 		return
 	}
 	if !auth.ValidRole(body.Role) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be admin, operator, or viewer"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be admin, editor, runner, or viewer"})
 		return
 	}
 
@@ -77,7 +77,7 @@ func (h *Handlers) UpdateUserRole(c *gin.Context) {
 		return
 	}
 	if !auth.ValidRole(body.Role) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be admin, operator, or viewer"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be admin, editor, runner, or viewer"})
 		return
 	}
 

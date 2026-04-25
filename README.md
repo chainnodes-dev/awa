@@ -22,30 +22,22 @@ Define your process as a state machine in YAML. Assign LLM agents, deterministic
 
 ---
 
-## Quick start (Docker)
+## Getting Started
 
-**Prerequisites:** Docker and Docker Compose.
+For detailed instructions on configuration and startup modes, see the **[Running Guide](docs/RUNNING.md)**.
+
+### Quick Start (Full Stack)
+The fastest way to experience the platform is using Docker Compose:
 
 ```bash
 git clone https://github.com/bauhaus28/asm-platform
 cd asm-platform
 cp .env.example .env
+# Edit .env and set your LLM API keys
+make stack
 ```
 
-Open `.env` and set the two required values:
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY / OLLAMA_URL
-ADMIN_PASSWORD=your-password
-```
-
-Then start everything:
-
-```bash
-docker compose up -d
-```
-
-Open **http://localhost** — log in with `admin` / your password.
+Open **[http://localhost](http://localhost)** to access the platform.
 
 | URL | What |
 |---|---|
@@ -57,27 +49,14 @@ Open **http://localhost** — log in with `admin` / your password.
 
 ---
 
-## Quick start (local dev)
-
-**Prerequisites:** Go 1.24+, Node 20+, Docker (for infrastructure).
+### Quick Start (Manual Dev)
+To start infrastructure dependencies (Postgres, Redis, Temporal) in Docker while running the ASM services manually for development:
 
 ```bash
-# 1. Start infrastructure (Postgres, Redis, Temporal)
 make infra
-
-# 2. Copy and fill in config
-cp .env.example .env  # set at least LLM_PROVIDER + API key
-
-# 3. Start everything in tmux panes (requires tmux)
-make dev
-```
-
-Or run each piece individually:
-
-```bash
-make server    # Go API server  →  :8080
-make worker    # Temporal worker
-make frontend  # Vite dev server →  :5173
+make server    # API Server  →  :8080
+make worker    # Temporal Worker
+make frontend  # Vite Dev    →  :5173
 ```
 
 ---
@@ -304,4 +283,4 @@ This copies the template in `cmd/specialist-worker-template/` and gives you a ty
 
 ## License
 
-MIT
+Polyform Noncommercial 1.0.0 (Free for private use, prohibited for commercial use).

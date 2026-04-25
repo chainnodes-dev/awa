@@ -1,0 +1,116 @@
+package enterprise
+
+import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+)
+
+type Tier string
+
+const (
+	TierFree       Tier = "free"
+	TierCommunity  Tier = "community"
+	TierPro        Tier = "pro"
+	TierEnterprise Tier = "enterprise"
+
+	// MonthlyLookback is the standard window for run quota enforcement.
+	MonthlyLookback = 30 * 24 * time.Hour
+)
+
+// LicenseClaims represents the signed information in an enterprise license.
+type LicenseClaims struct {
+	Tier         Tier     `json:"tier"`
+	TenantID     string   `json:"tenant_id"`
+	IssuedAt     int64    `json:"iat"`
+	ExpiresAt    int64    `json:"exp"`
+	Features     []string `json:"features,omitempty"`
+	MaxRuns      int      `json:"max_runs,omitempty"`
+	MaxWorkflows int      `json:"max_workflows,omitempty"`
+	jwt.RegisteredClaims
+}
+
+var (
+	ErrLicenseExpired    = errors.New("license has expired")
+	ErrInvalidLicense    = errors.New("invalid license token")
+	ErrTierNotMet        = errors.New("required tier not met")
+	ErrFeatureNotEnabled = errors.New("feature not enabled for this license")
+)
+
+// Verifier handles license validation using a trusted RSA public key.
+type Verifier struct {
+	publicKey *rsa.PublicKey
+}
+
+func NewVerifier(pubKey *rsa.PublicKey) *Verifier {
+	return &Verifier{publicKey: pubKey}
+}
+
+// Verify decodes and validates a signed JWT license token.
+func (v *Verifier) Verify(tokenString string) (*LicenseClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &LicenseClaims{}, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return v.publicKey, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidLicense, err)
+	}
+
+	if claims, ok := token.Claims.(*LicenseClaims); ok && token.Valid {
+		if time.Now().Unix() > claims.ExpiresAt {
+			return nil, ErrLicenseExpired
+		}
+		return claims, nil
+	}
+
+	return nil, ErrInvalidLicense
+}
+
+// HasFeature checks if the license allows a specific named capability.
+func (c *LicenseClaims) HasFeature(feature string) bool {
+	if c.Tier == TierEnterprise {
+		return true // Enterprise has everything
+	}
+	for _, f := range c.Features {
+		if f == feature {
+			return true
+		}
+	}
+	return false
+}
+
+// DefaultFreeLicense returns a standard set of claims for unmanaged tenants.
+func DefaultFreeLicense(tenantID string) *LicenseClaims {
+	return &LicenseClaims{
+		Tier:         TierFree,
+		TenantID:     tenantID,
+		MaxWorkflows: 3,
+		MaxRuns:      100,
+		Features:     []string{"basic_execution"},
+	}
+}
+
+// ParseRSAPublicKey parses a PEM-encoded RSA public key.
+func ParseRSAPublicKey(pemStr string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pemStr))
+	if block == nil {
+		return nil, errors.New("failed to decode PEM block")
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("not an RSA public key")
+	}
+	return rsaPub, nil
+}

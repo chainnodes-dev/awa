@@ -81,7 +81,7 @@ func testRouter(t *testing.T) testEnv {
 		t.Fatalf("generate test token: %v", err)
 	}
 
-	handlers := NewHandlers(eng, s, jwtSvc, nil, nil, nil) // nil generator, scheduler, llmRegistry: disabled in tests
+	handlers := NewHandlers(eng, s, jwtSvc, nil, nil, nil, nil) // nil generator, scheduler, llmRegistry, verifier: disabled in tests
 	router := gin.New()
 	registerRoutes(router, handlers, NewHub(bus), jwtSvc, health.New())
 

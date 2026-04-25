@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -9,7 +10,23 @@ import (
 	"github.com/asm-platform/asm/internal/store"
 )
 
-const claimsKey = "auth_claims"
+type authKey string
+
+const claimsKey authKey = "auth_claims"
+
+// WithClaims returns a context.Context with the provided Claims attached.
+func WithClaims(ctx context.Context, claims *Claims) context.Context {
+	return context.WithValue(ctx, claimsKey, claims)
+}
+
+// ClaimsFromContext retrieves the JWT Claims from a context.Context.
+func ClaimsFromContext(ctx context.Context) *Claims {
+	if ctx == nil {
+		return nil
+	}
+	claims, _ := ctx.Value(claimsKey).(*Claims)
+	return claims
+}
 
 // RequireAuth validates the Bearer token in the Authorization header.
 // On success it sets the parsed Claims in the gin context AND propagates
@@ -28,10 +45,11 @@ func RequireAuth(svc *JWTService) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
 			return
 		}
-		c.Set(claimsKey, claims)
-		// Propagate tenant_id into the standard request context so store
-		// methods called with c.Request.Context() are automatically scoped.
+		c.Set(string(claimsKey), claims)
+		// Propagate tenant_id and claims into the standard request context so
+		// store methods and audit actions can automatically access them.
 		ctx := store.WithTenantID(c.Request.Context(), claims.TenantID)
+		ctx = WithClaims(ctx, claims)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
@@ -67,7 +85,7 @@ func RequireRole(roles ...Role) gin.HandlerFunc {
 // ClaimsFrom retrieves the JWT Claims injected by RequireAuth.
 // Returns nil if RequireAuth has not run or the value is missing.
 func ClaimsFrom(c *gin.Context) *Claims {
-	v, exists := c.Get(claimsKey)
+	v, exists := c.Get(string(claimsKey))
 	if !exists {
 		return nil
 	}

@@ -16,9 +16,9 @@ type ProcessAnalyseRequest struct {
 	// Description is the natural-language description of what the process does.
 	Description string `json:"description" binding:"required"`
 	// Inputs is the typed I/O contract the caller declares.
-	Inputs []asmtypes.SkillPortDef `json:"inputs,omitempty"`
+	Inputs []asmtypes.PortDef `json:"inputs,omitempty"`
 	// Outputs is the typed output contract.
-	Outputs []asmtypes.SkillPortDef `json:"outputs,omitempty"`
+	Outputs []asmtypes.PortDef `json:"outputs,omitempty"`
 	// MCPServers lists MCP server names available to the generated workflow.
 	MCPServers []string `json:"mcp_servers,omitempty"`
 	// ExistingYAML when set causes the LLM to refine rather than generate from scratch.
@@ -56,7 +56,7 @@ type ProcessSummariseResult struct {
 //   - script       (simple deterministic expression)
 //   - hitl         (requires human input)
 //   - wait         (event-driven pause)
-//   - skill_call   (delegates to another reusable process)
+//   - subprocess   (delegates to another reusable process)
 //
 // On YAML validation failure the LLM is retried once with the error.
 func (g *Generator) AnalyseProcess(ctx context.Context, req ProcessAnalyseRequest) (*ProcessAnalyseResult, error) {
@@ -152,7 +152,7 @@ A "process" is a workflow that may be reusable. Your job is to:
 
 1. **Decompose** the process into atomic, sequential (or branching) steps.
 2. **Classify** each step into the most efficient state type:
-   - Use **skill_call** FIRST when a reusable sub-process in the catalog (see below) already
+   - Use **subprocess** FIRST when a reusable sub-process in the catalog (see below) already
      implements the required capability. This is always preferred over reimplementing
      the same logic inline.
    - Use **intermediate** (LLM agent) ONLY when genuine reasoning, judgment, or language
@@ -167,10 +167,10 @@ A "process" is a workflow that may be reusable. Your job is to:
 4. **Honour the declared I/O contract** — all declared input ports MUST appear as
    blackboard fields; all declared output ports MUST be written before terminal states.
 5. **Abstract Generation** — Populate "metadata.description" with a concise 1-sentence abstract. PRESERVE existing descriptions if present.
-6. **Minimise LLM usage** — prefer code, script, or skill_call nodes where possible.
+6. **Minimise LLM usage** — prefer code, script, or subprocess nodes where possible.
 
 Ask yourself for each step:
-"Does a reusable process already do this?" If yes, use skill_call.
+"Does a reusable process already do this?" If yes, use subprocess.
 "Can this be expressed without an LLM?" If yes, use code or script.
 
 `) + base
@@ -190,11 +190,11 @@ func (g *Generator) buildProcessCatalogSection(processes []*asmtypes.WorkflowDef
 ## Reusable Process Catalog
 
 The following processes are already implemented and marked as reusable. When a step
-in the workflow you are designing matches one of these, you MUST emit a **skill_call**
+in the workflow you are designing matches one of these, you MUST emit a **subprocess**
 state that delegates to it — do NOT reimplement the same logic inline.
 
-For each skill_call state:
-- Set "skill_ref" to the process name shown below.
+For each subprocess state:
+- Set "process_ref" to the process name shown below.
 - Map the parent blackboard fields to the sub-process's input ports via "input_mappings".
 - Map the sub-process's output ports back to parent blackboard fields via "output_mappings".
 

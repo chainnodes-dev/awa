@@ -117,10 +117,10 @@ func (p *ctxCheckProvider) Stream(ctx context.Context, _ llm.CompletionRequest, 
 
 // ── Constructor helpers ───────────────────────────────────────────────────────
 
-func newExecutorWithProvider(providerName string, prov llm.Provider) *DirectExecutor {
+func newExecutorWithProvider(providerName string, prov llm.Provider) *Executor {
 	reg := llm.NewRegistry()
 	reg.Register(prov)
-	return NewDirectExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), providerName)
+	return NewExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), providerName)
 }
 
 // makeTask builds a minimal AgentTask targeting the given provider name.
@@ -332,7 +332,7 @@ func TestExecute_InvalidJSONFallback(t *testing.T) {
 // provider is registered.
 func TestExecute_UnknownProvider(t *testing.T) {
 	reg := llm.NewRegistry()
-	exec := NewDirectExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), "anthropic")
+	exec := NewExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), "anthropic")
 
 	task := makeTask("missing-provider")
 	_, err := exec.Execute(context.Background(), task)
@@ -408,7 +408,7 @@ func TestExecute_ContextCancellation(t *testing.T) {
 
 	reg := llm.NewRegistry()
 	reg.Register(&ctxCheckProvider{name: "mock"})
-	exec := NewDirectExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), "mock-llm")
+	exec := NewExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), "mock-llm")
 
 	_, err := exec.Execute(ctx, makeTask("mock"))
 	if err == nil {

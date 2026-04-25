@@ -23,6 +23,7 @@ type Executor interface {
 // AgentTask carries everything an executor needs to run an agent.
 type AgentTask struct {
 	RunID      string
+	TenantID   string
 	AgentDef   asmtypes.AgentDef
 	StateDef   asmtypes.StateDef
 	Blackboard map[string]interface{}
@@ -86,8 +87,8 @@ func (e *Engine) StartRun(ctx context.Context, workflowName, version string, inp
 		return nil, fmt.Errorf("persist run: %w", err)
 	}
 
-	metrics.RunsStartedTotal.WithLabelValues(workflowName, version).Inc()
-	metrics.RunsActive.WithLabelValues(workflowName).Inc()
+	metrics.RunsStartedTotal.WithLabelValues(workflowName, version, run.TenantID).Inc()
+	metrics.RunsActive.WithLabelValues(workflowName, run.TenantID).Inc()
 
 	_ = e.bus.Publish(ctx, events.New(events.RunCreated, events.RunCreatedPayload{Run: run}))
 
@@ -180,7 +181,7 @@ func (e *Engine) TerminateRun(ctx context.Context, id string) error {
 	}
 
 	_ = e.bus.Publish(ctx, events.New(events.RunCancelled, events.RunCancelledPayload{Run: run}))
-	metrics.RunsActive.WithLabelValues(run.WorkflowName).Dec()
+	metrics.RunsActive.WithLabelValues(run.WorkflowName, run.TenantID).Dec()
 
 	return nil
 }

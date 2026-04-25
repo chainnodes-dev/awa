@@ -55,6 +55,7 @@ type WorkflowStore interface {
 	ListDefinitions(ctx context.Context, filter DefinitionFilter) ([]*asmtypes.WorkflowDef, error)
 	ListDefinitionVersions(ctx context.Context, name string) ([]VersionSummary, error)
 	DeleteDefinition(ctx context.Context, name, version string) error
+	CountDefinitions(ctx context.Context) (int, error)
 }
 
 // RunStore manages workflow run instances.
@@ -67,6 +68,8 @@ type RunStore interface {
 
 	RecordTransition(ctx context.Context, record *asmtypes.TransitionRecord) error
 	ListTransitions(ctx context.Context, runID string) ([]*asmtypes.TransitionRecord, error)
+	CountRuns(ctx context.Context, filter RunFilter) (int, error)
+	GetRunStats(ctx context.Context) (map[string]int, error)
 }
 
 // HITLStore manages human-in-the-loop requests.

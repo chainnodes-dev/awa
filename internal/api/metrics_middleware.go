@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/asm-platform/asm/internal/metrics"
+	"github.com/asm-platform/asm/internal/store"
 )
 
 // MetricsMiddleware records Prometheus HTTP metrics for every request.
@@ -28,7 +29,12 @@ func MetricsMiddleware() gin.HandlerFunc {
 		status := strconv.Itoa(c.Writer.Status())
 		elapsed := time.Since(start).Seconds()
 
-		metrics.HTTPRequestsTotal.WithLabelValues(method, path, status).Inc()
-		metrics.HTTPRequestDurationSeconds.WithLabelValues(method, path).Observe(elapsed)
+		tenantID := store.TenantIDFromContext(c.Request.Context())
+		if tenantID == "" {
+			tenantID = "unknown"
+		}
+
+		metrics.HTTPRequestsTotal.WithLabelValues(method, path, status, tenantID).Inc()
+		metrics.HTTPRequestDurationSeconds.WithLabelValues(method, path, tenantID).Observe(elapsed)
 	}
 }

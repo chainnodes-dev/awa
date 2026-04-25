@@ -66,7 +66,7 @@ select option { background: #1a1d27; color: #e2e8f0; }
 .glow-wait         { box-shadow: 0 0 0 2px #818cf8, 0 0 16px 4px rgba(129,140,248,0.5); }
 .glow-script       { box-shadow: 0 0 0 2px #f59e0b, 0 0 16px 4px rgba(245,158,11,0.4); }
 .glow-code         { box-shadow: 0 0 0 2px #2dd4bf, 0 0 16px 4px rgba(45,212,191,0.5); }
-.glow-skill_call   { box-shadow: 0 0 0 2px #a78bfa, 0 0 16px 4px rgba(167,139,250,0.5); }
+.glow-subprocess   { box-shadow: 0 0 0 2px #a78bfa, 0 0 16px 4px rgba(167,139,250,0.5); }
 
 /* Vue Flow overrides */
 .vue-flow__background { background: var(--color-bg) !important; }

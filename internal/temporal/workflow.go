@@ -8,6 +8,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/asm-platform/asm/internal/events"
+	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -107,7 +108,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					workflowErr = err
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], autoTrigger, bb, nil); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], autoTrigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}
@@ -122,11 +123,14 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 			// ── Terminal ─────────────────────────────────────────────────────────
 			if state.Type == asmtypes.StateTerminal {
 				_ = workflow.ExecuteActivity(shortOpts, (*Activities).UpdateRun, UpdateRunParams{
-					RunID:        p.RunID,
-					CurrentState: currentState,
-					Status:       asmtypes.RunComplete,
-					Blackboard:   bb,
-					IsTerminal:   true,
+					RunID:           p.RunID,
+					TenantID:        p.TenantID,
+					WorkflowName:    p.Def.Metadata.Name,
+					WorkflowVersion: p.Def.Metadata.Version,
+					CurrentState:    currentState,
+					Status:          asmtypes.RunComplete,
+					Blackboard:      bb,
+					IsTerminal:      true,
 				}).Get(bCtx, nil)
 				_ = workflow.ExecuteActivity(shortOpts, (*Activities).PublishEvent, PublishEventParams{
 					EventType: events.RunCompleted,
@@ -241,7 +245,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				}
 				if len(nextStates) > 0 {
 					next := nextStates[0]
-					if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, next, trigger, bb, nil); err != nil {
+					if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, next, trigger, bb, nil); err != nil {
 						workflowErr = err
 						return
 					}
@@ -302,7 +306,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}
@@ -325,11 +329,14 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				agentOpts := makeAgentOpts(bCtx, agentDef.TaskQueue)
 				var output *asmtypes.AgentOutput
 				err := workflow.ExecuteActivity(agentOpts, (*Activities).ExecuteAgent, ExecuteAgentParams{
-					RunID:      p.RunID,
-					AgentDef:   *agentDef,
-					StateDef:   *state,
-					Blackboard: bb,
-					Def:        p.Def,
+					RunID:           p.RunID,
+					TenantID:        p.TenantID,
+					WorkflowName:    p.Def.Metadata.Name,
+					WorkflowVersion: p.Def.Metadata.Version,
+					AgentDef:        *agentDef,
+					StateDef:        *state,
+					Blackboard:      bb,
+					Def:             p.Def,
 				}).Get(bCtx, &output)
 				if err != nil {
 					workflowErr = fmt.Errorf("agent execution failed: %w", err)
@@ -348,7 +355,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
 					workflowErr = err
 					return
 				}
@@ -379,7 +386,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
 					workflowErr = err
 					return
 				}
@@ -402,10 +409,13 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				codeOpts := makeAgentOpts(bCtx, "") // same long-timeout / heartbeat as agent activities
 				var output *asmtypes.AgentOutput
 				err := workflow.ExecuteActivity(codeOpts, (*Activities).ExecuteCode, ExecuteCodeParams{
-					RunID:         p.RunID,
-					StateDef:      *state,
-					Blackboard:    bb,
-					ValidTriggers: validTriggers,
+					RunID:           p.RunID,
+					TenantID:        p.TenantID,
+					WorkflowName:    p.Def.Metadata.Name,
+					WorkflowVersion: p.Def.Metadata.Version,
+					StateDef:        *state,
+					Blackboard:      bb,
+					ValidTriggers:   validTriggers,
 				}).Get(bCtx, &output)
 				if err != nil {
 					workflowErr = fmt.Errorf("code execution failed in state '%s': %w", currentState, err)
@@ -424,7 +434,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
 					workflowErr = err
 					return
 				}
@@ -473,7 +483,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}
@@ -485,18 +495,34 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				continue
 			}
 
-			// ── Skill Call ───────────────────────────────────────────────────────
-			if state.Type == asmtypes.StateSkillCall && state.SkillCall != nil {
-				sc := state.SkillCall
+			// ── SubProcess Call ──────────────────────────────────────────────────────
+			if state.Type == asmtypes.StateSubProcess && state.SubProcess != nil {
+				sc := state.SubProcess
 				skillOpts := makeShortOpts(bCtx)
 
-				// 1. Load the child WorkflowDef by name.
+				// 1. Verify license for sub-processes (Enterprise Feature).
+				var claims *enterprise.LicenseClaims
+				err := workflow.ExecuteActivity(skillOpts, (*Activities).GetLicenseClaims, p.TenantID).Get(bCtx, &claims)
+				if err != nil {
+					workflowErr = fmt.Errorf("license verification failed: %w", err)
+					return
+				}
+				if claims.Tier == enterprise.TierFree {
+					workflowErr = fmt.Errorf("%w: subprocesses require a Pro or Enterprise license", enterprise.ErrTierNotMet)
+					return
+				}
+
+				// 2. Load the child WorkflowDef by name and version.
 				var childDef *asmtypes.WorkflowDef
-				err := workflow.ExecuteActivity(skillOpts, (*Activities).LoadWorkflowDef,
-					LoadWorkflowDefParams{WorkflowName: sc.SkillRef},
+				err = workflow.ExecuteActivity(skillOpts, (*Activities).LoadWorkflowDef,
+					LoadWorkflowDefParams{
+						TenantID:     p.TenantID,
+						WorkflowName: sc.ProcessRef,
+						Version:      sc.ProcessVersion,
+					},
 				).Get(bCtx, &childDef)
 				if err != nil {
-					workflowErr = fmt.Errorf("skill_call: load workflow '%s': %w", sc.SkillRef, err)
+					workflowErr = fmt.Errorf("subprocess: load workflow '%s' (version: %s): %w", sc.ProcessRef, sc.ProcessVersion, err)
 					return
 				}
 
@@ -509,10 +535,19 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				}
 
 				// 3. Launch a Temporal child workflow.
-				childRunID := workflow.GetInfo(bCtx).WorkflowExecution.ID + "__skill__" + currentState
+				childRunID := workflow.GetInfo(bCtx).WorkflowExecution.ID + "__sub__" + currentState
 				cwo := workflow.ChildWorkflowOptions{
 					WorkflowID: childRunID,
 				}
+
+				// Apply state-level timeout to the sub-process if provided.
+				if state.Timeout != "" {
+					if d, err := time.ParseDuration(state.Timeout); err == nil {
+						cwo.WorkflowExecutionTimeout = d
+						cwo.WorkflowRunTimeout = d
+					}
+				}
+
 				childCtx := workflow.WithChildOptions(bCtx, cwo)
 				skillErr := workflow.ExecuteChildWorkflow(childCtx, ASMWorkflow, WorkflowParams{
 					RunID:      childRunID,
@@ -522,16 +557,19 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 
 				// 4. Determine trigger and apply output mappings.
 				trigger := sc.CompletionTrigger
+				if trigger == "" {
+					trigger = "done" // default for unified process model
+				}
 				if skillErr != nil {
 					trigger = sc.FailureTrigger
 					if trigger == "" {
-						trigger = "skill_failed"
+						trigger = "subprocess_failed"
 					}
 				} else {
 					// Read the child run's terminal blackboard and map outputs back.
 					var childFinalBB map[string]interface{}
 					_ = workflow.ExecuteActivity(skillOpts, (*Activities).GetRunBlackboard,
-						GetRunBlackboardParams{RunID: childRunID},
+						GetRunBlackboardParams{TenantID: p.TenantID, RunID: childRunID},
 					).Get(bCtx, &childFinalBB)
 					for childField, parentField := range sc.OutputMappings {
 						if v, ok := childFinalBB[childField]; ok {
@@ -548,7 +586,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}
@@ -603,7 +641,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 			if len(nextStates) == 0 {
 				return
 			}
-			if err := persistTransition(shortOpts, bCtx, p.RunID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+			if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 				workflowErr = err
 				return
 			}
@@ -647,7 +685,7 @@ func applyTransition(def *asmtypes.WorkflowDef, fromState, trigger string, bb ma
 	return nil, fmt.Errorf("no valid transition from '%s' for trigger '%s'", fromState, trigger)
 }
 
-func persistTransition(shortOpts, ctx workflow.Context, runID, fromState, toState, trigger string, bb map[string]interface{}, output *asmtypes.AgentOutput) error {
+func persistTransition(shortOpts, ctx workflow.Context, runID, workflowName, workflowVersion, tenantID, fromState, toState, trigger string, bb map[string]interface{}, output *asmtypes.AgentOutput) error {
 	rec := &asmtypes.TransitionRecord{
 		RunID:              runID,
 		FromState:          fromState,
@@ -658,7 +696,10 @@ func persistTransition(shortOpts, ctx workflow.Context, runID, fromState, toStat
 		Timestamp:          workflow.Now(ctx),
 	}
 	if err := workflow.ExecuteActivity(shortOpts, (*Activities).RecordTransition, RecordTransitionParams{
-		Record: rec,
+		TenantID:        tenantID,
+		WorkflowName:    workflowName,
+		WorkflowVersion: workflowVersion,
+		Record:          rec,
 	}).Get(ctx, nil); err != nil {
 		return err
 	}
@@ -668,10 +709,13 @@ func persistTransition(shortOpts, ctx workflow.Context, runID, fromState, toStat
 	// Terminal states override this immediately with their own UpdateRun call
 	// (status=complete), so using RunRunning here is always safe.
 	if err := workflow.ExecuteActivity(shortOpts, (*Activities).UpdateRun, UpdateRunParams{
-		RunID:        runID,
-		CurrentState: toState,
-		Status:       asmtypes.RunRunning,
-		Blackboard:   bb,
+		RunID:           runID,
+		TenantID:        tenantID,
+		WorkflowName:    workflowName,
+		WorkflowVersion: workflowVersion,
+		CurrentState:    toState,
+		Status:          asmtypes.RunRunning,
+		Blackboard:      bb,
 	}).Get(ctx, nil); err != nil {
 		return err
 	}
@@ -691,9 +735,12 @@ func persistTransition(shortOpts, ctx workflow.Context, runID, fromState, toStat
 
 func failWorkflow(ctx, shortOpts workflow.Context, p WorkflowParams, cause error) error {
 	_ = workflow.ExecuteActivity(shortOpts, (*Activities).UpdateRun, UpdateRunParams{
-		RunID:      p.RunID,
-		Status:     asmtypes.RunFailed,
-		IsTerminal: true,
+		RunID:           p.RunID,
+		TenantID:        p.TenantID,
+		WorkflowName:    p.Def.Metadata.Name,
+		WorkflowVersion: p.Def.Metadata.Version,
+		Status:          asmtypes.RunFailed,
+		IsTerminal:      true,
 	}).Get(ctx, nil)
 	_ = workflow.ExecuteActivity(shortOpts, (*Activities).PublishEvent, PublishEventParams{
 		EventType: events.RunFailed,

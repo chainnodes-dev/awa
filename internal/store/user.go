@@ -7,10 +7,34 @@ import (
 
 // Tenant is a platform tenant (one per customer / deployment unit).
 type Tenant struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"` // URL-safe identifier, e.g. "acme-corp"
-	CreatedAt time.Time `json:"created_at"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Slug         string            `json:"slug"` // URL-safe identifier, e.g. "acme-corp"
+	LogoURL      string            `json:"logo_url,omitempty"`
+	Secrets      map[string]string `json:"-"` // never serialise secrets to JSON
+	LicenseToken string            `json:"license_token,omitempty"`
+	CreatedAt    time.Time         `json:"created_at"`
+}
+
+// IDPConfig represents external auth settings for a tenant.
+type IDPConfig struct {
+	TenantID     string            `json:"tenant_id"`
+	IssuerURL    string            `json:"issuer_url"`
+	ClientID     string            `json:"client_id"`
+	ClientSecret string            `json:"-"`
+	RoleMapping  map[string]string `json:"role_mapping"`
+	Active       bool              `json:"active"`
+}
+
+// AuditLog represents a single recorded action for auditing.
+type AuditLog struct {
+	ID        string                 `json:"id"`
+	TenantID  string                 `json:"tenant_id"`
+	UserID    string                 `json:"user_id"`
+	Action    string                 `json:"action"`
+	Details   map[string]interface{} `json:"details"`
+	IPAddress string                 `json:"ip_address"`
+	CreatedAt time.Time              `json:"created_at"`
 }
 
 // User is the platform user type. PasswordHash is never serialised to JSON.
@@ -39,9 +63,17 @@ type TenantStore interface {
 	CreateTenant(ctx context.Context, t *Tenant) error
 	GetTenant(ctx context.Context, id string) (*Tenant, error)
 	GetTenantBySlug(ctx context.Context, slug string) (*Tenant, error)
+	UpdateTenantLicense(ctx context.Context, id, token string) error
+	GetTenantIDPConfig(ctx context.Context, tenantID string) (*IDPConfig, error)
+	UpsertTenantIDPConfig(ctx context.Context, cfg *IDPConfig) error
 	ListTenants(ctx context.Context) ([]*Tenant, error)
 	DeleteTenant(ctx context.Context, id string) error
 	HasAnyTenant(ctx context.Context) (bool, error)
+	UpdateTenantBranding(ctx context.Context, id, name, logoURL string) error
+	UpdateTenantSecrets(ctx context.Context, id string, secrets map[string]string) error
+
+	RecordAuditLog(ctx context.Context, entry *AuditLog) error
+	ListAuditLogs(ctx context.Context, tenantID string, limit, offset int) ([]*AuditLog, error)
 }
 
 // UserFilter controls which users are returned by ListUsers.

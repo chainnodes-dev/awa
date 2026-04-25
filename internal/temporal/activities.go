@@ -10,8 +10,10 @@ import (
 	"go.temporal.io/sdk/client"
 	temporalactivity "go.temporal.io/sdk/activity"
 
+	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor/code"
+	"github.com/asm-platform/asm/internal/metrics"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -24,10 +26,11 @@ type Activities struct {
 	Bus      events.Bus
 	Executor orchestrator.Executor
 	Client   client.Client // used by EmitWorkflowEvent to signal waiting workflows
+	Verifier *enterprise.Verifier
 }
 
-func NewActivities(s store.Store, bus events.Bus, exec orchestrator.Executor, c client.Client) *Activities {
-	return &Activities{Store: s, Bus: bus, Executor: exec, Client: c}
+func NewActivities(s store.Store, bus events.Bus, exec orchestrator.Executor, c client.Client, v *enterprise.Verifier) *Activities {
+	return &Activities{Store: s, Bus: bus, Executor: exec, Client: c, Verifier: v}
 }
 
 // UpdateRun persists run state changes to the store.
@@ -43,6 +46,14 @@ func (a *Activities) UpdateRun(ctx context.Context, p UpdateRunParams) error {
 	if p.IsTerminal {
 		now := time.Now()
 		run.CompletedAt = &now
+
+		metrics.RunsCompletedTotal.WithLabelValues(p.WorkflowName, p.WorkflowVersion, string(p.Status), p.TenantID).Inc()
+		metrics.RunsActive.WithLabelValues(p.WorkflowName, p.TenantID).Dec()
+
+		// Recording RunDurationSeconds if StartTime is known
+		if !run.StartedAt.IsZero() {
+			metrics.RunDurationSeconds.WithLabelValues(p.WorkflowName, p.WorkflowVersion, string(p.Status), p.TenantID).Observe(time.Since(run.StartedAt).Seconds())
+		}
 	}
 	return a.Store.UpdateRun(ctx, run)
 }
@@ -55,6 +66,15 @@ func (a *Activities) RecordTransition(ctx context.Context, p RecordTransitionPar
 	if p.Record.Timestamp.IsZero() {
 		p.Record.Timestamp = time.Now()
 	}
+
+	metrics.StateTransitionsTotal.WithLabelValues(
+		p.WorkflowName,
+		p.Record.FromState,
+		p.Record.ToState,
+		p.Record.Trigger,
+		p.TenantID,
+	).Inc()
+
 	return a.Store.RecordTransition(ctx, p.Record)
 }
 
@@ -99,6 +119,7 @@ func (a *Activities) ExecuteCode(ctx context.Context, p ExecuteCodeParams) (*asm
 func (a *Activities) ExecuteAgent(ctx context.Context, p ExecuteAgentParams) (*asmtypes.AgentOutput, error) {
 	return a.Executor.Execute(ctx, orchestrator.AgentTask{
 		RunID:      p.RunID,
+		TenantID:   p.TenantID,
 		AgentDef:   p.AgentDef,
 		StateDef:   p.StateDef,
 		Blackboard: p.Blackboard,
@@ -107,12 +128,21 @@ func (a *Activities) ExecuteAgent(ctx context.Context, p ExecuteAgentParams) (*a
 }
 
 
-// LoadWorkflowDef loads the latest version of a WorkflowDef by name.
-// Used by skill_call states to resolve the child workflow before launching it.
+// LoadWorkflowDef loads a WorkflowDef by name and optional version.
+// Used by subprocess states to resolve the child workflow before launching it.
 func (a *Activities) LoadWorkflowDef(ctx context.Context, p LoadWorkflowDefParams) (*asmtypes.WorkflowDef, error) {
-	def, _, err := a.Store.GetLatestDefinition(ctx, p.WorkflowName)
+	ctx = store.WithTenantID(ctx, p.TenantID)
+	var def *asmtypes.WorkflowDef
+	var err error
+
+	if p.Version != "" {
+		def, _, err = a.Store.GetDefinition(ctx, p.WorkflowName, p.Version)
+	} else {
+		def, _, err = a.Store.GetLatestDefinition(ctx, p.WorkflowName)
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("load workflow '%s': %w", p.WorkflowName, err)
+		return nil, fmt.Errorf("load workflow '%s' (version: %s): %w", p.WorkflowName, p.Version, err)
 	}
 	return def, nil
 }
@@ -120,6 +150,7 @@ func (a *Activities) LoadWorkflowDef(ctx context.Context, p LoadWorkflowDefParam
 // GetRunBlackboard reads the current blackboard snapshot for a completed run.
 // Used after a child skill workflow completes to extract its output fields.
 func (a *Activities) GetRunBlackboard(ctx context.Context, p GetRunBlackboardParams) (map[string]interface{}, error) {
+	ctx = store.WithTenantID(ctx, p.TenantID)
 	run, err := a.Store.GetRun(ctx, p.RunID)
 	if err != nil {
 		return nil, fmt.Errorf("get run '%s': %w", p.RunID, err)
@@ -173,4 +204,25 @@ func (a *Activities) EmitWorkflowEvent(ctx context.Context, p EmitWorkflowEventP
 		_ = a.Store.UnregisterEventSubscription(ctx, sub.ID)
 	}
 	return nil
+}
+
+// GetLicenseClaims retrieves and verifies the license claims for a tenant.
+func (a *Activities) GetLicenseClaims(ctx context.Context, tenantID string) (*enterprise.LicenseClaims, error) {
+	tenant, err := a.Store.GetTenant(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	if tenant.LicenseToken == "" {
+		return enterprise.DefaultFreeLicense(tenantID), nil
+	}
+
+	if a.Verifier == nil {
+		// If no verifier, we fallback to free tier for safety or error out?
+		// Given this is for enforcement, if verifier is missing on worker,
+		// we should probably warn and use free tier.
+		return enterprise.DefaultFreeLicense(tenantID), nil
+	}
+
+	return a.Verifier.Verify(tenant.LicenseToken)
 }

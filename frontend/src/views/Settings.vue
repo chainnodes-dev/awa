@@ -1,33 +1,83 @@
 <template>
   <div class="flex flex-col h-full overflow-y-auto bg-surface-0">
 
-    <header class="px-6 py-4 border-b border-border shrink-0 bg-surface-1">
-      <h1 class="text-base font-semibold text-slate-200">Settings</h1>
-      <p class="text-xs text-slate-500 mt-0.5">Configure LLM providers and global defaults</p>
-    </header>
+      <header class="px-6 py-4 border-b border-border shrink-0 bg-surface-1 flex items-center justify-between">
+        <div>
+          <h1 class="text-base font-semibold text-slate-200">Settings</h1>
+          <p class="text-xs text-slate-500 mt-0.5">Configure platform identity, usage, and LLM providers</p>
+        </div>
+        <div v-if="entStore.status" class="flex items-center gap-2">
+           <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Tier</span>
+           <span :class="tierBadgeClass(entStore.status.tier)">{{ entStore.status.tier }}</span>
+        </div>
+      </header>
 
-    <div class="flex-1 px-6 py-6 max-w-3xl w-full mx-auto space-y-6">
+      <div class="flex-1 px-6 py-6 max-w-3xl w-full mx-auto space-y-6">
 
-      <!-- Non-admin notice -->
-      <div v-if="!isAdmin" class="px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
+        <!-- Branding (Pilot-ready feature) -->
+        <section v-if="isAdmin" class="space-y-4">
+           <div class="flex items-center gap-2 px-1">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+               <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
+             </svg>
+             <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Tenant Identity & Branding</h2>
+           </div>
+
+           <div class="card p-5 space-y-4">
+              <div class="grid grid-cols-2 gap-4">
+                 <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Company Name</label>
+                    <input v-model="brandingForm.name" class="input text-sm w-full" placeholder="e.g. Acme Corp" />
+                 </div>
+                 <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Logo URL</label>
+                    <input v-model="brandingForm.logo_url" class="input text-sm w-full" placeholder="https://..." autocomplete="off" />
+                 </div>
+              </div>
+              <div class="flex justify-end">
+                 <button @click="saveBranding" :disabled="brandingBusy" class="btn-primary text-xs px-4">
+                    {{ brandingBusy ? 'Saving...' : 'Save Branding' }}
+                 </button>
+              </div>
+           </div>
+        </section>
+
+
+        <!-- Environment Secrets (v1 Finishing feature) -->
+        <section v-if="isAdmin" class="space-y-4">
+           <div class="flex items-center gap-2 px-1">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+             </svg>
+             <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Environment Secrets</h2>
+           </div>
+
+           <div class="card p-5 space-y-4">
+              <p class="text-[10px] text-slate-500 mb-2">Secrets are stored securely and available to Agent tools/scripts via the <code>secrets</code> object.</p>
+              <div v-if="!Object.keys(secretsForm).length" class="text-center py-4 bg-black/5 rounded border border-dashed border-border/40">
+                <p class="text-xs text-slate-600 italic">No secrets defined yet.</p>
+              </div>
+              <div v-for="(val, key) in secretsForm" :key="key" class="flex gap-2 items-center">
+                 <input v-model="secretsForm[key].name" class="input text-xs w-1/3" placeholder="KEY_NAME" />
+                 <input v-model="secretsForm[key].value" type="password" class="input text-xs flex-1" placeholder="Value (hidden)" />
+                 <button @click="removeSecret(key)" class="btn-ghost text-red-400 p-2">✕</button>
+              </div>
+              <div class="flex justify-between items-center pt-2">
+                 <button @click="addSecret" class="btn-ghost text-[10px] font-bold uppercase">+ Add Secret</button>
+                 <button @click="saveSecrets" :disabled="secretsBusy" class="btn-primary text-xs px-4">
+                    {{ secretsBusy ? 'Saving...' : 'Save Secrets' }}
+                 </button>
+              </div>
+           </div>
+        </section>
+
+
+        <!-- Existing LLM configs -->
+        <div v-if="!isAdmin" class="px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
         LLM configuration requires admin privileges.
       </div>
 
       <template v-if="isAdmin">
-        <!-- Global default -->
-        <section class="card p-5">
-          <h2 class="text-sm font-semibold text-slate-300 mb-3">Global Default Provider</h2>
-          <div class="flex items-center gap-3">
-            <select v-model="selectedDefault" class="input text-sm flex-1"
-                    @change="saveDefault">
-              <option value="">— none —</option>
-              <option v-for="p in enabledProviders" :key="p.id" :value="p.id">
-                {{ p.label }}
-              </option>
-            </select>
-            <span class="text-xs text-slate-500">Used when a workflow state does not specify a provider</span>
-          </div>
-        </section>
 
         <!-- Per-provider cards -->
         <section v-for="prov in llmStore.PROVIDERS" :key="prov.id" class="card p-5 space-y-4">
@@ -55,6 +105,7 @@
                 type="password"
                 :placeholder="hasExistingKey(prov.id) ? 'Configured (leave blank to keep)' : 'Enter API key'"
                 class="input text-sm w-full font-mono"
+                autocomplete="new-password"
               />
             </div>
 
@@ -116,8 +167,16 @@
             >
               {{ testing[prov.id] ? 'Testing…' : 'Test Connection' }}
             </button>
+            <button
+              v-if="forms[prov.id].enabled && !isDefaultProvider(prov.id)"
+              @click="saveDefault(prov.id)"
+              class="btn-ghost text-violet-400 text-xs px-3 py-1.5 font-bold uppercase"
+            >
+              Set as Default
+            </button>
           </div>
         </section>
+
 
         <!-- System Prompts -->
         <section class="card p-5 space-y-4">
@@ -156,9 +215,11 @@
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useAuthStore, api } from '@/stores/auth'
 import { useLLMStore } from '@/stores/llm'
+import { useEnterpriseStore } from '@/stores/enterprise'
 
 const authStore = useAuthStore()
 const llmStore  = useLLMStore()
+const entStore  = useEnterpriseStore()
 
 const isAdmin = computed(() => authStore.user?.role === 'admin' || authStore.user?.role === 'super_admin')
 
@@ -204,6 +265,76 @@ function providerEndpoint(id) {
     glm:       'open.bigmodel.cn',
   }
   return map[id] ?? ''
+}
+
+const updatingLicense = ref(false)
+const licenseInput = ref('')
+const licenseBusy = ref(false)
+
+const brandingForm = reactive({ name: '', logo_url: '' })
+const brandingBusy = ref(false)
+
+async function saveBranding() {
+  brandingBusy.value = true
+  try {
+    await entStore.updateBranding(brandingForm)
+  } catch (e) {
+    alert('Failed to update branding: ' + (e.response?.data?.error ?? e.message))
+  } finally {
+    brandingBusy.value = false
+  }
+}
+
+const secretsForm = ref([])
+const secretsBusy = ref(false)
+
+function addSecret() {
+  secretsForm.value.push({ name: '', value: '' })
+}
+function removeSecret(idx) {
+  secretsForm.value.splice(idx, 1)
+}
+
+async function saveSecrets() {
+  secretsBusy.value = true
+  try {
+    const payload = {}
+    secretsForm.value.forEach(s => {
+      if (s.name) payload[s.name] = s.value
+    })
+    await entStore.updateSecrets(payload)
+    alert('Secrets saved successfully.')
+  } catch (e) {
+    alert('Failed to save secrets: ' + (e.response?.data?.error ?? e.message))
+  } finally {
+    secretsBusy.value = false
+  }
+}
+
+async function saveLicense() {
+  if (!licenseInput.value) return
+  licenseBusy.value = true
+  try {
+    await entStore.setLicense(licenseInput.value)
+    updatingLicense.value = false
+    licenseInput.value = ''
+  } catch (e) {
+    alert('License update failed: ' + (e.response?.data?.error ?? e.message))
+  } finally {
+    licenseBusy.value = false
+  }
+}
+
+function usagePercent(curr, max) {
+  if (!max) return 0
+  return Math.min(100, Math.round((curr / max) * 100))
+}
+
+function tierBadgeClass(tier) {
+  const base = 'badge'
+  if (tier === 'enterprise') return `${base} bg-purple-500/20 text-purple-400`
+  if (tier === 'pro') return `${base} bg-indigo-500/20 text-indigo-400`
+  return `${base} bg-slate-500/20 text-slate-400`
 }
 
 function syncFormsFromStore() {
@@ -258,10 +389,11 @@ async function test(provider) {
   }
 }
 
-async function saveDefault() {
-  if (!selectedDefault.value) return
+async function saveDefault(provider) {
+  const p = provider || selectedDefault.value
+  if (!p) return
   try {
-    await llmStore.setDefault(selectedDefault.value)
+    await llmStore.setDefault(p)
   } catch (e) {
     console.error('Failed to set default provider', e)
   }
@@ -297,9 +429,22 @@ async function savePrompt(id) {
 
 onMounted(async () => {
   if (isAdmin.value) {
+    await entStore.fetchBranding()
+    Object.assign(brandingForm, entStore.branding)
+    await entStore.fetchSecrets()
+    secretsForm.value = Object.entries(entStore.secrets).map(([k, v]) => ({ name: k, value: '' /* hidden */ }))
+    await entStore.fetchAuditLogs()
+    await entStore.fetchStatus()
     await llmStore.fetchAll()
     syncFormsFromStore()
     await fetchPrompts()
   }
 })
+
+function formatDateTime(ts) {
+  if (!ts) return '-'
+  return new Date(ts).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  })
+}
 </script>

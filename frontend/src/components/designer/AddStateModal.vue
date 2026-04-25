@@ -11,7 +11,7 @@
         <option value="script">script</option>
         <option value="code">code</option>
         <optgroup label="──────────────"></optgroup>
-        <option value="skill_call">skill_call</option>
+        <option value="subprocess">subprocess</option>
         <optgroup label="──────────────"></optgroup>
         <option value="hitl">hitl</option>
         <option value="wait">wait</option>

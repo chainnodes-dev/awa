@@ -13,14 +13,16 @@ type Role string
 const (
 	RoleSuperAdmin Role = "super_admin" // platform operator; can manage tenants
 	RoleAdmin      Role = "admin"       // tenant administrator
-	RoleOperator   Role = "operator"    // can start/trigger runs
+	RoleEditor     Role = "editor"      // can define workflows and setup processes
+	RoleRunner     Role = "runner"      // can start/trigger runs and approve HITL
+	RoleOperator   Role = "operator"    // deprecated; can do both (admin/editor/runner union)
 	RoleViewer     Role = "viewer"      // read-only
 )
 
 // ValidRole returns true when r is one of the recognised roles.
 func ValidRole(r string) bool {
 	switch Role(r) {
-	case RoleSuperAdmin, RoleAdmin, RoleOperator, RoleViewer:
+	case RoleSuperAdmin, RoleAdmin, RoleEditor, RoleRunner, RoleOperator, RoleViewer:
 		return true
 	}
 	return false

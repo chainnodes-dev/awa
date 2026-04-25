@@ -37,6 +37,8 @@ func seedWorkflows(s store.Store) {
 // infrastructure is required to run through the full flow.
 var builtinWorkflows = []string{
 	invoiceProcessingWorkflow,
+	securityIncidentWorkflow,
+	supportRouterWorkflow,
 }
 
 const invoiceProcessingWorkflow = `
@@ -199,4 +201,127 @@ agents:
       - "Never invent or fabricate data. Only use what is present on the blackboard."
       - "When in doubt about a field value, prefer the conservative option."
       - "validation_errors must be a JSON array of strings, never a plain string."
+`
+
+const securityIncidentWorkflow = `
+apiVersion: asm/v1
+kind: Workflow
+metadata:
+  name: security-incident-triage
+  version: 1
+  description: |
+    Automated triage of security alerts: enrichment → severity assessment → remediation script → human approval.
+    Showcases complex agent routing and multi-persona handovers.
+
+blackboard:
+  schema:
+    incident_id: { type: string, required: true }
+    source_ip: { type: string, required: true }
+    alert_type: { type: string }
+    threat_intel_report: { type: string }
+    severity: { type: string }
+    remediation_required: { type: bool }
+    remediation_plan: { type: string }
+
+states:
+  - name: INTAKE
+    type: initial
+    script: { trigger: '"start"' }
+
+  - name: THREAT_INTEL
+    type: intermediate
+    agent: security-analyst
+    instructions: |
+      Analyse the source_ip using available threat intelligence.
+      Set threat_intel_report with your findings.
+      If the IP is a known malicious actor, set severity: 'CRITICAL' and trigger: 'intel_ready'.
+      Otherwise, set severity: 'LOW' and trigger: 'intel_ready'.
+
+  - name: REMEDIATION_SCAN
+    type: intermediate
+    agent: security-analyst
+    instructions: |
+      Based on threat_intel_report, define a remediation plan.
+      If the severity is CRITICAL, remediation_required should be true.
+      Set remediation_plan as a markdown list of steps.
+      Trigger 'plan_done'.
+
+  - name: SOC_APPROVAL
+    type: hitl
+    instructions: "SOC Lead review required for Critical Incidents."
+
+  - name: RESOLVED
+    type: terminal
+
+  - name: ESCALATED
+    type: terminal
+
+transitions:
+  - { from: INTAKE, to: THREAT_INTEL, trigger: start }
+  - { from: THREAT_INTEL, to: REMEDIATION_SCAN, trigger: intel_ready }
+  - { from: REMEDIATION_SCAN, to: SOC_APPROVAL, trigger: plan_done, guard: "severity == 'CRITICAL'" }
+  - { from: REMEDIATION_SCAN, to: RESOLVED, trigger: plan_done }
+  - { from: SOC_APPROVAL, to: RESOLVED, trigger: approved }
+  - { from: SOC_APPROVAL, to: ESCALATED, trigger: rejected }
+
+agents:
+  - name: security-analyst
+    rules:
+      - "Strict JSON output only."
+      - "Prioritize system safety and containment."
+`
+
+const supportRouterWorkflow = `
+apiVersion: asm/v1
+kind: Workflow
+metadata:
+  name: support-router
+  version: 1
+  description: |
+    Intelligent customer support ticket routing: sentiment analysis → urgency detection → agent assignment.
+
+blackboard:
+  schema:
+    ticket_id: { type: string, required: true }
+    customer_message: { type: string, required: true }
+    sentiment: { type: string }
+    urgency: { type: string }
+    assigned_team: { type: string }
+
+states:
+  - name: ANALYSIS
+    type: initial
+    agent: router-bot
+    instructions: |
+      Analyse customer_message for sentiment (positive/neutral/negative/angry)
+      and urgency (low/medium/high/critical).
+      If sentiment is 'angry' or urgency is 'critical', set urgency to 'CRITICAL'.
+      Trigger 'analysis_done'.
+
+  - name: ROUTING
+    type: intermediate
+    script:
+      trigger: "urgency == 'CRITICAL' ? 'priority' : 'standard'"
+      updates:
+        assigned_team: "urgency == 'CRITICAL' ? 'Senior_Support' : 'General_Support'"
+
+  - name: AUTO_REPLY
+    type: intermediate
+    agent: router-bot
+    instructions: "Draft a polite automated reply acknowledging the standard ticket."
+
+  - name: DONE
+    type: terminal
+
+transitions:
+  - { from: ANALYSIS, to: ROUTING, trigger: analysis_done }
+  - { from: ROUTING, to: DONE, trigger: priority }
+  - { from: ROUTING, to: AUTO_REPLY, trigger: standard }
+  - { from: AUTO_REPLY, to: DONE, trigger: replied }
+
+agents:
+  - name: router-bot
+    rules:
+      - "Keep responses helpful and concise."
+      - "If the user is angry, be exceptionally empathetic."
 `

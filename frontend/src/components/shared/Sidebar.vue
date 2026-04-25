@@ -1,8 +1,9 @@
 <template>
   <aside class="w-14 flex flex-col items-center py-4 gap-1 border-r border-border bg-surface-1 shrink-0">
     <!-- Logo / Home -->
-    <RouterLink to="/dashboard" title="Home" class="mb-6 w-9 h-9 rounded-lg bg-accent flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <RouterLink to="/dashboard" :title="entStore.branding?.name || 'Home'" class="mb-6 w-9 h-9 rounded-lg bg-accent flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden">
+      <img v-if="entStore.branding?.logo_url" :src="entStore.branding.logo_url" class="w-full h-full object-cover" />
+      <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="8" cy="3" r="2" fill="white"/>
         <circle cx="3" cy="13" r="2" fill="white"/>
         <circle cx="13" cy="13" r="2" fill="white"/>
@@ -41,7 +42,6 @@
       </svg>
     </NavItem>
 
-
     <NavItem to="/mcp-servers" title="MCP Servers">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <rect x="2" y="2" width="20" height="6" rx="2"/>
@@ -54,6 +54,28 @@
       </svg>
     </NavItem>
 
+    <NavItem v-if="authStore.hasRole('admin')" to="/users" title="Users">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    </NavItem>
+
+    <NavItem v-if="authStore.hasRole('admin')" to="/usage" title="Usage & Reporting">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+      </svg>
+    </NavItem>
+
+    <NavItem v-if="authStore.hasRole('super_admin')" to="/tenants" title="Tenants">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <line x1="9" y1="3" x2="9" y2="21"/>
+      </svg>
+    </NavItem>
+
     <div class="flex-1"/>
 
     <NavItem to="/settings" title="Settings">
@@ -63,6 +85,12 @@
       </svg>
     </NavItem>
 
+    <button @click="onLogout" title="Sign Out" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all mb-2">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </button>
+
     <!-- WS indicator -->
     <div :title="connected ? 'Live' : 'Disconnected'"
          :class="connected ? 'bg-green-500' : 'bg-red-500'"
@@ -71,14 +99,28 @@
 </template>
 
 <script setup>
-import { RouterLink, useRoute } from 'vue-router'
-import { computed } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { computed, onMounted } from 'vue'
 import { useWebSocket }      from '@/composables/useWebSocket'
 import { useExecutionStore } from '@/stores/execution'
+import { useAuthStore }      from '@/stores/auth'
+import { useEnterpriseStore } from '@/stores/enterprise'
 
 const { connected } = useWebSocket()
 const route      = useRoute()
 const execStore  = useExecutionStore()
+const authStore  = useAuthStore()
+const entStore   = useEnterpriseStore()
+const router     = useRouter()
+
+function onLogout() {
+  authStore.logout()
+  router.push('/login')
+}
+
+onMounted(() => {
+  entStore.fetchBranding()
+})
 
 const pendingCount = computed(() => execStore.pendingHITL.length)
 </script>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ type MemoryStore struct {
 	mu            sync.RWMutex
 	tenants       map[string]*Tenant  // key: id
 	tenantsBySlug map[string]string   // slug → id
+	idpConfigs    map[string]*IDPConfig
 	definitions   map[string]*defEntry       // key: tenantID:name@version
 	runs          map[string]*asmtypes.WorkflowRun
 	transitions   map[string][]*asmtypes.TransitionRecord // key: runID
@@ -32,6 +34,7 @@ type MemoryStore struct {
 	apiKeysByHash map[string]string            // hash → id
 
 	mcpLogs       map[string][]*asmtypes.MCPAuditLog // key: runID
+	auditLogs     []*AuditLog
 }
 
 type defEntry struct {
@@ -43,6 +46,7 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		tenants:       make(map[string]*Tenant),
 		tenantsBySlug: make(map[string]string),
+		idpConfigs:    make(map[string]*IDPConfig),
 		definitions:   make(map[string]*defEntry),
 		runs:          make(map[string]*asmtypes.WorkflowRun),
 		transitions:   make(map[string][]*asmtypes.TransitionRecord),
@@ -99,6 +103,91 @@ func (s *MemoryStore) GetTenantBySlug(_ context.Context, slug string) (*Tenant, 
 	}
 	cp := *s.tenants[id]
 	return &cp, nil
+}
+
+func (s *MemoryStore) UpdateTenantLicense(ctx context.Context, id, token string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tenants[id]
+	if !ok {
+		return fmt.Errorf("tenant '%s' not found", id)
+	}
+	t.LicenseToken = token
+	return nil
+}
+
+func (s *MemoryStore) GetTenantIDPConfig(_ context.Context, tenantID string) (*IDPConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cfg, ok := s.idpConfigs[tenantID]
+	if !ok {
+		return nil, fmt.Errorf("idp config for tenant '%s' not found", tenantID)
+	}
+	cp := *cfg
+	return &cp, nil
+}
+
+func (s *MemoryStore) UpsertTenantIDPConfig(_ context.Context, cfg *IDPConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *cfg
+	s.idpConfigs[cfg.TenantID] = &cp
+	return nil
+}
+
+func (s *MemoryStore) UpdateTenantBranding(_ context.Context, id, name, logoURL string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tenants[id]
+	if !ok {
+		return fmt.Errorf("tenant %s not found", id)
+	}
+	t.Name = name
+	t.LogoURL = logoURL
+	return nil
+}
+
+func (s *MemoryStore) UpdateTenantSecrets(_ context.Context, id string, secrets map[string]string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tenants[id]
+	if !ok {
+		return fmt.Errorf("tenant %s not found", id)
+	}
+	t.Secrets = secrets
+	return nil
+}
+
+func (s *MemoryStore) RecordAuditLog(_ context.Context, entry *AuditLog) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *entry
+	if cp.CreatedAt.IsZero() {
+		cp.CreatedAt = time.Now()
+	}
+	s.auditLogs = append(s.auditLogs, &cp)
+	return nil
+}
+
+func (s *MemoryStore) ListAuditLogs(_ context.Context, tenantID string, limit, offset int) ([]*AuditLog, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*AuditLog
+	for _, l := range s.auditLogs {
+		if l.TenantID == tenantID {
+			out = append(out, l)
+		}
+	}
+	// Simple slice logic for limit/offset
+	start := offset
+	if start > len(out) {
+		return []*AuditLog{}, nil
+	}
+	end := start + limit
+	if end > len(out) {
+		end = len(out)
+	}
+	return out[start:end], nil
 }
 
 func (s *MemoryStore) ListTenants(_ context.Context) ([]*Tenant, error) {
@@ -280,6 +369,26 @@ func (s *MemoryStore) DeleteDefinition(ctx context.Context, name, version string
 	return nil
 }
 
+func (s *MemoryStore) CountDefinitions(ctx context.Context) (int, error) {
+	tenantID := TenantIDFromContext(ctx)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	// Only count unique workflow names for the limit
+	names := make(map[string]bool)
+	prefix := tenantID + ":"
+	for k := range s.definitions {
+		if strings.HasPrefix(k, prefix) {
+			// key format is tid:name@version
+			parts := strings.Split(strings.TrimPrefix(k, prefix), "@")
+			if len(parts) > 0 {
+				names[parts[0]] = true
+			}
+		}
+	}
+	return len(names), nil
+}
+
 // -- RunStore --
 
 func (s *MemoryStore) CreateRun(_ context.Context, run *asmtypes.WorkflowRun) error {
@@ -383,6 +492,45 @@ func (s *MemoryStore) ListTransitions(_ context.Context, runID string) ([]*asmty
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.transitions[runID], nil
+}
+
+func (s *MemoryStore) CountRuns(ctx context.Context, filter RunFilter) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	count := 0
+	for _, r := range s.runs {
+		if filter.TenantID != "" && r.TenantID != filter.TenantID {
+			continue
+		}
+		if filter.WorkflowName != "" && r.WorkflowName != filter.WorkflowName {
+			continue
+		}
+		if filter.Status != "" && r.Status != filter.Status {
+			continue
+		}
+		if filter.StartedFrom != nil && r.StartedAt.Before(*filter.StartedFrom) {
+			continue
+		}
+		if filter.StartedTo != nil && r.StartedAt.After(*filter.StartedTo) {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (s *MemoryStore) GetRunStats(ctx context.Context) (map[string]int, error) {
+	tenantID := TenantIDFromContext(ctx)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]int)
+	for _, r := range s.runs {
+		if tenantID != "" && r.TenantID != tenantID {
+			continue
+		}
+		out[string(r.Status)]++
+	}
+	return out, nil
 }
 
 // -- HITLStore --
