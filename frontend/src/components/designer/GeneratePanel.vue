@@ -60,7 +60,14 @@
 
         <!-- Process Description -->
         <div class="space-y-2">
-          <label class="text-[10px] text-text-muted uppercase font-bold tracking-tighter">Process Description</label>
+          <div class="flex items-center justify-between">
+            <label class="text-[10px] text-text-muted uppercase font-bold tracking-tighter">Process Description</label>
+            <button @click="emit('requestDescriptionModal')" class="text-text-muted hover:text-violet-400 transition-colors" title="Expand editor">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+              </svg>
+            </button>
+          </div>
           <textarea
             :value="description"
             @input="onDescriptionInput"
@@ -234,6 +241,7 @@ const emit = defineEmits([
   'update:pipelineStep',
   'update:pipelineWarning',
   'apply',
+  'requestDescriptionModal',
 ])
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────

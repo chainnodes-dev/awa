@@ -80,6 +80,12 @@ type HITLStore interface {
 	ListPendingHITL(ctx context.Context) ([]*asmtypes.HITLRequest, error)
 }
 
+// SystemSettingsStore manages platform-wide configuration.
+type SystemSettingsStore interface {
+	GetSystemSetting(ctx context.Context, key string) (string, error)
+	SetSystemSetting(ctx context.Context, key, value string) error
+}
+
 // Store is the combined store interface.
 type Store interface {
 	WorkflowStore
@@ -92,6 +98,7 @@ type Store interface {
 	LLMConfigStore
 	EventSubscriptionStore
 	APIKeyStore
+	SystemSettingsStore
 	Close() error
 }
 

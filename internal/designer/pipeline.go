@@ -80,7 +80,7 @@ func (g *Generator) DecomposeWorkflow(ctx context.Context, req PipelineRequest) 
 	system += pipelineOutputFormat()
 
 	userMsg := fmt.Sprintf("Process description:\n\n%s", req.ProcessDescription)
-	return g.runPipelineStep(ctx, system, userMsg, true)
+	return g.runPipelineStep(ctx, req, system, userMsg, true)
 }
 
 // ── Step 2: Categorise ───────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*
 		"Process description:\n\n%s\n\nSkeleton workflow YAML (all nodes currently typed as 'intermediate'):\n\n```yaml\n%s\n```",
 		req.ProcessDescription, req.CurrentYAML,
 	)
-	return g.runPipelineStep(ctx, system, userMsg, true)
+	return g.runPipelineStep(ctx, req, system, userMsg, true)
 }
 
 // ── Step 3: Wire ─────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ func (g *Generator) WireWorkflow(ctx context.Context, req PipelineRequest) (*Pip
 		"Process description:\n\n%s\n\nCategorised workflow YAML (types assigned, needs transitions and blackboard schema):\n\n```yaml\n%s\n```",
 		req.ProcessDescription, req.CurrentYAML,
 	)
-	return g.runPipelineStep(ctx, system, userMsg, true)
+	return g.runPipelineStep(ctx, req, system, userMsg, true)
 }
 
 // ── Step 4: Implement ────────────────────────────────────────────────────────
@@ -204,14 +204,14 @@ func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*P
 		"Original process description:\n\n%s\n\nWorkflow with code and script nodes already implemented (remaining nodes need finalising):\n\n```yaml\n%s\n```",
 		req.ProcessDescription, patchedYAML,
 	)
-	return g.runPipelineStep(ctx, finishSystem, finishMsg, false)
+	return g.runPipelineStep(ctx, req, finishSystem, finishMsg, false)
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
 // runPipelineStep performs a single LLM call and extracts a YAML block from the response.
 // When softValidate is true, validation failures populate ValidationError but are not fatal.
-func (g *Generator) runPipelineStep(ctx context.Context, system, userMsg string, softValidate bool) (*PipelineStepResult, error) {
+func (g *Generator) runPipelineStep(ctx context.Context, req PipelineRequest, system, userMsg string, softValidate bool) (*PipelineStepResult, error) {
 	interaction := []llm.Message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: userMsg},
@@ -233,6 +233,10 @@ func (g *Generator) runPipelineStep(ctx context.Context, system, userMsg string,
 		return &PipelineStepResult{Interactions: interaction}, fmt.Errorf("no YAML block in response: %w", err)
 	}
 
+	// SELF-HEALING: AI often produces 'script: "string"' instead of 'script: {trigger: "string"}'
+	// or 'code: "string"' instead of 'code: {code: "string"}'. We fix these common shortcuts here.
+	yamlStr = repairNodeStructures(yamlStr)
+
 	def, _, valErr := asmtypes.LoadFromYAML([]byte(yamlStr))
 	validationError := ""
 	if valErr != nil {
@@ -243,12 +247,51 @@ func (g *Generator) runPipelineStep(ctx context.Context, system, userMsg string,
 		validationError = valErr.Error()
 	}
 
+	// PERSISTENCE: Ensure the process description is carried through every step.
+	if def != nil {
+		def.Metadata.ProcessDescription = req.ProcessDescription
+		// Update the YAML string to include the persisted description
+		if out, err := yaml.Marshal(def); err == nil {
+			yamlStr = string(out)
+		}
+	}
+
 	return &PipelineStepResult{
 		YAML:            yamlStr,
 		Definition:      def,
 		Interactions:    interaction,
 		ValidationError: validationError,
 	}, nil
+}
+
+// repairNodeStructures uses simple string/regex replacement to fix common AI YAML shortcuts
+// that violate the strict ASM schema.
+func repairNodeStructures(y string) string {
+	lines := strings.Split(y, "\n")
+	var out []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Fix 'script: "expr"' -> 'script: { trigger: "expr" }'
+		if strings.HasPrefix(trimmed, "script:") && !strings.Contains(trimmed, "{") && len(trimmed) > 8 {
+			val := strings.TrimSpace(trimmed[7:])
+			if val != "" && val != "{}" {
+				indent := line[:strings.Index(line, "script:")]
+				out = append(out, fmt.Sprintf("%sscript: { trigger: %s }", indent, val))
+				continue
+			}
+		}
+		// Fix 'code: "body"' -> 'code: { code: "body" }'
+		if strings.HasPrefix(trimmed, "code:") && !strings.Contains(trimmed, "{") && len(trimmed) > 6 {
+			val := strings.TrimSpace(trimmed[5:])
+			if val != "" && val != "{}" {
+				indent := line[:strings.Index(line, "code:")]
+				out = append(out, fmt.Sprintf("%scode: { code: %s }", indent, val))
+				continue
+			}
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }
 
 // implementFallback runs a single refinement LLM call when the wired YAML cannot
@@ -259,7 +302,7 @@ func (g *Generator) implementFallback(ctx context.Context, req PipelineRequest) 
 		"Here is the current workflow YAML:\n\n```yaml\n%s\n```\n\nProcess context: %s\n\nPlease apply the following change:\n\nImplement all placeholder nodes. Replace any TODO code with working JavaScript. Replace placeholder script triggers with real expr-lang expressions. Finalise hitl assignees, wait conditions, and emit_event definitions. Produce a complete runnable workflow.",
 		req.CurrentYAML, req.ProcessDescription,
 	)
-	return g.runPipelineStep(ctx, system, userMsg, false)
+	return g.runPipelineStep(ctx, req, system, userMsg, false)
 }
 
 // buildMCPSection builds the MCP server context block for a pipeline step prompt.
@@ -388,56 +431,56 @@ The YAML must be complete and valid according to the ASM schema.
 // ── Default system prompts ────────────────────────────────────────────────────
 
 func decomposeSystemPrompt() string {
-	return `You are a workflow decomposition expert for the ASM (Agentic State Machine) platform.
+	return `You are a world-class business process architect and workflow decomposition expert for the ASM (Agentic State Machine) platform.
 
-Your task is to break a business process description into discrete workflow states (nodes).
+Your task is to transform a high-level business process description into a granular, high-fidelity workflow structure (nodes). 
+
+## Your Goal: Maximum Granularity
+Do not be generic. A "good" decomposition identifies every critical logical pivot and operational step. If a process involves "Checking an invoice and then paying it", that is at least 3 steps: 
+1. Validate invoice data (Check)
+2. Decide on payment (Decision)
+3. Execute payment (Action)
 
 ## What to produce
 
 For each state you identify:
-- A concise SCREAMING_SNAKE_CASE name
-- A clear 1–2 sentence description (set as the 'instructions' field) explaining what happens at this step
+- A descriptive SCREAMING_SNAKE_CASE name (e.g., ` + "`VALIDATE_INVOICE_TOTAL`" + ` instead of ` + "`CHECK`" + `)
+- A clear 2-3 sentence description in the 'instructions' field. This MUST explain:
+    - The specific INPUTS being considered
+    - The logical TRANSFORMATION or DECISION being made
+    - The possible OUTCOMES (triggers)
 - Type: follow the rules below for node typing
 
 ### Node typing rules for this step
 - The FIRST state (entry point) MUST have type: initial
-- End states (success, failure, done, etc.) MUST have type: terminal
-- ALL other states: set type: intermediate — specific typing happens in the next step
+- End states (success, failure, rejected, error) MUST have type: terminal
+- ALL other states: set type: intermediate — specific classification happens in the next step
+
+### Identification Strategy
+1. **Identification of Error Paths**: Explicitly identify where the process can fail (e.g., "Invalid Data", "Unauthorized", "System Timeout") and create dedicated terminal states for these.
+2. **Distinct Operations**: If two actions happen sequentially (e.g., "Get Data" then "Transform Data"), create two separate nodes.
+3. **Decisions/Gateways**: Every time a "if", "whether", or "depending on" is mentioned, ensure there is a preceding node that prepares that decision.
 
 Additionally:
-- Create a single 'primary-agent' entry in the agents block (as a YAML list item)
-- **REQUIRED**: Add minimal transitions connecting states in a logical, linear sequence. Use trigger name 'next' for now.
+- Create a 'primary-agent' entry in the agents block (as a YAML list item).
+- **REQUIRED**: Add logical transitions connecting states. Use trigger names like 'next', 'ok', 'error', 'invalid', 'approved'.
 - Set metadata.name, metadata.description, metadata.version: "1", apiVersion: asm/v1, kind: Workflow
-
-## What NOT to produce
-
-- Do NOT assign specific types (code, script, hitl, etc.) to middle states — only 'intermediate'
-- Do NOT generate any JavaScript, expr-lang expressions, or form schemas
-- Do NOT generate a blackboard schema yet
-- Do NOT add complex guards or conditional branching yet
 
 ## Critical YAML format rules
 
-The 'agents' field MUST be a YAML list, not a map:
+The 'agents' field MUST be a YAML list:
 ` + "```yaml" + `
 agents:
-  - name: primary-agent   # CORRECT — list item with 'name' field
-    model: ""
-` + "```" + `
-NOT:
-` + "```yaml" + `
-agents:
-  primary-agent:          # WRONG — this is a map key, not a list item
+  - name: primary-agent
     model: ""
 ` + "```" + `
 
-Transitions also MUST be a list in the top-level ` + "`transitions:`" + ` block, never inside a state.
-
+Transitions MUST be in the top-level ` + "`transitions:`" + ` block:
 ` + "```yaml" + `
 transitions:
-  - from: STATE_A      # CORRECT: Top-level list item
-    to: STATE_B
-    trigger: next
+  - from: VALIDATE_STEP
+    to: PROCESS_STEP
+    trigger: ok
 ` + "```" + `
 
 The 'states' field MUST be a YAML list (sequence), NOT a map:
@@ -455,10 +498,10 @@ states:
 
 ## Rules
 
-1. Exactly one 'initial' state and at least one 'terminal' state
-2. **CRITICAL**: Every 'instructions' field MUST be wrapped in double-quotes to prevent YAML parsing errors (e.g. ` + "`" + `instructions: "Task: verify invoice"` + "`" + `).
-3. **Every non-terminal state MUST have at least one outgoing transition** (usually to the next logical step)
-4. Be thorough — identify all meaningful steps in the process
+1. Exactly one 'initial' state and at least one 'terminal' state.
+2. **CRITICAL**: Every 'instructions' field MUST be wrapped in double-quotes.
+3. **Every non-terminal state MUST have at least one outgoing transition**.
+4. Be thorough — a detailed 10-node workflow is better than a vague 3-node one.
 `
 }
 
@@ -500,20 +543,38 @@ For any type that requires a code body, inject a minimal placeholder so the YAML
 - wait nodes: add ` + "`condition: \"true\"` and `on_condition: \"done\"`" + `
 - emit_event nodes: ` + "`emit_event: { event_name: placeholder_event, completion_trigger: done }`" + `
 
-## Critical YAML format rules
+## Node Structure Requirements
 
-The 'agents' field MUST be a YAML list, not a map:
+**CRITICAL**: Strictly adhere to the following object structures. Do NOT flatten these into strings.
+
+### type: code
+Must have a ` + "`" + `code` + "`" + ` object with a nested ` + "`code`" + ` string field.
 ` + "```yaml" + `
-agents:
-  - name: primary-agent   # CORRECT
-    model: ""
+# CORRECT
+- name: MY_CODE_NODE
+  type: code
+  code:
+    code: "// TODO: implement" # Nested key
+
+# WRONG (causes unmarshal error)
+- name: MY_CODE_NODE
+  type: code
+  code: "// TODO: implement" # DO NOT DO THIS
 ` + "```" + `
 
-The 'states' field MUST be a YAML list (sequence), NOT a map:
+### type: script
+Must have a ` + "`script`" + ` object with a nested ` + "`trigger`" + ` field.
 ` + "```yaml" + `
-states:
-  - name: START        # CORRECT
-    type: initial
+# CORRECT
+- name: MY_SCRIPT_NODE
+  type: script
+  script:
+    trigger: "'done'"
+
+# WRONG
+- name: MY_SCRIPT_NODE
+  type: script
+  script: "'done'" # DO NOT DO THIS
 ` + "```" + `
 
 ## Rules
@@ -521,7 +582,6 @@ states:
 - Do NOT change state names, instructions, or transitions
 - Do NOT change the type of 'initial' or 'terminal' states
 - Do NOT generate a blackboard schema yet
-- **Timeouts**: If a step implies a time limit (e.g., "must be approved within 2 days"), note that it will need a 'timeout' and 'on_timeout' field in the next step.
 - Output the complete updated YAML with all types correctly assigned
 `
 }
@@ -596,6 +656,30 @@ For every 'intermediate' node (agent) that was categorized to use an MCP server:
 For each code/script/hitl/wait/emit_event node, update the 'instructions' field to include:
 - A clear description of what the node does
 - The exact list of valid trigger names it may fire (so Step 4 code generators have full context)
+
+## Node Structure Requirements
+
+**CRITICAL**: Strictly adhere to the following object structures. Do NOT flatten these into strings.
+
+### type: code
+Must have a ` + "`" + `code` + "`" + ` object with a nested ` + "`code`" + ` string field.
+` + "```yaml" + `
+# CORRECT
+- name: MY_CODE_NODE
+  type: code
+  code:
+    code: "// TODO: implement" # Nested key
+` + "```" + `
+
+### type: script
+Must have a ` + "`script`" + ` object with a nested ` + "`trigger`" + ` field.
+` + "```yaml" + `
+# CORRECT
+- name: MY_SCRIPT_NODE
+  type: script
+  script:
+    trigger: "blackboard.amount > 100"
+` + "```" + `
 
 ## Rules
 

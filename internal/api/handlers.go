@@ -38,6 +38,32 @@ type Handlers struct {
 	licenseSigner   *enterprise.Signer
 }
 
+func (h *Handlers) ReloadLicenseKeys(ctx context.Context) error {
+	pubKeyPEM, err := h.store.GetSystemSetting(ctx, "license_public_key")
+	if err == nil && pubKeyPEM != "" {
+		pubKey, err := enterprise.ParseRSAPublicKey(pubKeyPEM)
+		if err == nil {
+			h.licenseVerifier = enterprise.NewVerifier(pubKey)
+			slog.Info("License verification reloaded from DB")
+		} else {
+			slog.Error("Failed to parse license public key from DB", "error", err)
+		}
+	}
+
+	privKeyPEM, err := h.store.GetSystemSetting(ctx, "license_private_key")
+	if err == nil && privKeyPEM != "" {
+		privKey, err := enterprise.ParseRSAPrivateKey(privKeyPEM)
+		if err == nil {
+			h.licenseSigner = enterprise.NewSigner(privKey)
+			slog.Info("License signing reloaded from DB")
+		} else {
+			slog.Error("Failed to parse license private key from DB", "error", err)
+		}
+	}
+
+	return nil
+}
+
 func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer) *Handlers {
 	return &Handlers{
 		engine:          engine,

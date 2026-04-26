@@ -17,8 +17,13 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
     meta.versionNumber = def.metadata?.version_number ?? 0
     meta.description        = def.metadata?.description         ?? ''
     meta.systemPrompt       = def.metadata?.system_prompt       ?? ''
-    meta.processDescription = def.metadata?.process_description ?? ''
     meta.reusable           = def.metadata?.reusable            ?? false
+    
+    // Only overwrite process description if the new definition actually has one.
+    // This prevents forgetful AI responses from clearing the user's latest prompt.
+    if (def.metadata?.process_description) {
+      meta.processDescription = def.metadata.process_description
+    }
     
     meta.inputs       = (def.inputs       ?? []).map(p => ({ ...p }))
     meta.outputs      = (def.outputs      ?? []).map(p => ({ ...p }))

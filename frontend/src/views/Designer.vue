@@ -307,6 +307,7 @@
             v-model:pipeline-warning="generatePipelineWarning"
             :metadata-abstract="meta.description"
             @apply="onAIApply"
+            @request-description-modal="showDescriptionModal = true"
           />
         </aside>
       </template>
@@ -317,32 +318,13 @@
     <AddStateModal v-if="showAddState" @close="showAddState = false" @add="onAddState" />
     
     <!-- Description Pop-out Modal -->
-    <div v-if="showDescriptionModal" class="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/60 backdrop-blur-sm">
-      <div class="bg-surface-1 border border-border w-full max-w-4xl h-full max-h-[80vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        <header class="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-          <div>
-            <h2 class="text-sm font-semibold text-text">Process Description</h2>
-            <p class="text-xs text-text-muted">Describe the business logic and AI agents will follow these rules.</p>
-          </div>
-          <button @click="showDescriptionModal = false" class="btn-ghost p-1">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </header>
-        <div class="flex-1 p-4 bg-surface-0 overflow-hidden">
-          <CodeEditor
-            v-model="meta.processDescription"
-            language="text"
-            height="100%"
-            class="h-full border-none"
-          />
-        </div>
-        <footer class="px-6 py-4 border-t border-border flex justify-end gap-3 shrink-0 bg-surface-1">
-          <button @click="showDescriptionModal = false" class="btn-primary px-6">Done</button>
-        </footer>
-      </div>
-    </div>
+    <CodeEditorModal
+      v-if="showDescriptionModal"
+      v-model="meta.processDescription"
+      title="Process Description"
+      language="text"
+      @close="showDescriptionModal = false"
+    />
 
     <!-- Start Run Modal -->
     <StartRunModal
@@ -375,6 +357,7 @@ import EdgePanel              from '@/components/designer/EdgePanel.vue'
 import BBFieldModal           from '@/components/designer/BBFieldModal.vue'
 import AddStateModal          from '@/components/designer/AddStateModal.vue'
 import GeneratePanel          from '@/components/designer/GeneratePanel.vue'
+import CodeEditorModal       from '@/components/designer/CodeEditorModal.vue'
 import IOPortEditor           from '@/components/designer/IOPortEditor.vue'
 
 import { useWorkflowStore } from '@/stores/workflows'

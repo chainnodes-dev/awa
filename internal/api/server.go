@@ -44,8 +44,21 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 	hub.Start(context.Background())
 
 	var verifier *enterprise.Verifier
-	if cfg.LicensePublicKey != "" {
-		pubKey, err := enterprise.ParseRSAPublicKey(cfg.LicensePublicKey)
+	var signer *enterprise.Signer
+
+	// Load keys from DB if present, otherwise fallback to config.
+	pubKeyPEM, err := s.GetSystemSetting(context.Background(), "license_public_key")
+	if err != nil || pubKeyPEM == "" {
+		pubKeyPEM = cfg.LicensePublicKey
+	}
+
+	privKeyPEM, err := s.GetSystemSetting(context.Background(), "license_private_key")
+	if err != nil || privKeyPEM == "" {
+		privKeyPEM = cfg.LicensePrivateKey
+	}
+
+	if pubKeyPEM != "" {
+		pubKey, err := enterprise.ParseRSAPublicKey(pubKeyPEM)
 		if err != nil {
 			slog.Error("Failed to parse license public key", "error", err)
 		} else {
@@ -53,12 +66,11 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 			slog.Info("License verification enabled", "key_type", "RSA")
 		}
 	} else {
-		slog.Warn("License verification disabled: LICENSE_PUBLIC_KEY is empty")
+		slog.Warn("License verification disabled: no public key found in DB or env")
 	}
 
-	var signer *enterprise.Signer
-	if cfg.LicensePrivateKey != "" {
-		privKey, err := enterprise.ParseRSAPrivateKey(cfg.LicensePrivateKey)
+	if privKeyPEM != "" {
+		privKey, err := enterprise.ParseRSAPrivateKey(privKeyPEM)
 		if err != nil {
 			slog.Error("Failed to parse license private key", "error", err)
 		} else {

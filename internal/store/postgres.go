@@ -965,6 +965,27 @@ func (s *PostgresStore) RevokeAllUserTokens(ctx context.Context, userID string) 
 	return err
 }
 
+// -- SystemSettingsStore --
+
+func (s *PostgresStore) GetSystemSetting(ctx context.Context, key string) (string, error) {
+	var value string
+	err := s.pool.QueryRow(ctx, `SELECT value FROM system_settings WHERE key=$1`, key).Scan(&value)
+	if err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+func (s *PostgresStore) SetSystemSetting(ctx context.Context, key, value string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO system_settings (key, value, updated_at)
+		VALUES ($1, $2, CURRENT_TIMESTAMP)
+		ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=CURRENT_TIMESTAMP`,
+		key, value,
+	)
+	return err
+}
+
 // Ping checks that the database connection is healthy.
 func (s *PostgresStore) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)

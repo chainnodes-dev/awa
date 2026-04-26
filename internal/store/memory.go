@@ -35,6 +35,8 @@ type MemoryStore struct {
 
 	mcpLogs       map[string][]*asmtypes.MCPAuditLog // key: runID
 	auditLogs     []*AuditLog
+
+	systemSettings map[string]string
 }
 
 type defEntry struct {
@@ -60,6 +62,7 @@ func NewMemoryStore() *MemoryStore {
 		apiKeys:       make(map[string]*APIKey),
 		apiKeysByHash: make(map[string]string),
 		mcpLogs:       make(map[string][]*asmtypes.MCPAuditLog),
+		systemSettings: make(map[string]string),
 	}
 }
 
@@ -737,6 +740,25 @@ func (s *MemoryStore) RevokeAllUserTokens(_ context.Context, userID string) erro
 			t.Revoked = true
 		}
 	}
+	return nil
+}
+
+// -- SystemSettingsStore --
+
+func (s *MemoryStore) GetSystemSetting(_ context.Context, key string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	val, ok := s.systemSettings[key]
+	if !ok {
+		return "", fmt.Errorf("system setting '%s' not found", key)
+	}
+	return val, nil
+}
+
+func (s *MemoryStore) SetSystemSetting(_ context.Context, key, value string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.systemSettings[key] = value
 	return nil
 }
 

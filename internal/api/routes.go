@@ -160,6 +160,13 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 				entAdmin.PUT("/oidc", h.SetIDPConfig)
 			}
 		}
+		// System Settings — super_admin only.
+		system := api.Group("/system", auth.RequireRole(auth.RoleSuperAdmin))
+		{
+			system.GET("/keys", h.GetSystemKeys)
+			system.POST("/keys", h.UpdateSystemKeys)
+			system.POST("/keys/generate", h.GenerateSystemKeys)
+		}
 	}
 
 	// External process invocation — accepts JWT OR API key (no role restriction beyond auth).

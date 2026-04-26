@@ -150,3 +150,31 @@ func ParseRSAPrivateKey(pemStr string) (*rsa.PrivateKey, error) {
 	}
 	return priv, nil
 }
+// GenerateRSAKeyPair creates a new 2048-bit RSA key pair and returns them as PEM strings.
+func GenerateRSAKeyPair() (privPEM string, pubPEM string, err error) {
+	priv, err := rsa.GenerateKey(nil, 2048)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Private Key
+	privBytes := x509.MarshalPKCS1PrivateKey(priv)
+	privBlock := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: privBytes,
+	}
+	privPEM = string(pem.EncodeToMemory(privBlock))
+
+	// Public Key
+	pubBytes, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	if err != nil {
+		return "", "", err
+	}
+	pubBlock := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubBytes,
+	}
+	pubPEM = string(pem.EncodeToMemory(pubBlock))
+
+	return privPEM, pubPEM, nil
+}

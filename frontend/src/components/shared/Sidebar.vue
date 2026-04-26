@@ -76,6 +76,17 @@
       </svg>
     </NavItem>
 
+    <NavItem v-if="authStore.hasRole('super_admin')" to="/system" title="System Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <rect x="4" y="4" width="16" height="16" rx="2"/>
+        <path d="M9 9h6v6H9z"/>
+        <path d="M12 2v2"/>
+        <path d="M12 20v2"/>
+        <path d="M2 12h2"/>
+        <path d="M20 12h2"/>
+      </svg>
+    </NavItem>
+
     <div class="flex-1"/>
 
     <NavItem to="/settings" title="Settings">
