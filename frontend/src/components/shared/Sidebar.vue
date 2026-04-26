@@ -69,7 +69,7 @@
       </svg>
     </NavItem>
 
-    <NavItem v-if="authStore.hasRole('super_admin')" to="/tenants" title="Tenants">
+    <NavItem v-if="authStore.hasRole('admin') || authStore.hasRole('super_admin')" to="/tenants" title="Tenants">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
         <line x1="9" y1="3" x2="9" y2="21"/>
@@ -85,7 +85,7 @@
       </svg>
     </NavItem>
 
-    <button @click="onLogout" title="Sign Out" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all mb-2">
+    <button @click="onLogout" title="Sign Out" class="w-9 h-9 rounded-lg flex items-center justify-center text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-all mb-2">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
       </svg>
@@ -142,7 +142,7 @@ export const NavItem = defineComponent({
           'w-9 h-9 rounded-lg flex items-center justify-center transition-all',
           isActive.value
             ? 'bg-accent text-white'
-            : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
+            : 'text-text-muted hover:text-text hover:bg-white/5'
         ]
       }, slots.default)
     }

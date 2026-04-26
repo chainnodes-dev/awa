@@ -2,16 +2,16 @@
   <div class="p-4 space-y-2.5 flex-1 overflow-y-auto">
     <!-- Header -->
     <div class="flex items-center gap-2 mb-1">
-      <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex-1">State</span>
+      <span class="text-xs font-semibold text-text-muted uppercase tracking-wider flex-1">State</span>
       <button class="btn-danger text-xs py-1" @click="$emit('delete')">Delete</button>
     </div>
 
     <div class="space-y-1">
-      <label class="text-xs text-slate-500">Name</label>
+      <label class="text-xs text-text-muted">Name</label>
       <input class="input" v-model="form.name" />
     </div>
     <div class="space-y-1">
-      <label class="text-xs text-slate-500">Type</label>
+      <label class="text-xs text-text-muted">Type</label>
       <select class="input" v-model="form.type">
         <option value="initial">initial</option>
         <option value="terminal">terminal</option>
@@ -27,7 +27,7 @@
       </select>
     </div>
     <div class="space-y-1">
-      <label class="text-xs text-slate-500">Instructions</label>
+      <label class="text-xs text-text-muted">Instructions</label>
       <textarea class="input text-xs leading-relaxed resize-none h-16" v-model="form.instructions" placeholder="Describe what should happen in this state…" />
       <!-- Generate Code button — only shown for code nodes -->
       <div v-if="form.type === 'code'" class="pt-0.5">
@@ -54,7 +54,7 @@
     <!-- Wait condition -->
     <template v-if="form.type === 'wait'">
       <div class="space-y-1">
-        <label class="text-xs text-slate-500">Condition (expr-lang)</label>
+        <label class="text-xs text-text-muted">Condition (expr-lang)</label>
         <input class="input font-mono text-xs" v-model="form.condition" placeholder="e.g. blackboard.count >= 2" />
       </div>
     </template>
@@ -63,7 +63,7 @@
     <template v-if="form.type === 'hitl'">
       <div class="pt-3 border-t border-border space-y-2.5">
         <h4 class="text-xs font-semibold text-amber-500/80 uppercase tracking-wider">HITL Form Schema</h4>
-        <p class="text-[10px] text-slate-600 leading-relaxed">
+        <p class="text-[10px] text-text-muted leading-relaxed">
           Define a JSON Schema to render a custom input form in the dashboard.
         </p>
         <CodeEditor
@@ -77,7 +77,7 @@
         </div>
         <div class="flex items-center gap-3">
           <button 
-            class="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1"
+            class="text-[10px] text-text-muted hover:text-text flex items-center gap-1"
             @click="form.form_schema = JSON.stringify({type: 'object', properties: { field_1: {type: 'string', title: 'Example Field'}}}, null, 2); validateJson()"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -105,10 +105,10 @@
       <div class="pt-3 border-t border-border space-y-2.5">
         <div class="flex items-center gap-2">
           <h4 class="text-xs font-semibold text-teal-400/80 uppercase tracking-wider flex-1">Code</h4>
-          <span class="text-[9px] font-mono text-slate-600 uppercase tracking-wider bg-teal-500/10 px-1.5 py-0.5 rounded">JavaScript</span>
+          <span class="text-[9px] font-mono text-text-muted uppercase tracking-wider bg-teal-500/10 px-1.5 py-0.5 rounded">JavaScript</span>
           <!-- Pop-out button -->
           <button
-            class="text-slate-500 hover:text-teal-400 transition-colors"
+            class="text-text-muted hover:text-teal-400 transition-colors"
             title="Open in fullscreen editor"
             @click="showCodeModal = true"
           >
@@ -118,7 +118,7 @@
             </svg>
           </button>
         </div>
-        <p class="text-[10px] text-slate-600 leading-relaxed">
+        <p class="text-[10px] text-text-muted leading-relaxed">
           Read &amp; write <code class="text-teal-400/80">bb</code> directly. Return
           <code class="text-teal-400/80">&#123; trigger, blackboard_updates?, reasoning? &#125;</code>
           or call <code class="text-teal-400/80">trigger('name')</code> to exit early.
@@ -134,7 +134,7 @@
     <!-- Agent field -->
     <template v-if="form.type !== 'script' && form.type !== 'wait' && form.type !== 'code' && form.type !== 'subprocess'">
       <div class="space-y-1">
-        <label class="text-xs text-slate-500">Agent</label>
+        <label class="text-xs text-text-muted">Agent</label>
         <div class="space-y-1.5">
           <AgentCombobox
             v-model="form.agent"
@@ -149,12 +149,12 @@
     </template>
 
     <div class="space-y-1">
-      <label class="text-xs text-slate-500">Timeout</label>
+      <label class="text-xs text-text-muted">Timeout</label>
       <input class="input" v-model="form.timeout" placeholder="e.g. 30m" />
     </div>
     <template v-if="form.timeout">
       <div class="space-y-1">
-        <label class="text-xs text-slate-500">On Timeout</label>
+        <label class="text-xs text-text-muted">On Timeout</label>
         <input class="input font-mono" v-model="form.on_timeout" placeholder="trigger_name" />
       </div>
     </template>
@@ -163,21 +163,21 @@
     <template v-if="form.type === 'script'">
       <div class="pt-3 border-t border-border space-y-2.5">
         <h4 class="text-xs font-semibold text-amber-500/80 uppercase tracking-wider">Script</h4>
-        <p class="text-[10px] text-slate-600 leading-relaxed">Expressions use expr-lang. Blackboard fields are available as variables.</p>
+        <p class="text-[10px] text-text-muted leading-relaxed">Expressions use expr-lang. Blackboard fields are available as variables.</p>
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">Trigger Expression *</label>
+          <label class="text-xs text-text-muted">Trigger Expression *</label>
           <input class="input font-mono text-xs" v-model="form.script_trigger" placeholder='amount > 1000 ? "needs_review" : "auto_approve"' />
         </div>
         <div class="space-y-1">
           <div class="flex items-center justify-between">
-            <label class="text-xs text-slate-500">Blackboard Updates</label>
+            <label class="text-xs text-text-muted">Blackboard Updates</label>
             <button class="text-[10px] text-indigo-400 hover:text-indigo-300" @click="form.script_updates.push({ key: '', expr: '' })">+ Add</button>
           </div>
           <div v-for="(row, i) in form.script_updates" :key="i" class="flex gap-1.5 items-center">
             <input class="input font-mono text-xs flex-1" v-model="row.key" placeholder="field" />
-            <span class="text-slate-600 text-xs shrink-0">=</span>
+            <span class="text-text-muted text-xs shrink-0">=</span>
             <input class="input font-mono text-xs flex-[2]" v-model="row.expr" placeholder="amount * 0.2" />
-            <button class="text-slate-600 hover:text-red-400 text-xs shrink-0 px-1" @click="form.script_updates.splice(i, 1)">✕</button>
+            <button class="text-text-muted hover:text-red-400 text-xs shrink-0 px-1" @click="form.script_updates.splice(i, 1)">✕</button>
           </div>
         </div>
       </div>
@@ -187,21 +187,21 @@
     <template v-if="form.type === 'subprocess'">
       <div class="pt-3 border-t border-border space-y-2.5">
         <h4 class="text-xs font-semibold text-violet-400/80 uppercase tracking-wider">Sub-Process Call</h4>
-        <p class="text-[10px] text-slate-600 leading-relaxed">
+        <p class="text-[10px] text-text-muted leading-relaxed">
           Invoke another workflow as a child process. The child runs to completion
           before this state transitions.
         </p>
 
         <div class="flex gap-2">
           <div class="space-y-1 flex-[2]">
-            <label class="text-xs text-slate-500">Reusable Process</label>
+            <label class="text-xs text-text-muted">Reusable Process</label>
             <ProcessPicker
               v-model="form.process_ref"
               @process-selected="onProcessSelected"
             />
           </div>
           <div class="space-y-1 flex-1">
-            <label class="text-xs text-slate-500">Version</label>
+            <label class="text-xs text-text-muted">Version</label>
             <input
               class="input font-mono text-xs"
               v-model="form.process_version"
@@ -211,7 +211,7 @@
         </div>
 
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">Completion Trigger</label>
+          <label class="text-xs text-text-muted">Completion Trigger</label>
           <input
             class="input font-mono text-xs"
             v-model="form.completion_trigger"
@@ -220,7 +220,7 @@
         </div>
 
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">Failure Trigger <span class="text-slate-600 font-normal">(optional)</span></label>
+          <label class="text-xs text-text-muted">Failure Trigger <span class="text-text-muted font-normal">(optional)</span></label>
           <input
             class="input font-mono text-xs"
             v-model="form.failure_trigger"
@@ -241,39 +241,39 @@
 
     <!-- Transitions -->
     <div class="pt-3 border-t border-border space-y-3">
-      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Transitions</h4>
+      <h4 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Transitions</h4>
       <div class="space-y-1.5">
-        <div class="text-[10px] text-slate-500 font-medium">Incoming</div>
+        <div class="text-[10px] text-text-muted font-medium">Incoming</div>
         <div v-if="incomingTransitions.length" class="space-y-1">
           <div v-for="t in incomingTransitions" :key="`${t.from}__${t.label}`"
                class="flex items-center gap-1.5 px-2 py-1.5 rounded bg-surface-0 border border-border text-[10px]">
-            <span class="text-slate-400 font-mono truncate max-w-[80px]">{{ t.from }}</span>
-            <span class="text-slate-600">→</span>
+            <span class="text-text-muted font-mono truncate max-w-[80px]">{{ t.from }}</span>
+            <span class="text-text-muted">→</span>
             <span class="text-indigo-400 font-mono font-medium truncate flex-1">{{ t.label }}</span>
           </div>
         </div>
-        <p v-else class="text-[10px] text-slate-600 italic">None</p>
+        <p v-else class="text-[10px] text-text-muted italic">None</p>
       </div>
       <div class="space-y-1.5">
-        <div class="text-[10px] text-slate-500 font-medium">Outgoing</div>
+        <div class="text-[10px] text-text-muted font-medium">Outgoing</div>
         <div v-if="outgoingTransitions.length" class="space-y-1">
           <div v-for="t in outgoingTransitions" :key="`${t.label}__${t.to}`"
                class="flex items-center gap-1.5 px-2 py-1.5 rounded bg-surface-0 border border-border text-[10px]">
             <span class="text-indigo-400 font-mono font-medium truncate flex-1">{{ t.label }}</span>
-            <span class="text-slate-600">→</span>
-            <span class="text-slate-400 font-mono truncate max-w-[80px]">{{ t.to }}</span>
+            <span class="text-text-muted">→</span>
+            <span class="text-text-muted font-mono truncate max-w-[80px]">{{ t.to }}</span>
           </div>
         </div>
-        <p v-else class="text-[10px] text-slate-600 italic">None</p>
+        <p v-else class="text-[10px] text-text-muted italic">None</p>
       </div>
     </div>
 
     <!-- Agent config section -->
     <template v-if="form.type !== 'script' && form.type !== 'subprocess' && form.agent">
       <div class="pt-3 border-t border-border space-y-2.5">
-        <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Agent Config</h4>
+        <h4 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Agent Config</h4>
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">Provider</label>
+          <label class="text-xs text-text-muted">Provider</label>
           <select class="input text-xs" v-model="agentForm.provider">
             <option value="">Default (global setting)</option>
             <option value="anthropic">Anthropic</option>
@@ -292,15 +292,15 @@
           </select>
         </div>
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">Model</label>
+          <label class="text-xs text-text-muted">Model</label>
           <input class="input text-xs" v-model="agentForm.model" placeholder="Leave blank to use provider default" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">Task Queue</label>
+          <label class="text-xs text-text-muted">Task Queue</label>
           <input class="input font-mono text-xs" v-model="agentForm.task_queue" placeholder="asm-workers (default)" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs text-slate-500">MCP Servers</label>
+          <label class="text-xs text-text-muted">MCP Servers</label>
           <MCPServerPicker v-model="agentForm.mcp_servers" />
         </div>
       </div>
@@ -308,26 +308,26 @@
       <!-- Convert to Script section -->
       <div class="pt-3 border-t border-border space-y-2">
         <div class="flex items-center gap-2">
-          <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider flex-1">Convert to Script</h4>
+          <h4 class="text-xs font-semibold text-text-muted uppercase tracking-wider flex-1">Convert to Script</h4>
           <button
             :class="['text-xs px-2.5 py-1 rounded font-medium transition-colors', scaffoldLoading ? 'bg-indigo-500/20 text-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white']"
             :disabled="scaffoldLoading"
             @click="generateScript"
           >{{ scaffoldLoading ? 'Generating…' : 'Generate Script' }}</button>
         </div>
-        <p class="text-[10px] text-slate-600 leading-relaxed">Convert this LLM agent into deterministic expr-lang logic for zero-latency execution.</p>
+        <p class="text-[10px] text-text-muted leading-relaxed">Convert this LLM agent into deterministic expr-lang logic for zero-latency execution.</p>
         <p v-if="scaffoldError" class="text-[10px] text-red-400 font-mono">{{ scaffoldError }}</p>
         <template v-if="scaffoldScript">
           <div class="bg-surface-0 border border-border rounded p-2 space-y-2">
             <div class="space-y-0.5">
-              <span class="text-[9px] text-slate-500 font-bold uppercase">Trigger</span>
+              <span class="text-[9px] text-text-muted font-bold uppercase">Trigger</span>
               <div class="text-[10px] font-mono text-indigo-400">{{ scaffoldScript.trigger }}</div>
             </div>
             <div v-if="Object.keys(scaffoldScript.updates || {}).length" class="space-y-0.5">
-              <span class="text-[9px] text-slate-500 font-bold uppercase">Updates</span>
-              <div v-for="(v, k) in scaffoldScript.updates" :key="k" class="text-[10px] font-mono text-slate-400 flex gap-2">
-                <span class="text-slate-500 shrink-0">{{ k }}</span>
-                <span class="text-slate-600 shrink-0">=</span>
+              <span class="text-[9px] text-text-muted font-bold uppercase">Updates</span>
+              <div v-for="(v, k) in scaffoldScript.updates" :key="k" class="text-[10px] font-mono text-text-muted flex gap-2">
+                <span class="text-text-muted shrink-0">{{ k }}</span>
+                <span class="text-text-muted shrink-0">=</span>
                 <span class="truncate">{{ v }}</span>
               </div>
             </div>
@@ -356,12 +356,12 @@
   <div v-if="showPreview" class="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm" @click.self="showPreview = false">
     <div class="bg-surface-1 border border-border rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden animate-in zoom-in duration-200">
       <header class="px-6 py-4 border-b border-border flex items-center justify-between">
-        <h3 class="text-sm font-bold text-slate-200">Form Preview</h3>
-        <button @click="showPreview = false" class="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+        <h3 class="text-sm font-bold text-text">Form Preview</h3>
+        <button @click="showPreview = false" class="text-text-muted hover:text-text transition-colors">✕</button>
       </header>
       <div class="p-8 overflow-y-auto max-h-[70vh]">
         <div class="mb-6 pb-6 border-b border-border/50">
-          <p class="text-xs text-slate-400">This is how the form will appear to operators during HITL resolution.</p>
+          <p class="text-xs text-text-muted">This is how the form will appear to operators during HITL resolution.</p>
         </div>
         <JsonSchemaForm
           :schema="parsedFormSchema"

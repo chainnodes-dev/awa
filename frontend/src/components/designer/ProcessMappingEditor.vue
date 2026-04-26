@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-1.5">
-    <div class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{{ label }}</div>
+    <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{{ label }}</div>
 
     <div
       v-for="(port, i) in localPorts"
@@ -14,7 +14,7 @@
         placeholder="port"
         @input="update(i, 'name', $event.target.value)"
       />
-      <span class="text-slate-600 text-[10px] shrink-0">→</span>
+      <span class="text-text-muted text-[10px] shrink-0">→</span>
       <!-- Blackboard field (parent side) -->
       <input
         class="input font-mono text-[10px] py-0.5 flex-1"
@@ -23,14 +23,14 @@
         @input="update(i, 'bbField', $event.target.value)"
       />
       <button
-        class="text-slate-600 hover:text-red-400 text-xs shrink-0 px-1 transition-colors"
+        class="text-text-muted hover:text-red-400 text-xs shrink-0 px-1 transition-colors"
         @click="remove(i)"
       >✕</button>
     </div>
 
     <button
       class="w-full text-[10px] py-1 border border-dashed border-border hover:border-indigo-500/40
-             text-slate-600 hover:text-slate-400 rounded transition-colors"
+             text-text-muted hover:text-text-muted rounded transition-colors"
       @click="add"
     >
       + Add mapping

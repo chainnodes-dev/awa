@@ -278,3 +278,47 @@ func (h *Handlers) SetIDPConfig(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "IDP configuration updated"})
 }
+
+// GenerateLicenseToken generates a signed license token for a specific tenant.
+// POST /api/v1/tenants/:id/license/generate
+func (h *Handlers) GenerateLicenseToken(c *gin.Context) {
+	if h.licenseSigner == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "license signing not configured on server (set LICENSE_PRIVATE_KEY)"})
+		return
+	}
+
+	targetTenantID := c.Param("id")
+	var req struct {
+		Tier         string   `json:"tier" binding:"required"`
+		ExpiresInDays int      `json:"expires_in_days" binding:"required"`
+		Features     []string `json:"features"`
+		MaxRuns      int      `json:"max_runs"`
+		MaxWorkflows int      `json:"max_workflows"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	claims := &enterprise.LicenseClaims{
+		Tier:         enterprise.Tier(req.Tier),
+		TenantID:     targetTenantID,
+		IssuedAt:     time.Now().Unix(),
+		ExpiresAt:    time.Now().AddDate(0, 0, req.ExpiresInDays).Unix(),
+		Features:     req.Features,
+		MaxRuns:      req.MaxRuns,
+		MaxWorkflows: req.MaxWorkflows,
+	}
+
+	token, err := h.licenseSigner.Sign(claims)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to sign token: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"token": token,
+		"claims": claims,
+	})
+}

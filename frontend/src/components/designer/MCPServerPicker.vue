@@ -1,10 +1,10 @@
 <template>
   <div class="space-y-2">
     <!-- Loading -->
-    <div v-if="loading" class="text-[10px] text-slate-600 italic">Loading servers…</div>
+    <div v-if="loading" class="text-[10px] text-text-muted italic">Loading servers…</div>
 
     <!-- Empty registry -->
-    <div v-else-if="!servers.length" class="text-[10px] text-slate-600 italic">
+    <div v-else-if="!servers.length" class="text-[10px] text-text-muted italic">
       No MCP servers registered. Add one in
       <span class="text-indigo-400">Settings → MCP Servers</span>.
     </div>
@@ -20,7 +20,7 @@
           'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-medium transition-colors',
           isSelected(srv)
             ? 'bg-indigo-500/20 border-indigo-500/60 text-indigo-300'
-            : 'bg-surface-0 border-border text-slate-400 hover:border-indigo-500/40 hover:text-slate-300',
+            : 'bg-surface-0 border-border text-text-muted hover:border-indigo-500/40 hover:text-text',
         ]"
         @click="toggle(srv)"
       >
@@ -36,10 +36,10 @@
 
     <!-- Resolved value preview -->
     <div v-if="modelValue" class="flex items-start gap-1.5 mt-1">
-      <span class="text-[9px] text-slate-600 shrink-0 mt-px font-mono uppercase tracking-wider">value</span>
-      <span class="text-[9px] font-mono text-slate-500 break-all leading-relaxed">{{ modelValue }}</span>
+      <span class="text-[9px] text-text-muted shrink-0 mt-px font-mono uppercase tracking-wider">value</span>
+      <span class="text-[9px] font-mono text-text-muted break-all leading-relaxed">{{ modelValue }}</span>
       <button
-        class="shrink-0 text-slate-600 hover:text-red-400 transition-colors ml-auto"
+        class="shrink-0 text-text-muted hover:text-red-400 transition-colors ml-auto"
         title="Clear selection"
         @click="$emit('update:modelValue', '')"
       >

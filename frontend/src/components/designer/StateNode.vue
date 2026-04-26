@@ -14,14 +14,14 @@
         v-if="hovered && data.instructions"
         class="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+8px)] z-50 w-64 p-2.5 rounded-lg border border-border bg-surface-0 shadow-xl pointer-events-none"
       >
-        <p class="text-[10px] text-slate-300 leading-relaxed whitespace-pre-wrap">{{ data.instructions }}</p>
+        <p class="text-[10px] text-text leading-relaxed whitespace-pre-wrap">{{ data.instructions }}</p>
         <div class="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 rotate-45 bg-surface-0 border-r border-b border-border -mt-1"/>
       </div>
     </Transition>
 
     <div class="flex items-center gap-2">
       <div :class="['w-2.5 h-2.5 rounded-full shrink-0', dotColor]"/>
-      <span class="text-sm font-semibold text-slate-100 leading-tight truncate">{{ data.name }}</span>
+      <span class="text-sm font-semibold text-text leading-tight truncate">{{ data.name }}</span>
       <span v-if="data.type === 'hitl'" class="ml-auto text-amber-400">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm0 8a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm9 11v-1a7 7 0 0 0-7-7h-4a7 7 0 0 0-7 7v1h2v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1z"/>
@@ -46,7 +46,7 @@
 
     <!-- Agent badge -->
     <div v-if="data.agent" class="flex items-center gap-1">
-      <span class="text-[10px] font-mono text-slate-500 truncate">⚡ {{ data.agent }}</span>
+      <span class="text-[10px] font-mono text-text-muted truncate">⚡ {{ data.agent }}</span>
     </div>
 
     <!-- Timeout badge -->
@@ -57,16 +57,16 @@
     <!-- Active state blackboard preview -->
     <div v-if="isActive && bbPreview.length" class="mt-1 pt-1 border-t border-white/10 space-y-0.5">
       <div v-for="[k, v] in bbPreview" :key="k" class="flex gap-1 text-[10px]">
-        <span class="text-slate-500 shrink-0">{{ k }}:</span>
-        <span class="text-slate-300 truncate font-mono">{{ formatVal(v) }}</span>
+        <span class="text-text-muted shrink-0">{{ k }}:</span>
+        <span class="text-text truncate font-mono">{{ formatVal(v) }}</span>
       </div>
     </div>
 
     <!-- Vue Flow handles -->
     <Handle v-if="data.type !== 'initial'" type="target" :position="Position.Top"
-            class="!w-3 !h-3 !bg-slate-600 !border-slate-500 hover:!bg-accent" />
+            class="!w-3 !h-3 !bg-text-muted !border-text-muted hover:!bg-accent" />
     <Handle v-if="data.type !== 'terminal'" type="source" :position="Position.Bottom"
-            class="!w-3 !h-3 !bg-slate-600 !border-slate-500 hover:!bg-accent" />
+            class="!w-3 !h-3 !bg-text-muted !border-text-muted hover:!bg-accent" />
   </div>
 </template>
 
@@ -87,9 +87,9 @@ const TYPE_STYLES = {
   initial:      'border-green-500/60 bg-green-500/10',
   intermediate: 'border-indigo-500/60 bg-indigo-500/10',
   hitl:         'border-amber-500/40 bg-amber-500/10',
-  terminal:     'border-slate-500/60 bg-slate-500/10',
+  terminal:     'border-border bg-surface-2',
   subprocess:   'border-violet-500/60 bg-violet-500/10',
-  wait:         'border-white/20 bg-white/5',
+  wait:         'border-border bg-surface-2',
   script:       'border-amber-500/50 bg-amber-500/5',
   code:         'border-teal-500/60 bg-teal-500/10',
   emit_event:   'border-blue-500/40 bg-blue-500/10',

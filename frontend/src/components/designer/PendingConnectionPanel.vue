@@ -1,8 +1,8 @@
 <template>
   <div class="p-4 space-y-3 flex-1 overflow-y-auto">
     <div class="flex items-center gap-2 mb-1">
-      <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex-1">New Transition</span>
-      <button class="text-slate-600 hover:text-slate-300 text-sm leading-none p-1" @click="$emit('cancel')">✕</button>
+      <span class="text-xs font-semibold text-text-muted uppercase tracking-wider flex-1">New Transition</span>
+      <button class="text-text-muted hover:text-text text-sm leading-none p-1" @click="$emit('cancel')">✕</button>
     </div>
     <div class="flex items-center gap-2 py-2 px-3 rounded-lg bg-surface-0 border border-border">
       <span class="text-xs font-mono text-indigo-400 truncate">{{ connection.source }}</span>
@@ -12,14 +12,14 @@
       <span class="text-xs font-mono text-indigo-400 truncate">{{ connection.target }}</span>
     </div>
     <div class="space-y-1">
-      <label class="text-xs text-slate-500">Trigger name *</label>
+      <label class="text-xs text-text-muted">Trigger name *</label>
       <input class="input font-mono" v-model="trigger" placeholder="e.g. validation_passed" @keydown.enter="onConfirm" />
     </div>
     <div class="space-y-1">
-      <label class="text-xs text-slate-500">Guard expression</label>
+      <label class="text-xs text-text-muted">Guard expression</label>
       <input class="input font-mono" v-model="guard" placeholder="e.g. amount > 0" @keydown.enter="onConfirm" />
     </div>
-    <p class="text-[10px] text-slate-600">Leave guard empty to always follow this transition.</p>
+    <p class="text-[10px] text-text-muted">Leave guard empty to always follow this transition.</p>
     <div class="flex gap-2 pt-1">
       <button class="btn-ghost text-xs flex-1" @click="$emit('cancel')">Cancel</button>
       <button class="btn-primary text-xs flex-1" :class="{ 'opacity-40 cursor-not-allowed': !trigger }" :disabled="!trigger" @click="onConfirm">Create</button>

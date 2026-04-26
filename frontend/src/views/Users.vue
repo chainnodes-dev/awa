@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col h-full overflow-hidden">
     <header class="flex items-center gap-4 px-6 py-4 border-b border-border shrink-0">
-      <h1 class="text-base font-semibold text-slate-200">User Management</h1>
+      <h1 class="text-base font-semibold text-text">User Management</h1>
       <div class="flex-1"/>
       <button @click="showAddModal = true" class="btn-primary">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -12,25 +12,25 @@
     </header>
 
     <div class="flex-1 overflow-y-auto p-6">
-      <div v-if="userStore.loading" class="text-slate-600 text-sm py-8 text-center">Loading users…</div>
+      <div v-if="userStore.loading" class="text-text-muted text-sm py-8 text-center">Loading users…</div>
       
       <div v-else class="card overflow-hidden">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-border">
-              <th class="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Username</th>
-              <th class="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Role</th>
-              <th class="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">User ID</th>
+              <th class="text-left px-4 py-2.5 text-xs font-medium text-text-muted uppercase tracking-wider">Username</th>
+              <th class="text-left px-4 py-2.5 text-xs font-medium text-text-muted uppercase tracking-wider">Role</th>
+              <th class="text-left px-4 py-2.5 text-xs font-medium text-text-muted uppercase tracking-wider">User ID</th>
               <th/>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in userStore.users" :key="user.id" class="border-b border-border/50 hover:bg-white/3 transition-colors">
-              <td class="px-4 py-3 text-slate-200 font-medium">{{ user.username }}</td>
+              <td class="px-4 py-3 text-text font-medium">{{ user.username }}</td>
               <td class="px-4 py-3">
                 <span :class="roleBadgeClass(user.role)">{{ user.role }}</span>
               </td>
-              <td class="px-4 py-3 font-mono text-[10px] text-slate-500">{{ user.id }}</td>
+              <td class="px-4 py-3 font-mono text-[10px] text-text-muted">{{ user.id }}</td>
               <td class="px-4 py-3 text-right">
                 <div class="flex justify-end gap-2">
                   <select 
@@ -65,15 +65,15 @@
         <h2 class="text-lg font-semibold text-slate-100 mb-6 font-display">Add New User</h2>
         <form @submit.prevent="createUser" class="space-y-4">
           <div class="space-y-1.5">
-            <label class="text-xs font-medium text-slate-400">Username</label>
+            <label class="text-xs font-medium text-text-muted">Username</label>
             <input v-model="newUser.username" type="text" required class="input" placeholder="e.g. alice_smith" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-xs font-medium text-slate-400">Temporary Password</label>
+            <label class="text-xs font-medium text-text-muted">Temporary Password</label>
             <input v-model="newUser.password" type="password" required class="input" placeholder="••••••••" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-xs font-medium text-slate-400">Initial Role</label>
+            <label class="text-xs font-medium text-text-muted">Initial Role</label>
             <select v-model="newUser.role" class="input">
               <option value="viewer">Viewer (Read-only)</option>
               <option value="runner">Runner (Execute Workflows)</option>
@@ -159,6 +159,6 @@ function roleBadgeClass(role) {
   if (role === 'super_admin') return `${base} bg-purple-500/10 text-purple-400`
   if (role === 'editor') return `${base} bg-blue-500/10 text-blue-400`
   if (role === 'runner') return `${base} bg-green-500/10 text-green-400`
-  return `${base} bg-slate-500/10 text-slate-400`
+  return `${base} bg-slate-500/10 text-text-muted`
 }
 </script>

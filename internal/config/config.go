@@ -38,7 +38,8 @@ type Config struct {
 	JWTSecret     string // HS256 signing key — must be set in production
 	AdminUsername string // seed admin username on first boot
 	AdminPassword    string // seed admin password on first boot
-	LicensePublicKey string // PEM-encoded RSA public key for verification
+	LicensePublicKey  string // PEM-encoded RSA public key for verification
+	LicensePrivateKey string // PEM-encoded RSA private key for signing (optional)
 
 	// Logging
 	LogLevel string
@@ -67,6 +68,7 @@ func Load() *Config {
 		AdminPassword:     getEnv("ADMIN_PASSWORD", "pwd"),
 		LogLevel:          getEnv("LOG_LEVEL", "info"),
 		LicensePublicKey:  getEnv("LICENSE_PUBLIC_KEY", ""),
+		LicensePrivateKey: getEnv("LICENSE_PRIVATE_KEY", ""),
 	}
 }
 

@@ -50,10 +50,24 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 			slog.Error("Failed to parse license public key", "error", err)
 		} else {
 			verifier = enterprise.NewVerifier(pubKey)
+			slog.Info("License verification enabled", "key_type", "RSA")
+		}
+	} else {
+		slog.Warn("License verification disabled: LICENSE_PUBLIC_KEY is empty")
+	}
+
+	var signer *enterprise.Signer
+	if cfg.LicensePrivateKey != "" {
+		privKey, err := enterprise.ParseRSAPrivateKey(cfg.LicensePrivateKey)
+		if err != nil {
+			slog.Error("Failed to parse license private key", "error", err)
+		} else {
+			signer = enterprise.NewSigner(privKey)
+			slog.Info("License signing enabled")
 		}
 	}
 
-	handlers := NewHandlers(engine, s, jwtSvc, gen, sched, llmReg, verifier)
+	handlers := NewHandlers(engine, s, jwtSvc, gen, sched, llmReg, verifier, signer)
 
 	router := gin.New()
 	router.Use(gin.Recovery())

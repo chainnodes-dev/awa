@@ -1,8 +1,8 @@
 <template>
   <div class="flex flex-col h-full">
     <div class="px-4 py-2.5 border-b border-border flex items-center gap-3">
-      <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Event Log</span>
-      <span class="text-xs text-slate-600">{{ events.length }} events</span>
+      <span class="text-xs font-semibold text-text-muted uppercase tracking-wider">Event Log</span>
+      <span class="text-xs text-text-muted">{{ events.length }} events</span>
       <button @click="clear" class="ml-auto btn-ghost text-xs py-0.5 px-2">Clear</button>
     </div>
 
@@ -11,12 +11,12 @@
         v-for="(ev, i) in events" :key="i"
         class="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-white/5 group"
       >
-        <span class="text-slate-600 shrink-0 w-[72px]">{{ formatTime(ev.timestamp) }}</span>
+        <span class="text-text-muted shrink-0 w-[72px]">{{ formatTime(ev.timestamp) }}</span>
         <span :class="['shrink-0 w-32 truncate', eventColor(ev.type)]">{{ ev.type }}</span>
-        <span :class="['text-slate-500', ev.type === 'run.failed' ? 'break-all' : 'truncate group-hover:whitespace-normal']">{{ summarise(ev) }}</span>
+        <span :class="['text-text-muted', ev.type === 'run.failed' ? 'break-all' : 'truncate group-hover:whitespace-normal']">{{ summarise(ev) }}</span>
       </div>
 
-      <div v-if="!events.length" class="text-slate-600 text-center py-8">
+      <div v-if="!events.length" class="text-text-muted text-center py-8">
         Waiting for events…
       </div>
     </div>
@@ -56,14 +56,14 @@ const EVENT_COLORS = {
   'run.failed':         'text-red-400',
   'state.changed':      'text-indigo-400',
   'blackboard.updated': 'text-blue-400',
-  'agent.thinking':     'text-slate-500',
+  'agent.thinking':     'text-text-muted',
   'agent.tool_call':    'text-cyan-600',
   'agent.prompt':       'text-violet-400',
   'agent.response':     'text-violet-300',
   'hitl.waiting':       'text-amber-400',
   'hitl.resolved':      'text-amber-300',
 }
-function eventColor(type) { return EVENT_COLORS[type] ?? 'text-slate-400' }
+function eventColor(type) { return EVENT_COLORS[type] ?? 'text-text-muted' }
 
 function summarise(ev) {
   const d = ev.data ?? {}

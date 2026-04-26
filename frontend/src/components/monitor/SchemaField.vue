@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-1.5">
-    <label v-if="schema.title || name" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+    <label v-if="schema.title || name" class="block text-[10px] font-semibold text-text-muted uppercase tracking-wider">
       {{ schema.title || name }}
       <span v-if="required" class="text-red-500/80 ml-0.5">*</span>
     </label>
@@ -25,7 +25,7 @@
         @change="$emit('update:modelValue', $event.target.checked)"
         class="w-4 h-4 rounded border-border bg-surface-1 text-accent focus:ring-accent/30"
       />
-      <span class="text-xs text-slate-400">{{ schema.description || 'Enable' }}</span>
+      <span class="text-xs text-text-muted">{{ schema.description || 'Enable' }}</span>
     </div>
 
     <!-- Number -->
@@ -50,7 +50,7 @@
       :required="required"
     />
 
-    <p v-if="schema.description && schema.type !== 'boolean'" class="text-[10px] text-slate-600 italic">
+    <p v-if="schema.description && schema.type !== 'boolean'" class="text-[10px] text-text-muted italic">
       {{ schema.description }}
     </p>
   </div>

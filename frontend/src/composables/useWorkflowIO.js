@@ -15,9 +15,10 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
     meta.name          = def.metadata?.name           ?? ''
     meta.version       = def.metadata?.version        ?? '1.0.0'
     meta.versionNumber = def.metadata?.version_number ?? 0
-    meta.description   = def.metadata?.description    ?? ''
-    meta.systemPrompt  = def.metadata?.system_prompt  ?? ''
-    meta.reusable      = def.metadata?.reusable       ?? false
+    meta.description        = def.metadata?.description         ?? ''
+    meta.systemPrompt       = def.metadata?.system_prompt       ?? ''
+    meta.processDescription = def.metadata?.process_description ?? ''
+    meta.reusable           = def.metadata?.reusable            ?? false
     
     meta.inputs       = (def.inputs       ?? []).map(p => ({ ...p }))
     meta.outputs      = (def.outputs      ?? []).map(p => ({ ...p }))

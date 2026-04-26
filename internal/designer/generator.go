@@ -163,6 +163,12 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 		}, fmt.Errorf("generated workflow is invalid: %w", err)
 	}
 
+	// Ensure process description is persisted.
+	// If the LLM didn't fill it in, use the user's latest request.
+	if def != nil && def.Metadata.ProcessDescription == "" {
+		def.Metadata.ProcessDescription = req.Description
+	}
+
 	return &GenerateResult{
 		YAML:         yamlStr,
 		Definition:   def,
@@ -208,6 +214,7 @@ metadata:
   name: kebab-case-unique-name
   version: "1"
   description: "Concise 1-sentence abstract"
+  process_description: "Detailed natural language description of the business process"
   labels: { env: production, category: finance }
   system_prompt: "Global persona/rules for LLM agents"
 blackboard:
@@ -258,7 +265,7 @@ agents:
 1. **Integrity**: Exactly one 'initial' and at least one 'terminal' state.
 2. **Global Transitions**: Transitions MUST be in the top-level 'transitions:' block. NEVER place a 'transitions' list inside a state.
 3. **Efficiency**: Be concise. Avoid redundant intermediate states. Consolidate logic into scripts/code where possible. 
-4. **Code Nodes**: The 'code' block MUST be an object with a nested 'code' field: `+"`code: { code: \"...\" }`"+`.
+4. **Code Nodes**: The 'code' block MUST be an object with BOTH 'language' (always 'javascript') and 'code' fields. Example: ` + "`" + `code: { language: javascript, code: "bb.total = bb.amount * 1.19; return {trigger: 'done'};" }` + "`" + ` . NEVER use a plain string.
 5. **Expressions**: NEVER use literal placeholders like "expr". Provide valid expr-lang logic.
 6. **Instructions**: Start each 'instructions' field with a concise 1-sentence node description for the human designer, followed by the specific task and available triggers for the agent.
 7. **Blackboard Minimalist**: Only define fields in 'blackboard.schema' that are required as initial input or need a specific default value. NEVER include fields that are produced or updated during workflow runtime (agents/scripts handle these dynamically).
@@ -267,6 +274,7 @@ agents:
 10. **States Format**: The 'states' field MUST be a YAML list (array), NOT a map.
 11. **Versioning**: Use simple increasing integers for 'metadata.version' (e.g., "1", "2", "3"). NEVER use semantic versioning like "1.0.0".
 12. **CRITICAL**: Every 'instructions' field MUST be wrapped in double-quotes to prevent YAML parsing errors (e.g. ` + "`" + `instructions: "Task: verify invoice"` + "`" + `).
+13. **Process Description**: Always include 'metadata.process_description' with a professional 2-3 sentence summary of the business logic.
 `))
 
 	// Add MCP server context if any servers were requested or all are listed.

@@ -17,8 +17,10 @@ import { useRoute } from 'vue-router'
 import Sidebar from '@/components/shared/Sidebar.vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useAuthStore } from '@/stores/auth'
+import { useTheme } from '@/composables/useTheme'
 
 const authStore = useAuthStore()
+useTheme() // Initialize theme
 const route = useRoute()
 
 // Boot WebSocket only when authenticated; reconnect when auth state changes.

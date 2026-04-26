@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full overflow-hidden">
     <!-- Top bar -->
     <header class="flex items-center gap-4 px-6 py-4 border-b border-border shrink-0">
-      <h1 class="text-base font-semibold text-slate-200">Dashboard</h1>
+      <h1 class="text-base font-semibold text-text">Dashboard</h1>
       <div class="flex-1"/>
       <RouterLink to="/designer" class="btn-primary">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -41,13 +41,13 @@
       <!-- Workflow Definitions -->
       <section>
         <div class="flex items-center gap-3 mb-3">
-          <h2 class="text-sm font-semibold text-slate-300">Workflow Definitions</h2>
-          <span class="badge bg-white/5 text-slate-500">{{ wfStore.definitions.length }}</span>
+          <h2 class="text-sm font-semibold text-text">Workflow Definitions</h2>
+          <span class="badge bg-white/5 text-text-muted">{{ wfStore.definitions.length }}</span>
         </div>
 
-        <div v-if="wfStore.loading" class="text-slate-600 text-sm py-8 text-center">Loading…</div>
+        <div v-if="wfStore.loading" class="text-text-muted text-sm py-8 text-center">Loading…</div>
         <div v-else-if="!wfStore.definitions.length" class="card p-8 text-center">
-          <p class="text-slate-500 text-sm mb-4">No workflows yet. Create your first one.</p>
+          <p class="text-text-muted text-sm mb-4">No workflows yet. Create your first one.</p>
           <RouterLink to="/designer" class="btn-primary">Create Workflow</RouterLink>
         </div>
         <div v-else class="grid grid-cols-1 gap-3">
@@ -65,21 +65,21 @@
       <!-- Recent Runs -->
       <section>
         <div class="flex items-center gap-3 mb-3">
-          <h2 class="text-sm font-semibold text-slate-300">Recent Runs</h2>
-          <span class="badge bg-white/5 text-slate-500">{{ execStore.runs.length }}</span>
+          <h2 class="text-sm font-semibold text-text">Recent Runs</h2>
+          <span class="badge bg-white/5 text-text-muted">{{ execStore.runs.length }}</span>
         </div>
 
         <!-- Filters -->
         <div class="flex flex-wrap items-end gap-3 mb-3">
           <div class="space-y-1.5">
-            <label class="text-[10px] text-slate-500 uppercase tracking-wider">Workflow</label>
+            <label class="text-[10px] text-text-muted uppercase tracking-wider">Workflow</label>
             <select v-model="runFilters.workflow" @change="applyFilters" class="input text-xs py-1.5 w-40">
               <option value="">All</option>
               <option v-for="d in wfStore.definitions" :key="d.metadata.name" :value="d.metadata.name">{{ d.metadata.name }}</option>
             </select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[10px] text-slate-500 uppercase tracking-wider">Status</label>
+            <label class="text-[10px] text-text-muted uppercase tracking-wider">Status</label>
             <select v-model="runFilters.status" @change="applyFilters" class="input text-xs py-1.5 w-32">
               <option value="">All</option>
               <option value="pending">pending</option>
@@ -90,29 +90,29 @@
             </select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[10px] text-slate-500 uppercase tracking-wider">Started from</label>
+            <label class="text-[10px] text-text-muted uppercase tracking-wider">Started from</label>
             <input type="date" v-model="runFilters.startedFrom" @change="applyFilters" class="input text-xs py-1.5 w-36" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[10px] text-slate-500 uppercase tracking-wider">Started to</label>
+            <label class="text-[10px] text-text-muted uppercase tracking-wider">Started to</label>
             <input type="date" v-model="runFilters.startedTo" @change="applyFilters" class="input text-xs py-1.5 w-36" />
           </div>
-          <button @click="resetFilters" class="btn-ghost text-xs py-1.5 px-2 text-slate-500">Reset</button>
+          <button @click="resetFilters" class="btn-ghost text-xs py-1.5 px-2 text-text-muted">Reset</button>
           <button v-if="authStore.hasRole('admin') && execStore.runs.length" @click="confirmDeleteAll" class="btn-danger text-xs py-1.5 px-2 ml-auto">Delete All</button>
         </div>
 
-        <div v-if="!execStore.runs.length" class="text-slate-600 text-sm py-4 text-center">
+        <div v-if="!execStore.runs.length" class="text-text-muted text-sm py-4 text-center">
           No runs match the current filters.
         </div>
         <div v-else class="card overflow-hidden">
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-border">
-                <th class="text-left px-4 py-2.5 text-xs font-medium text-slate-500">Run ID</th>
-                <th class="text-left px-4 py-2.5 text-xs font-medium text-slate-500">Workflow</th>
-                <th class="text-left px-4 py-2.5 text-xs font-medium text-slate-500">State</th>
-                <th class="text-left px-4 py-2.5 text-xs font-medium text-slate-500">Status</th>
-                <th class="text-left px-4 py-2.5 text-xs font-medium text-slate-500">Started</th>
+                <th class="text-left px-4 py-2.5 text-xs font-medium text-text-muted">Run ID</th>
+                <th class="text-left px-4 py-2.5 text-xs font-medium text-text-muted">Workflow</th>
+                <th class="text-left px-4 py-2.5 text-xs font-medium text-text-muted">State</th>
+                <th class="text-left px-4 py-2.5 text-xs font-medium text-text-muted">Status</th>
+                <th class="text-left px-4 py-2.5 text-xs font-medium text-text-muted">Started</th>
                 <th/>
               </tr>
             </thead>
@@ -121,13 +121,13 @@
                 v-for="run in execStore.runs.slice(0, 20)" :key="run.id"
                 class="border-b border-border/50 hover:bg-white/3 transition-colors"
               >
-                <td class="px-4 py-2.5 font-mono text-xs text-slate-400">{{ run.id.slice(0, 8) }}</td>
-                <td class="px-4 py-2.5 text-slate-300">{{ run.workflow_name }}</td>
+                <td class="px-4 py-2.5 font-mono text-xs text-text-muted">{{ run.id.slice(0, 8) }}</td>
+                <td class="px-4 py-2.5 text-text">{{ run.workflow_name }}</td>
                 <td class="px-4 py-2.5 font-mono text-xs text-indigo-400">{{ run.current_state }}</td>
                 <td class="px-4 py-2.5">
                   <span :class="`status-${run.status}`">{{ run.status }}</span>
                 </td>
-                <td class="px-4 py-2.5 text-xs text-slate-500">{{ relativeTime(run.started_at) }}</td>
+                <td class="px-4 py-2.5 text-xs text-text-muted">{{ relativeTime(run.started_at) }}</td>
                 <td class="px-4 py-2.5 text-right flex gap-1 justify-end">
                   <button @click="openMonitor(run.id)" class="btn-ghost text-xs py-1 px-2">Monitor</button>
                   <button v-if="authStore.hasRole('admin')" @click="confirmDeleteRun(run)" class="btn-danger text-xs py-1 px-2">Delete</button>
@@ -263,7 +263,7 @@ export const StatCard = defineComponent({
     const colors = { indigo: 'text-indigo-400 bg-indigo-500/10', blue: 'text-blue-400 bg-blue-500/10', amber: 'text-amber-400 bg-amber-500/10', green: 'text-green-400 bg-green-500/10' }
     return () => h('div', { class: 'card p-4' }, [
       h('div', { class: `text-2xl font-bold mb-1 ${colors[p.color]?.split(' ')[0]}` }, p.value),
-      h('div', { class: 'text-xs text-slate-500' }, p.label)
+      h('div', { class: 'text-xs text-text-muted' }, p.label)
     ])
   }
 })
@@ -276,11 +276,11 @@ export const WorkflowCard = defineComponent({
     return () => h('div', { class: 'card p-4 flex items-center gap-4 hover:border-border/80 transition-colors' }, [
       h('div', { class: 'flex-1 min-w-0' }, [
         h('div', { class: 'flex items-center gap-2 mb-1' }, [
-          h('span', { class: 'font-medium text-slate-200 text-sm' }, def.metadata.name),
-          h('span', { class: 'badge bg-white/5 text-slate-500 font-mono' }, def.metadata.version?.toString().startsWith('v') ? def.metadata.version : `v${def.metadata.version}`),
+          h('span', { class: 'font-medium text-text text-sm' }, def.metadata.name),
+          h('span', { class: 'badge bg-white/5 text-text-muted font-mono' }, def.metadata.version?.toString().startsWith('v') ? def.metadata.version : `v${def.metadata.version}`),
           def.metadata.reusable ? h('span', { class: 'badge bg-violet-500/10 text-violet-400 font-bold tracking-wider text-[9px]' }, 'REUSABLE') : null
         ]),
-        h('p', { class: 'text-xs text-slate-500 truncate' }, def.metadata.description || `${def.states?.length ?? 0} states · ${def.agents?.length ?? 0} agents`),
+        h('p', { class: 'text-xs text-text-muted truncate' }, def.metadata.description || `${def.states?.length ?? 0} states · ${def.agents?.length ?? 0} agents`),
       ]),
       h('div', { class: 'flex gap-2 shrink-0' }, [
         h('button', { class: 'btn-ghost text-xs', onClick: () => emit('edit') }, 'Edit'),

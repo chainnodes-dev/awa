@@ -3,14 +3,14 @@
     <div class="w-full max-w-sm bg-surface-1 rounded-xl shadow-lg p-8 space-y-6">
       <!-- Logo / title -->
       <div class="text-center space-y-1">
-        <h1 class="text-2xl font-bold text-content-primary">ASM Platform</h1>
-        <p class="text-sm text-content-secondary">Agentic State Machine</p>
+        <h1 class="text-2xl font-bold text-text">ASM Platform</h1>
+        <p class="text-sm text-text-muted">Agentic State Machine</p>
       </div>
 
       <!-- Form -->
       <form @submit.prevent="submit" class="space-y-4">
         <div class="space-y-1">
-          <label class="block text-sm font-medium text-content-secondary" for="username">
+          <label class="block text-sm font-medium text-text-muted" for="username">
             Username
           </label>
           <input
@@ -19,13 +19,12 @@
             type="text"
             autocomplete="username"
             required
-            class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-content-primary
-                   focus:outline-none focus:ring-2 focus:ring-accent-primary"
+            class="input"
           />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-sm font-medium text-content-secondary" for="password">
+          <label class="block text-sm font-medium text-text-muted" for="password">
             Password
           </label>
           <input
@@ -34,8 +33,7 @@
             type="password"
             autocomplete="current-password"
             required
-            class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-content-primary
-                   focus:outline-none focus:ring-2 focus:ring-accent-primary"
+            class="input"
           />
         </div>
 
@@ -47,9 +45,9 @@
         <button
           type="submit"
           :disabled="authStore.loading"
-          class="w-full py-2 px-4 rounded-lg bg-accent-primary text-white font-medium
-                 hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed
-                 transition-colors"
+          class="w-full py-2.5 px-4 rounded-lg bg-accent text-white font-semibold
+                 hover:brightness-110 active:scale-[0.98] disabled:opacity-50
+                 transition-all shadow-sm"
         >
           {{ authStore.loading ? 'Signing in…' : 'Sign in' }}
         </button>

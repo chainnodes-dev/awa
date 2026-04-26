@@ -10,9 +10,9 @@
         <svg class="text-violet-400/60 shrink-0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
         </svg>
-        <span v-if="selected" class="font-mono text-xs text-slate-200 flex-1 truncate">{{ selected.metadata.name }}</span>
-        <span v-else class="text-xs text-slate-600 flex-1">— select a process —</span>
-        <svg class="text-slate-600 shrink-0 transition-transform" :class="open && 'rotate-180'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <span v-if="selected" class="font-mono text-xs text-text flex-1 truncate">{{ selected.metadata.name }}</span>
+        <span v-else class="text-xs text-text-muted flex-1">— select a process —</span>
+        <svg class="text-text-muted shrink-0 transition-transform" :class="open && 'rotate-180'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
       </button>
@@ -35,8 +35,8 @@
         </div>
 
         <div class="max-h-52 overflow-y-auto">
-          <div v-if="loading" class="px-3 py-4 text-xs text-slate-600 text-center">Loading…</div>
-          <div v-else-if="!filtered.length" class="px-3 py-4 text-xs text-slate-600 text-center italic">No reusable processes found</div>
+          <div v-if="loading" class="px-3 py-4 text-xs text-text-muted text-center">Loading…</div>
+          <div v-else-if="!filtered.length" class="px-3 py-4 text-xs text-text-muted text-center italic">No reusable processes found</div>
           <button
             v-for="p in filtered"
             :key="p.metadata.name"
@@ -46,11 +46,11 @@
           >
             <div class="flex items-center gap-2 mb-0.5">
               <span class="font-mono text-xs text-violet-400 font-medium">{{ p.metadata.name }}</span>
-              <span v-if="p.inputs?.length || p.outputs?.length" class="text-[9px] text-slate-600">
+              <span v-if="p.inputs?.length || p.outputs?.length" class="text-[9px] text-text-muted">
                 {{ p.inputs?.length || 0 }}↓ {{ p.outputs?.length || 0 }}↑
               </span>
             </div>
-            <p v-if="p.metadata.description" class="text-[10px] text-slate-500 leading-snug line-clamp-1">{{ p.metadata.description }}</p>
+            <p v-if="p.metadata.description" class="text-[10px] text-text-muted leading-snug line-clamp-1">{{ p.metadata.description }}</p>
           </button>
         </div>
       </div>
@@ -62,26 +62,26 @@
         <!-- Port info -->
         <div class="flex gap-4">
           <div v-if="selected.inputs?.length" class="space-y-0.5">
-            <div class="text-[9px] text-slate-600 uppercase tracking-wider font-semibold">Inputs</div>
+            <div class="text-[9px] text-text-muted uppercase tracking-wider font-semibold">Inputs</div>
             <div v-for="p in selected.inputs" :key="p.name" class="flex items-center gap-1.5 text-[10px]">
               <span class="font-mono text-indigo-300">{{ p.name }}</span>
-              <span class="text-slate-600">{{ p.type }}</span>
+              <span class="text-text-muted">{{ p.type }}</span>
               <span v-if="p.required" class="text-red-400/70">*</span>
             </div>
           </div>
           <div v-if="selected.outputs?.length" class="space-y-0.5">
-            <div class="text-[9px] text-slate-600 uppercase tracking-wider font-semibold">Outputs</div>
+            <div class="text-[9px] text-text-muted uppercase tracking-wider font-semibold">Outputs</div>
             <div v-for="p in selected.outputs" :key="p.name" class="flex items-center gap-1.5 text-[10px]">
               <span class="font-mono text-teal-300">{{ p.name }}</span>
-              <span class="text-slate-600">{{ p.type }}</span>
+              <span class="text-text-muted">{{ p.type }}</span>
             </div>
           </div>
-          <div v-if="!selected.inputs?.length && !selected.outputs?.length" class="text-[10px] text-slate-600 italic">No ports declared</div>
+          <div v-if="!selected.inputs?.length && !selected.outputs?.length" class="text-[10px] text-text-muted italic">No ports declared</div>
         </div>
         <!-- Workflow ref + clear -->
         <div class="flex items-center gap-2 pt-0.5">
-          <span class="text-[10px] text-slate-500 font-mono flex-1 truncate">Ver: {{ selected.metadata.version }}</span>
-          <button type="button" class="text-[10px] text-slate-600 hover:text-red-400 transition-colors" @click="clear">Clear</button>
+          <span class="text-[10px] text-text-muted font-mono flex-1 truncate">Ver: {{ selected.metadata.version }}</span>
+          <button type="button" class="text-[10px] text-text-muted hover:text-red-400 transition-colors" @click="clear">Clear</button>
         </div>
       </div>
     </template>

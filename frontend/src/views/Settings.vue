@@ -3,16 +3,45 @@
 
       <header class="px-6 py-4 border-b border-border shrink-0 bg-surface-1 flex items-center justify-between">
         <div>
-          <h1 class="text-base font-semibold text-slate-200">Settings</h1>
-          <p class="text-xs text-slate-500 mt-0.5">Configure platform identity, usage, and LLM providers</p>
+          <h1 class="text-base font-semibold text-text">Settings</h1>
+          <p class="text-xs text-text-muted mt-0.5">Configure platform identity, usage, and LLM providers</p>
         </div>
         <div v-if="entStore.status" class="flex items-center gap-2">
-           <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Tier</span>
+           <span class="text-[10px] font-bold uppercase tracking-widest text-text-muted">Tier</span>
            <span :class="tierBadgeClass(entStore.status.tier)">{{ entStore.status.tier }}</span>
         </div>
       </header>
 
       <div class="flex-1 px-6 py-6 max-w-3xl w-full mx-auto space-y-6">
+
+        <!-- Appearance (Theme Switcher) -->
+        <section class="space-y-4">
+           <div class="flex items-center gap-2 px-1">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+               <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+             </svg>
+             <h2 class="text-sm font-bold text-text uppercase tracking-wider">Platform Appearance</h2>
+           </div>
+
+           <div class="card p-5">
+              <div class="flex items-center gap-4">
+                 <button 
+                   v-for="mode in ['light', 'dark', 'system']" 
+                   :key="mode"
+                   @click="setTheme(mode)"
+                   :class="[
+                     'flex-1 flex flex-col items-center gap-2 p-3 rounded-lg border transition-all',
+                     theme === mode ? 'border-accent bg-accent/5 text-accent' : 'border-border hover:bg-text/5 text-text-muted'
+                   ]"
+                 >
+                   <span class="text-[10px] font-bold uppercase tracking-widest">{{ mode }}</span>
+                 </button>
+              </div>
+              <p class="text-[10px] text-text-muted mt-4">
+                Choose between a clean light interface, a sleek dark workspace, or follow your operating system preferences.
+              </p>
+           </div>
+        </section>
 
         <!-- Branding (Pilot-ready feature) -->
         <section v-if="isAdmin" class="space-y-4">
@@ -20,17 +49,17 @@
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
                <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
              </svg>
-             <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Tenant Identity & Branding</h2>
+             <h2 class="text-sm font-bold text-text uppercase tracking-wider">Tenant Identity & Branding</h2>
            </div>
 
            <div class="card p-5 space-y-4">
               <div class="grid grid-cols-2 gap-4">
                  <div>
-                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Company Name</label>
+                    <label class="text-[10px] font-bold text-text-muted uppercase tracking-widest block mb-1">Company Name</label>
                     <input v-model="brandingForm.name" class="input text-sm w-full" placeholder="e.g. Acme Corp" />
                  </div>
                  <div>
-                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Logo URL</label>
+                    <label class="text-[10px] font-bold text-text-muted uppercase tracking-widest block mb-1">Logo URL</label>
                     <input v-model="brandingForm.logo_url" class="input text-sm w-full" placeholder="https://..." autocomplete="off" />
                  </div>
               </div>
@@ -49,13 +78,13 @@
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
              </svg>
-             <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Environment Secrets</h2>
+             <h2 class="text-sm font-bold text-text uppercase tracking-wider">Environment Secrets</h2>
            </div>
 
            <div class="card p-5 space-y-4">
-              <p class="text-[10px] text-slate-500 mb-2">Secrets are stored securely and available to Agent tools/scripts via the <code>secrets</code> object.</p>
+              <p class="text-[10px] text-text-muted mb-2">Secrets are stored securely and available to Agent tools/scripts via the <code>secrets</code> object.</p>
               <div v-if="!Object.keys(secretsForm).length" class="text-center py-4 bg-black/5 rounded border border-dashed border-border/40">
-                <p class="text-xs text-slate-600 italic">No secrets defined yet.</p>
+                <p class="text-xs text-text-muted italic">No secrets defined yet.</p>
               </div>
               <div v-for="(val, key) in secretsForm" :key="key" class="flex gap-2 items-center">
                  <input v-model="secretsForm[key].name" class="input text-xs w-1/3" placeholder="KEY_NAME" />
@@ -83,13 +112,13 @@
         <section v-for="prov in llmStore.PROVIDERS" :key="prov.id" class="card p-5 space-y-4">
           <div class="flex items-center gap-3">
             <div class="flex-1">
-              <h2 class="text-sm font-semibold text-slate-300">{{ prov.label }}</h2>
-              <p class="text-xs text-slate-500 mt-0.5">{{ providerEndpoint(prov.id) || 'Local server' }}</p>
+              <h2 class="text-sm font-semibold text-text">{{ prov.label }}</h2>
+              <p class="text-xs text-text-muted mt-0.5">{{ providerEndpoint(prov.id) || 'Local server' }}</p>
             </div>
             <!-- Enable toggle -->
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" v-model="forms[prov.id].enabled" class="rounded" />
-              <span class="text-xs text-slate-400">Enabled</span>
+              <span class="text-xs text-text-muted">Enabled</span>
             </label>
             <!-- Default badge -->
             <span v-if="isDefaultProvider(prov.id)"
@@ -99,7 +128,7 @@
           <div class="grid grid-cols-2 gap-3">
             <!-- API Key (cloud providers) -->
             <div v-if="prov.needsKey" class="col-span-2">
-              <label class="text-xs text-slate-500 mb-1 block">API Key</label>
+              <label class="text-xs text-text-muted mb-1 block">API Key</label>
               <input
                 v-model="forms[prov.id].api_key"
                 type="password"
@@ -111,7 +140,7 @@
 
             <!-- Base URL (Ollama) -->
             <div v-if="prov.needsURL" class="col-span-2">
-              <label class="text-xs text-slate-500 mb-1 block">Server URL</label>
+              <label class="text-xs text-text-muted mb-1 block">Server URL</label>
               <input
                 v-model="forms[prov.id].base_url"
                 type="text"
@@ -122,7 +151,7 @@
 
             <!-- Default model -->
             <div>
-              <label class="text-xs text-slate-500 mb-1 block">Default Model</label>
+              <label class="text-xs text-text-muted mb-1 block">Default Model</label>
               <input
                 v-model="forms[prov.id].default_model"
                 type="text"
@@ -133,7 +162,7 @@
 
             <!-- Max Tokens -->
             <div>
-              <label class="text-xs text-slate-500 mb-1 block">Max Output Tokens</label>
+              <label class="text-xs text-text-muted mb-1 block">Max Output Tokens</label>
               <input
                 v-model.number="forms[prov.id].max_output_tokens"
                 type="number"
@@ -184,16 +213,16 @@
             <svg class="text-violet-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
             </svg>
-            <h2 class="text-sm font-semibold text-slate-300">AI Designer System Prompts</h2>
+            <h2 class="text-sm font-semibold text-text">AI Designer System Prompts</h2>
           </div>
-          <p class="text-xs text-slate-500">
+          <p class="text-xs text-text-muted">
             Customize the underlying instructions used by the AI to generate and refine workflows.
             Overrides are stored in-memory and will reset on server restart.
           </p>
 
           <div v-for="(content, id) in systemPrompts" :key="id" class="space-y-2">
             <div class="flex items-center justify-between">
-              <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">{{ id.replace(/_/g, ' ') }}</span>
+              <span class="text-[10px] font-mono text-text-muted uppercase tracking-wider">{{ id.replace(/_/g, ' ') }}</span>
               <button @click="savePrompt(id)" :disabled="savingPrompt[id]" class="text-[10px] text-violet-400 hover:text-violet-300 font-bold uppercase transition-colors">
                 {{ savingPrompt[id] ? 'Saving...' : 'Save Override' }}
               </button>
@@ -216,10 +245,12 @@ import { ref, computed, onMounted, reactive } from 'vue'
 import { useAuthStore, api } from '@/stores/auth'
 import { useLLMStore } from '@/stores/llm'
 import { useEnterpriseStore } from '@/stores/enterprise'
+import { useTheme } from '@/composables/useTheme'
 
 const authStore = useAuthStore()
 const llmStore  = useLLMStore()
 const entStore  = useEnterpriseStore()
+const { theme, setTheme } = useTheme()
 
 const isAdmin = computed(() => authStore.user?.role === 'admin' || authStore.user?.role === 'super_admin')
 
@@ -334,7 +365,7 @@ function tierBadgeClass(tier) {
   const base = 'badge'
   if (tier === 'enterprise') return `${base} bg-purple-500/20 text-purple-400`
   if (tier === 'pro') return `${base} bg-indigo-500/20 text-indigo-400`
-  return `${base} bg-slate-500/20 text-slate-400`
+  return `${base} bg-slate-500/20 text-text-muted`
 }
 
 function syncFormsFromStore() {

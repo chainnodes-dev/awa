@@ -2,8 +2,8 @@
   <div class="flex flex-col h-full overflow-hidden">
     <!-- Top bar -->
     <header class="flex items-center gap-4 px-6 py-4 border-b border-border shrink-0">
-      <h1 class="text-base font-semibold text-slate-200">MCP Servers</h1>
-      <p class="text-xs text-slate-500">Manage and monitor Model Context Protocol servers</p>
+      <h1 class="text-base font-semibold text-text">MCP Servers</h1>
+      <p class="text-xs text-text-muted">Manage and monitor Model Context Protocol servers</p>
       <div class="flex-1"/>
       <button @click="pingAll" :disabled="pingingAll" class="btn-ghost text-xs gap-1.5 border border-border">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -25,7 +25,7 @@
         MCP server management requires admin privileges. You can view registered servers and their status.
       </div>
 
-      <div v-if="loading" class="text-slate-600 text-sm py-12 text-center">Loading...</div>
+      <div v-if="loading" class="text-text-muted text-sm py-12 text-center">Loading...</div>
 
       <div v-else-if="!servers.length" class="card p-12 text-center">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="mx-auto mb-4 text-slate-700">
@@ -34,8 +34,8 @@
           <circle cx="6" cy="6" r="1" fill="currentColor"/>
           <circle cx="6" cy="18" r="1" fill="currentColor"/>
         </svg>
-        <p class="text-slate-500 text-sm mb-1">No MCP servers registered</p>
-        <p class="text-slate-600 text-xs mb-4">Add an MCP server to make its tools available to workflow agents.</p>
+        <p class="text-text-muted text-sm mb-1">No MCP servers registered</p>
+        <p class="text-text-muted text-xs mb-4">Add an MCP server to make its tools available to workflow agents.</p>
         <button v-if="isAdmin" @click="openModal(null)" class="btn-primary text-xs">Add Server</button>
       </div>
 
@@ -56,9 +56,9 @@
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-0.5">
                 <span class="font-mono text-sm font-medium text-indigo-400">{{ srv.name }}</span>
-                <span v-if="healthLatency[srv.id]" class="text-[10px] text-slate-600">{{ healthLatency[srv.id] }}ms</span>
+                <span v-if="healthLatency[srv.id]" class="text-[10px] text-text-muted">{{ healthLatency[srv.id] }}ms</span>
               </div>
-              <p class="text-xs text-slate-500 leading-relaxed">{{ srv.description || 'No capabilities discovered yet' }}</p>
+              <p class="text-xs text-text-muted leading-relaxed">{{ srv.description || 'No capabilities discovered yet' }}</p>
             </div>
 
             <!-- Actions -->
@@ -77,16 +77,16 @@
 
           <!-- Connection details -->
           <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-            <div v-if="srv.url" class="flex items-center gap-1.5 text-slate-400">
-              <span class="text-slate-600">URL</span>
+            <div v-if="srv.url" class="flex items-center gap-1.5 text-text-muted">
+              <span class="text-text-muted">URL</span>
               <span class="font-mono">{{ srv.url }}</span>
             </div>
-            <div v-if="srv.env_var" class="flex items-center gap-1.5 text-slate-400">
-              <span class="text-slate-600">ENV</span>
+            <div v-if="srv.env_var" class="flex items-center gap-1.5 text-text-muted">
+              <span class="text-text-muted">ENV</span>
               <span class="font-mono" v-text="'$' + srv.env_var"></span>
             </div>
-            <div v-if="srv.created_by" class="flex items-center gap-1.5 text-slate-400">
-              <span class="text-slate-600">By</span>
+            <div v-if="srv.created_by" class="flex items-center gap-1.5 text-text-muted">
+              <span class="text-text-muted">By</span>
               <span>{{ srv.created_by }}</span>
             </div>
           </div>
@@ -262,10 +262,10 @@ export const MCPServerModal = defineComponent({
       onClick: e => e.target === e.currentTarget && emit('close'),
     }, [
       h('div', { class: 'card w-[520px] p-6 space-y-4' }, [
-        h('h3', { class: 'font-semibold text-slate-200' }, isEdit ? 'Edit MCP Server' : 'Register MCP Server'),
+        h('h3', { class: 'font-semibold text-text' }, isEdit ? 'Edit MCP Server' : 'Register MCP Server'),
 
         h('div', { class: 'space-y-1.5' }, [
-          h('label', { class: 'text-xs text-slate-500' }, 'Name *'),
+          h('label', { class: 'text-xs text-text-muted' }, 'Name *'),
           h('input', {
             class: inputClass + ' font-mono',
             value: form.value.name,
@@ -273,12 +273,12 @@ export const MCPServerModal = defineComponent({
             disabled: isEdit,
             onInput: e => form.value.name = e.target.value,
           }),
-          !isEdit && h('p', { class: 'text-[10px] text-slate-600' }, 'Logical identifier used in workflow YAML agent configs.'),
+          !isEdit && h('p', { class: 'text-[10px] text-text-muted' }, 'Logical identifier used in workflow YAML agent configs.'),
         ]),
 
         // URL + Discover button
         h('div', { class: 'space-y-1.5' }, [
-          h('label', { class: 'text-xs text-slate-500' }, 'URL'),
+          h('label', { class: 'text-xs text-text-muted' }, 'URL'),
           h('div', { class: 'flex gap-2' }, [
             h('input', {
               class: inputClass + ' font-mono flex-1',
@@ -302,28 +302,28 @@ export const MCPServerModal = defineComponent({
         ]),
 
         h('div', { class: 'space-y-1.5' }, [
-          h('label', { class: 'text-xs text-slate-500' }, 'Env Var Key'),
+          h('label', { class: 'text-xs text-text-muted' }, 'Env Var Key'),
           h('input', {
             class: inputClass + ' font-mono',
             value: form.value.env_var,
             placeholder: 'MCP_INVOICE_PARSER_URL',
             onInput: e => form.value.env_var = e.target.value,
           }),
-          h('p', { class: 'text-[10px] text-slate-600' }, 'Provide URL or env var (or both). Env vars are resolved at runtime by the worker.'),
+          h('p', { class: 'text-[10px] text-text-muted' }, 'Provide URL or env var (or both). Env vars are resolved at runtime by the worker.'),
         ]),
 
         // Description — read-only, populated by Discover
         h('div', { class: 'space-y-1.5' }, [
           h('div', { class: 'flex items-center gap-2' }, [
-            h('label', { class: 'text-xs text-slate-500' }, 'Capabilities'),
-            h('span', { class: 'text-[10px] text-slate-600' }, '(auto-populated via Discover)'),
+            h('label', { class: 'text-xs text-text-muted' }, 'Capabilities'),
+            h('span', { class: 'text-[10px] text-text-muted' }, '(auto-populated via Discover)'),
           ]),
           form.value.description
             ? h('div', {
-                class: 'px-3 py-2.5 rounded-lg bg-white/3 border border-border text-xs text-slate-400 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto',
+                class: 'px-3 py-2.5 rounded-lg bg-white/3 border border-border text-xs text-text-muted leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto',
               }, form.value.description)
             : h('div', {
-                class: 'px-3 py-2.5 rounded-lg bg-white/3 border border-border/50 text-xs text-slate-600 italic',
+                class: 'px-3 py-2.5 rounded-lg bg-white/3 border border-border/50 text-xs text-text-muted italic',
               }, 'No capabilities discovered yet. Enter a URL and click Discover.'),
         ]),
 

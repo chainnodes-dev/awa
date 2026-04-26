@@ -7,8 +7,8 @@
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="1.5" class="mx-auto">
           <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
         </svg>
-        <p class="text-sm text-slate-400">AI Workflow Assistant</p>
-        <p class="text-xs text-slate-600 leading-relaxed max-w-[220px] mx-auto">
+        <p class="text-sm text-text-muted">AI Workflow Assistant</p>
+        <p class="text-xs text-text-muted leading-relaxed max-w-[220px] mx-auto">
           {{ yamlSource ? 'Describe changes to make to this workflow. The AI will modify the existing definition.' : 'Describe a business process and the AI will generate a workflow for you.' }}
         </p>
       </div>
@@ -16,12 +16,12 @@
       <!-- Message list -->
       <div v-for="(msg, i) in messages" :key="i" class="space-y-1.5">
         <div class="flex items-center gap-1.5">
-          <span v-if="msg.role === 'user'" class="text-[10px] font-medium text-slate-500 uppercase">You</span>
+          <span v-if="msg.role === 'user'" class="text-[10px] font-medium text-text-muted uppercase">You</span>
           <span v-else class="text-[10px] font-medium text-violet-500 uppercase">AI</span>
         </div>
         <div :class="msg.role === 'user'
-          ? 'text-xs text-slate-300 bg-surface-0 rounded-lg px-3 py-2 border border-border'
-          : 'text-xs text-slate-400 bg-violet-500/5 rounded-lg px-3 py-2 border border-violet-500/20'">
+          ? 'text-xs text-text bg-surface-0 rounded-lg px-3 py-2 border border-border'
+          : 'text-xs text-text-muted bg-violet-500/5 rounded-lg px-3 py-2 border border-violet-500/20'">
           {{ msg.content }}
         </div>
         <button v-if="msg.yaml" class="btn-primary text-xs gap-1.5 w-full" @click="applyResult(msg)">
@@ -60,7 +60,7 @@
           </svg>
         </button>
       </div>
-      <p class="text-[10px] text-slate-600 mt-1.5">Press Enter to send, Shift+Enter for new line</p>
+      <p class="text-[10px] text-text-muted mt-1.5">Press Enter to send, Shift+Enter for new line</p>
     </div>
   </div>
 </template>

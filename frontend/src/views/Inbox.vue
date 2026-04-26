@@ -3,7 +3,7 @@
     <!-- ── Task List ─────────────────────────────────────────────────── -->
     <aside class="w-80 border-r border-border flex flex-col bg-surface-1 shrink-0">
       <div class="px-4 py-3 border-b border-border flex items-center justify-between">
-        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Task Queue</h2>
+        <h2 class="text-xs font-semibold text-text-muted uppercase tracking-widest">Task Queue</h2>
         <span class="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
           {{ pendingTasks.length }}
         </span>
@@ -22,14 +22,14 @@
           ]"
         >
           <div class="flex items-start justify-between mb-1.5">
-            <span class="text-xs font-bold text-slate-200 truncate pr-2">{{ task.workflow_name || 'Workflow' }}</span>
-            <span class="text-[9px] font-mono text-slate-600 bg-surface-0 px-1.5 py-0.5 rounded border border-border">
+            <span class="text-xs font-bold text-text truncate pr-2">{{ task.workflow_name || 'Workflow' }}</span>
+            <span class="text-[9px] font-mono text-text-muted bg-surface-0 px-1.5 py-0.5 rounded border border-border">
               HITL
             </span>
           </div>
-          <div class="text-[10px] text-slate-500 font-medium mb-2">{{ task.state_name }}</div>
+          <div class="text-[10px] text-text-muted font-medium mb-2">{{ task.state_name }}</div>
           
-          <div class="flex items-center gap-2 text-[9px] text-slate-600">
+          <div class="flex items-center gap-2 text-[9px] text-text-muted">
             <span class="flex items-center gap-1">
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                 <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
@@ -60,10 +60,10 @@
         <header class="px-6 py-4 border-b border-border flex items-center justify-between shrink-0 bg-surface-1/50 backdrop-blur">
           <div>
             <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm font-semibold text-slate-200">{{ selectedTask.workflow_name }}</span>
-              <span class="text-xs text-slate-600 font-mono">/ {{ selectedTask.run_id.slice(0, 8) }}</span>
+              <span class="text-sm font-semibold text-text">{{ selectedTask.workflow_name }}</span>
+              <span class="text-xs text-text-muted font-mono">/ {{ selectedTask.run_id.slice(0, 8) }}</span>
             </div>
-            <p class="text-[10px] text-slate-500 font-mono tracking-tight">{{ selectedTask.state_name }} state</p>
+            <p class="text-[10px] text-text-muted font-mono tracking-tight">{{ selectedTask.state_name }} state</p>
           </div>
 
           <div class="flex items-center gap-3">
@@ -81,8 +81,8 @@
           <div class="flex-1 overflow-y-auto p-6 space-y-8">
             <section class="max-w-xl">
               <div class="mb-6">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Task Resolution</h3>
-                <p class="text-xs text-slate-500">Provide the required information to continue the workflow execution.</p>
+                <h3 class="text-xs font-bold text-text-muted uppercase tracking-widest mb-1">Task Resolution</h3>
+                <p class="text-xs text-text-muted">Provide the required information to continue the workflow execution.</p>
               </div>
 
               <JsonSchemaForm
@@ -95,7 +95,7 @@
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-700 mb-2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                 </svg>
-                <p class="text-xs text-slate-600">No specific input structure defined for this node.</p>
+                <p class="text-xs text-text-muted">No specific input structure defined for this node.</p>
               </div>
             </section>
           </div>
@@ -103,7 +103,7 @@
           <!-- Blackboard Tweak Section -->
           <div class="w-96 flex flex-col overflow-hidden bg-surface-1/30">
             <div class="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
-               <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Advanced Tweaks</h3>
+               <h3 class="text-xs font-bold text-text-muted uppercase tracking-widest">Advanced Tweaks</h3>
                <button 
                  @click="showBlackboard = !showBlackboard" 
                  class="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
@@ -117,20 +117,20 @@
                  @click="tweakView = 'form'"
                  :class="[
                    'px-2 py-0.5 text-[9px] font-bold uppercase rounded transition-colors',
-                   tweakView === 'form' ? 'bg-accent/20 text-accent' : 'text-slate-600 hover:text-slate-500'
+                   tweakView === 'form' ? 'bg-accent/20 text-accent' : 'text-text-muted hover:text-text-muted'
                  ]"
                > Form </button>
                <button
                  @click="tweakView = 'json'"
                  :class="[
                    'px-2 py-0.5 text-[9px] font-bold uppercase rounded transition-colors',
-                   tweakView === 'json' ? 'bg-accent/20 text-accent' : 'text-slate-600 hover:text-slate-500'
+                   tweakView === 'json' ? 'bg-accent/20 text-accent' : 'text-text-muted hover:text-text-muted'
                  ]"
                > JSON </button>
             </div>
             
             <div v-if="showBlackboard" class="flex-1 overflow-hidden flex flex-col p-3 pt-0">
-              <p class="text-[10px] text-slate-600 mb-3 mt-3 leading-relaxed">
+              <p class="text-[10px] text-text-muted mb-3 mt-3 leading-relaxed">
                 Directly modify any field in the workflow's blackboard context. Be careful with manual overrides.
               </p>
               

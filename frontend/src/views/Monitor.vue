@@ -10,8 +10,8 @@
       </RouterLink>
       <div class="w-px h-4 bg-border"/>
 
-      <span class="text-sm font-medium text-slate-300">{{ run?.workflow_name ?? 'Monitor' }}</span>
-      <span v-if="run" class="text-xs font-mono text-slate-600">{{ run.id.slice(0, 8) }}</span>
+      <span class="text-sm font-medium text-text">{{ run?.workflow_name ?? 'Monitor' }}</span>
+      <span v-if="run" class="text-xs font-mono text-text-muted">{{ run.id.slice(0, 8) }}</span>
       <span v-if="run" :class="`status-${run.status} ml-1`">{{ run.status }}</span>
 
       <div class="flex-1"/>
@@ -97,7 +97,7 @@
           <Background pattern-color="#2a2d3a" :gap="24" :size="1" />
           <Controls />
         </VueFlow>
-        <div v-else class="flex-1 flex items-center justify-center text-slate-600 text-sm">
+        <div v-else class="flex-1 flex items-center justify-center text-text-muted text-sm">
           Loading workflow…
         </div>
 
@@ -105,9 +105,9 @@
         <div v-if="thinkingText" class="border-t border-border bg-surface-1 px-4 py-2 max-h-32 overflow-y-auto">
           <div class="flex items-center gap-2 mb-1">
             <div class="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"/>
-            <span class="text-xs text-slate-500 font-semibold">Agent reasoning</span>
+            <span class="text-xs text-text-muted font-semibold">Agent reasoning</span>
           </div>
-          <p class="text-xs font-mono text-slate-400 whitespace-pre-wrap">{{ thinkingText }}</p>
+          <p class="text-xs font-mono text-text-muted whitespace-pre-wrap">{{ thinkingText }}</p>
         </div>
 
         <!-- Event log -->
@@ -124,7 +124,7 @@
             @click="activeTab = tab.id"
             :class="[
               'flex-1 py-2 text-xs font-medium transition-colors capitalize',
-              activeTab === tab.id ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300',
+              activeTab === tab.id ? 'text-text border-b-2 border-accent' : 'text-text-muted hover:text-text',
             ]"
           >
             <span v-if="tab.id === 'debug'" class="flex items-center justify-center gap-1">
@@ -173,11 +173,11 @@
         <div v-else-if="activeTab === 'snapshot' && selectedTransition" class="flex-1 flex flex-col overflow-hidden">
            <div class="px-4 py-2 border-b border-border bg-indigo-500/5 flex items-center justify-between">
               <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Historical State</span>
-              <button @click="selectedTransition = null; activeTab = 'blackboard'" class="text-[9px] text-slate-500 hover:text-slate-300">Close</button>
+              <button @click="selectedTransition = null; activeTab = 'blackboard'" class="text-[9px] text-text-muted hover:text-text">Close</button>
            </div>
            <div v-if="selectedTransition.agent_output?.reasoning" class="p-3 border-b border-border bg-surface-2">
-              <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Agent Reasoning</h4>
-              <p class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap leading-relaxed">{{ selectedTransition.agent_output.reasoning }}</p>
+              <h4 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5">Agent Reasoning</h4>
+              <p class="text-[11px] font-mono text-text-muted whitespace-pre-wrap leading-relaxed">{{ selectedTransition.agent_output.reasoning }}</p>
            </div>
            <BlackboardPanel
              :blackboard="selectedTransition.blackboard_snapshot"
@@ -202,8 +202,8 @@
         <div v-else-if="activeTab === 'task'" class="flex-1 flex flex-col overflow-hidden bg-surface-2/30">
           <div class="p-4 space-y-4 flex-1 overflow-y-auto">
             <div class="space-y-1 mb-4">
-              <h3 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Input Required</h3>
-              <p class="text-xs text-slate-500">{{ currentStateDef?.instructions || 'A human must review this step to continue.' }}</p>
+              <h3 class="text-xs font-semibold text-text uppercase tracking-wider">Input Required</h3>
+              <p class="text-xs text-text-muted">{{ currentStateDef?.instructions || 'A human must review this step to continue.' }}</p>
             </div>
 
             <JsonSchemaForm
@@ -213,13 +213,13 @@
               :initial-data="run?.blackboard"
             />
             <div v-else class="py-4 text-center">
-              <p class="text-xs text-slate-500">No additional data required. Please approve or reject above.</p>
+              <p class="text-xs text-text-muted">No additional data required. Please approve or reject above.</p>
             </div>
 
             <!-- Blackboard Tweak (Optional) -->
             <div class="mt-8 pt-4 border-t border-border">
               <div class="flex items-center justify-between mb-3">
-                <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Advanced Tweaks</h4>
+                <h4 class="text-[10px] font-bold text-text-muted uppercase tracking-widest">Advanced Tweaks</h4>
                 <button 
                   @click="showBlackboardTweak = !showBlackboardTweak" 
                   class="text-[9px] text-indigo-400 hover:text-indigo-300"
@@ -233,14 +233,14 @@
                   @click="tweakView = 'form'"
                   :class="[
                     'px-2 py-1 text-[9px] font-bold uppercase rounded transition-all',
-                    tweakView === 'form' ? 'bg-accent/10 text-accent' : 'text-slate-600 hover:text-slate-400'
+                    tweakView === 'form' ? 'bg-accent/10 text-accent' : 'text-text-muted hover:text-text-muted'
                   ]"
                 > Form </button>
                 <button
                   @click="tweakView = 'json'"
                   :class="[
                     'px-2 py-1 text-[9px] font-bold uppercase rounded transition-all',
-                    tweakView === 'json' ? 'bg-accent/10 text-accent' : 'text-slate-600 hover:text-slate-400'
+                    tweakView === 'json' ? 'bg-accent/10 text-accent' : 'text-text-muted hover:text-text-muted'
                   ]"
                 > JSON </button>
               </div>
@@ -270,7 +270,7 @@
 
         <!-- Timeline tab -->
         <div v-else class="flex-1 overflow-y-auto p-3">
-          <div v-if="!history.length" class="text-slate-600 text-xs text-center py-8">
+          <div v-if="!history.length" class="text-text-muted text-xs text-center py-8">
             No transitions yet
           </div>
 
@@ -296,7 +296,7 @@
               <div :class="['space-y-1 transition-opacity', selectedTransition && selectedTransition.id !== t.id ? 'opacity-40' : 'opacity-100']">
                 <!-- State arrived at -->
                 <div class="flex items-baseline gap-1.5 font-display">
-                  <span class="text-xs font-bold text-slate-200">{{ t.to_state }}</span>
+                  <span class="text-xs font-bold text-text">{{ t.to_state }}</span>
                 </div>
 
                 <!-- Trigger badge + origin -->
@@ -304,13 +304,13 @@
                   <span class="inline-flex items-center gap-1 text-[10px] font-mono bg-indigo-500/15 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/25">
                     {{ t.trigger }}
                   </span>
-                  <span class="text-[10px] text-slate-600">from</span>
-                  <span class="text-[10px] font-mono text-slate-500">{{ t.from_state }}</span>
+                  <span class="text-[10px] text-text-muted">from</span>
+                  <span class="text-[10px] font-mono text-text-muted">{{ t.from_state }}</span>
                 </div>
 
                 <!-- Timestamp + time spent in this state -->
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-[10px] text-slate-600">{{ formatTime(t.timestamp) }}</span>
+                  <span class="text-[10px] text-text-muted">{{ formatTime(t.timestamp) }}</span>
                   <span
                     v-if="stateDuration(i) !== null"
                     class="inline-flex items-center gap-1 text-[10px] font-mono text-amber-600/80"
@@ -331,7 +331,7 @@
               <div class="space-y-0.5">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-mono font-medium text-green-400">{{ run.current_state }}</span>
-                  <span class="text-[10px] text-slate-600">← active</span>
+                  <span class="text-[10px] text-text-muted">← active</span>
                 </div>
                 <!-- Time spent in the current (still-active) state -->
                 <div v-if="history.length" class="flex items-center gap-1 text-[10px] font-mono text-amber-600/60">
@@ -339,7 +339,7 @@
                     <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>
                   </svg>
                   {{ activeStateDuration }}
-                  <span v-if="run.status === 'running'" class="text-slate-600 font-sans">and counting</span>
+                  <span v-if="run.status === 'running'" class="text-text-muted font-sans">and counting</span>
                 </div>
                 <div v-if="run.status !== 'running'" :class="`status-${run.status} text-[10px]`">
                   {{ run.status }}
@@ -358,7 +358,7 @@
       @click.self="showTriggerModal = false"
     >
       <div class="card w-80 p-5 space-y-3">
-        <h3 class="font-semibold text-slate-200 text-sm">Fire Trigger</h3>
+        <h3 class="font-semibold text-text text-sm">Fire Trigger</h3>
         <input v-model="triggerName" class="input font-mono" placeholder="trigger_name" @keydown.enter="fireTrigger"/>
         <div class="flex gap-2 justify-end">
           <button class="btn-ghost" @click="showTriggerModal = false">Cancel</button>

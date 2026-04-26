@@ -17,7 +17,7 @@
         v-if="agents.length || modelValue"
         type="button"
         tabindex="-1"
-        class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+        class="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text transition-colors"
         @mousedown.prevent="toggleDropdown"
       >
         <svg
@@ -48,8 +48,8 @@
           :class="[
             'flex items-center gap-2 px-3 py-2 cursor-pointer text-sm transition-colors border-b border-border/50',
             cursor === -2
-              ? 'bg-slate-700/60 text-slate-300'
-              : 'text-slate-500 hover:bg-white/5 hover:text-slate-400',
+              ? 'bg-slate-700/60 text-text'
+              : 'text-text-muted hover:bg-white/5 hover:text-text-muted',
           ]"
           @mousedown.prevent="select('')"
         >
@@ -63,7 +63,7 @@
             'flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-mono transition-colors',
             i === cursor
               ? 'bg-accent/20 text-accent'
-              : 'text-slate-300 hover:bg-white/5 hover:text-slate-100',
+              : 'text-text hover:bg-white/5 hover:text-slate-100',
           ]"
           @mousedown.prevent="select(agent.name)"
         >

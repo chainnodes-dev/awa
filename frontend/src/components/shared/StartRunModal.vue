@@ -11,7 +11,7 @@
           </svg>
           Run: {{ definition?.metadata?.name }}
         </h3>
-        <button @click="$emit('close')" class="text-slate-500 hover:text-slate-300 transition-colors">
+        <button @click="$emit('close')" class="text-text-muted hover:text-text transition-colors">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -24,7 +24,7 @@
           @click="activeView = 'form'"
           :class="[
             'px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all duration-200',
-            activeView === 'form' ? 'bg-accent/10 text-accent' : 'text-slate-600 hover:text-slate-400'
+            activeView === 'form' ? 'bg-accent/10 text-accent' : 'text-text-muted hover:text-text-muted'
           ]"
         >
           Form
@@ -33,7 +33,7 @@
           @click="activeView = 'json'"
           :class="[
             'px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all duration-200',
-            activeView === 'json' ? 'bg-accent/10 text-accent' : 'text-slate-600 hover:text-slate-400'
+            activeView === 'json' ? 'bg-accent/10 text-accent' : 'text-text-muted hover:text-text-muted'
           ]"
         >
           JSON
@@ -52,8 +52,8 @@
         
         <div v-else class="space-y-1.5">
           <div class="flex items-center justify-between">
-            <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Initial Blackboard Data</label>
-            <span class="text-[10px] text-slate-600 font-mono">JSON format</span>
+            <label class="text-xs font-semibold text-text-muted uppercase tracking-wider">Initial Blackboard Data</label>
+            <span class="text-[10px] text-text-muted font-mono">JSON format</span>
           </div>
           <div class="relative group">
             <textarea
@@ -64,7 +64,7 @@
               @input="syncFromJson"
             />
             <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-               <button @click="formatJSON" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 px-2 py-1 rounded border border-slate-700">
+               <button @click="formatJSON" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-text-muted px-2 py-1 rounded border border-slate-700">
                  Format JSON
                </button>
             </div>
@@ -78,7 +78,7 @@
 
       <div class="pt-2 flex gap-3 justify-end">
         <button
-          class="px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors"
+          class="px-4 py-2 text-sm font-medium text-text-muted hover:text-text transition-colors"
           @click="$emit('close')"
           :disabled="loading"
         >

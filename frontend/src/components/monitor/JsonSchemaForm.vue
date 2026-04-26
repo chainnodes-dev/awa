@@ -1,8 +1,8 @@
 <template>
   <div class="json-schema-form space-y-6">
     <div v-if="title || description" class="space-y-1">
-      <h3 v-if="title" class="text-sm font-semibold text-slate-200">{{ title }}</h3>
-      <p v-if="description" class="text-xs text-slate-500">{{ description }}</p>
+      <h3 v-if="title" class="text-sm font-semibold text-text">{{ title }}</h3>
+      <p v-if="description" class="text-xs text-text-muted">{{ description }}</p>
     </div>
 
     <div class="grid grid-cols-1 gap-5">

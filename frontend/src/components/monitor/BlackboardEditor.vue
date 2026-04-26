@@ -7,7 +7,7 @@
           <line x1="3" y1="9" x2="21" y2="9"/>
           <line x1="9" y1="21" x2="9" y2="9"/>
         </svg>
-        <span class="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Blackboard Context</span>
+        <span class="text-[10px] font-bold text-text uppercase tracking-widest">Blackboard Context</span>
       </div>
       <div v-if="isValid === false" class="text-[9px] text-red-500 font-medium">
         Invalid JSON

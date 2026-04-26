@@ -1,7 +1,7 @@
 <template>
   <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" @click.self="$emit('close')">
     <div class="card w-80 p-5 space-y-3">
-      <h3 class="font-semibold text-slate-200 text-sm">Add State</h3>
+      <h3 class="font-semibold text-text text-sm">Add State</h3>
       <input class="input" placeholder="State name (e.g. VALIDATING)" v-model="name" @keydown.enter="onAdd" />
       <select class="input" v-model="type">
         <option value="initial">initial</option>

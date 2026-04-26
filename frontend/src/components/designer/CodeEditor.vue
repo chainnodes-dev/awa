@@ -1,8 +1,8 @@
 <template>
-  <div class="code-editor-wrapper relative rounded-lg overflow-hidden border border-border bg-[#1a1b26]">
+  <div class="code-editor-editor relative rounded-lg overflow-hidden border border-border bg-surface-0">
     <div ref="editorEl" class="text-xs" />
     <!-- Language badge -->
-    <div class="absolute top-2 right-2 text-[9px] font-mono text-slate-600 select-none pointer-events-none uppercase tracking-widest">
+    <div class="absolute top-2 right-2 text-[9px] font-mono text-text-muted select-none pointer-events-none uppercase tracking-widest">
       {{ language }}
     </div>
   </div>
@@ -137,16 +137,18 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
-/* Override oneDark background to match ASM surface */
-.code-editor-wrapper .cm-editor {
-  background: #1a1b26;
+/* Use theme variables for the editor background and gutters */
+.code-editor-editor .cm-editor {
+  background: var(--color-surface-0) !important;
+  color: var(--color-text);
 }
-.code-editor-wrapper .cm-gutters {
-  background: #1a1b26;
-  border-right: 1px solid #2a2d3a;
+.code-editor-editor .cm-gutters {
+  background: var(--color-surface-1) !important;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text-muted);
 }
-.code-editor-wrapper .cm-activeLineGutter,
-.code-editor-wrapper .cm-activeLine {
-  background: rgba(255,255,255,0.04);
+.code-editor-editor .cm-activeLineGutter,
+.code-editor-editor .cm-activeLine {
+  background: var(--color-surface-2);
 }
 </style>

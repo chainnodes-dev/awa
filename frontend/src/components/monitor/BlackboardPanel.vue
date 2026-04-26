@@ -1,8 +1,8 @@
 <template>
   <div class="flex flex-col h-full">
     <div class="px-4 py-3 border-b border-border flex items-center gap-2">
-      <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Blackboard</span>
-      <span class="ml-auto text-xs text-slate-600">{{ fieldCount }} fields</span>
+      <span class="text-xs font-semibold text-text-muted uppercase tracking-wider">Blackboard</span>
+      <span class="ml-auto text-xs text-text-muted">{{ fieldCount }} fields</span>
     </div>
 
     <div class="flex-1 overflow-y-auto p-3 space-y-1">
@@ -11,13 +11,13 @@
         class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
         :class="{ 'bg-accent/10 border border-accent/20': isNew(key) }"
       >
-        <span class="text-xs font-mono text-slate-500 shrink-0 mt-0.5 w-28 truncate">{{ key }}</span>
+        <span class="text-xs font-mono text-text-muted shrink-0 mt-0.5 w-28 truncate">{{ key }}</span>
         <span class="text-xs font-mono break-all" :class="valueColor(value)">
           {{ formatValue(value) }}
         </span>
       </div>
 
-      <div v-if="fieldCount === 0" class="text-slate-600 text-xs text-center py-8">
+      <div v-if="fieldCount === 0" class="text-text-muted text-xs text-center py-8">
         No blackboard data yet
       </div>
     </div>
@@ -61,10 +61,10 @@ function formatValue(v) {
 }
 
 function valueColor(v) {
-  if (v === null || v === undefined) return 'text-slate-600'
+  if (v === null || v === undefined) return 'text-text-muted'
   if (typeof v === 'boolean') return v ? 'text-green-400' : 'text-red-400'
   if (typeof v === 'number') return 'text-blue-400'
-  if (typeof v === 'string' && v === '') return 'text-slate-600'
-  return 'text-slate-300'
+  if (typeof v === 'string' && v === '') return 'text-text-muted'
+  return 'text-text'
 }
 </script>

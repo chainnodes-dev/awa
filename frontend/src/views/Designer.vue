@@ -9,20 +9,20 @@
         </svg>
       </RouterLink>
       <div class="w-px h-4 bg-border"/>
-      <span class="text-sm font-medium text-slate-300">{{ workflowName || 'New Workflow' }}</span>
+      <span class="text-sm font-medium text-text">{{ workflowName || 'New Workflow' }}</span>
       <!-- Version selector -->
       <template v-if="versions.length > 1">
         <select
           :value="meta.versionNumber"
           @change="switchVersion(Number($event.target.value))"
-          class="bg-surface-0 border border-border rounded px-2 py-1 text-xs text-slate-400 font-mono cursor-pointer hover:border-slate-500 outline-none"
+          class="bg-surface-0 border border-border rounded px-2 py-1 text-xs text-text-muted font-mono cursor-pointer hover:border-slate-500 outline-none"
         >
           <option v-for="v in versions" :key="v.version_number" :value="v.version_number">
             v{{ v.version_number }}
           </option>
         </select>
       </template>
-      <span v-else-if="meta.versionNumber" class="text-xs text-slate-500 font-mono">v{{ meta.versionNumber }}</span>
+      <span v-else-if="meta.versionNumber" class="text-xs text-text-muted font-mono">v{{ meta.versionNumber }}</span>
       <div v-if="isDirty" class="w-1.5 h-1.5 rounded-full bg-amber-500" title="Unsaved changes"/>
 
       <div class="flex-1"/>
@@ -64,15 +64,15 @@
       <div class="flex bg-surface-0 rounded-lg p-0.5 border border-border">
         <button
           @click="view = 'canvas'"
-          :class="['btn py-1 px-2.5 text-xs', view === 'canvas' ? 'bg-surface-2 text-slate-200' : 'text-slate-500']"
+          :class="['btn py-1 px-2.5 text-xs', view === 'canvas' ? 'bg-surface-2 text-text' : 'text-text-muted']"
         >Canvas</button>
         <button
           @click="view = 'split'"
-          :class="['btn py-1 px-2.5 text-xs', view === 'split' ? 'bg-surface-2 text-slate-200' : 'text-slate-500']"
+          :class="['btn py-1 px-2.5 text-xs', view === 'split' ? 'bg-surface-2 text-text' : 'text-text-muted']"
         >Split</button>
         <button
           @click="view = 'yaml'"
-          :class="['btn py-1 px-2.5 text-xs', view === 'yaml' ? 'bg-surface-2 text-slate-200' : 'text-slate-500']"
+          :class="['btn py-1 px-2.5 text-xs', view === 'yaml' ? 'bg-surface-2 text-text' : 'text-text-muted']"
         >YAML</button>
       </div>
 
@@ -103,7 +103,7 @@
           <textarea
             v-model="yamlSource"
             @input="isDirty = true"
-            class="flex-1 bg-surface-0 text-slate-300 font-mono text-xs p-4 resize-none outline-none border-none"
+            class="flex-1 bg-surface-0 text-text font-mono text-xs p-4 resize-none outline-none border-none"
             spellcheck="false"
             placeholder="Paste or type your workflow YAML here…"
           />
@@ -149,7 +149,7 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
               <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
             </svg>
-            <span class="text-xs text-slate-500 font-medium flex-1">YAML — live mirror</span>
+            <span class="text-xs text-text-muted font-medium flex-1">YAML — live mirror</span>
             <span v-if="yamlError" class="text-[10px] text-red-400 truncate max-w-[160px]" :title="yamlError">
               ⚠ {{ yamlError }}
             </span>
@@ -157,7 +157,7 @@
           <textarea
             v-model="yamlSource"
             @input="onYamlInput"
-            class="flex-1 bg-surface-0 text-slate-300 font-mono text-[11px] leading-relaxed p-3 resize-none outline-none border-none min-h-0"
+            class="flex-1 bg-surface-0 text-text font-mono text-[11px] leading-relaxed p-3 resize-none outline-none border-none min-h-0"
             spellcheck="false"
           />
         </div>
@@ -169,11 +169,11 @@
           <div class="flex border-b border-border shrink-0">
             <button
               @click="rightTab = 'properties'"
-              :class="['flex-1 py-2 text-xs font-medium transition-colors', rightTab === 'properties' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-400']"
+              :class="['flex-1 py-2 text-xs font-medium transition-colors', rightTab === 'properties' ? 'text-text border-b-2 border-accent' : 'text-text-muted hover:text-text-muted']"
             >Properties</button>
             <button
               @click="rightTab = 'generate'"
-              :class="['flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5', rightTab === 'generate' ? 'text-slate-200 border-b-2 border-violet-400' : 'text-slate-500 hover:text-slate-400']"
+              :class="['flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5', rightTab === 'generate' ? 'text-text border-b-2 border-violet-400' : 'text-text-muted hover:text-text-muted']"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
@@ -195,20 +195,31 @@
             <!-- Workflow metadata (no selection) -->
             <div v-else-if="!selected" class="p-4 space-y-4 overflow-y-auto flex-1">
               <div class="space-y-3">
-                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Workflow</h3>
+                <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Workflow</h3>
                 <div class="space-y-2">
                   <input v-model="meta.name"        class="input" placeholder="Name" @input="isDirty=true"/>
                   <div v-if="meta.versionNumber" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-0 border border-border">
-                    <span class="text-xs text-slate-500">Version</span>
-                    <span class="text-xs font-mono text-slate-300">v{{ meta.versionNumber }}</span>
-                    <span class="text-[10px] text-slate-600 flex-1 text-right">auto-incremented on save</span>
+                    <span class="text-xs text-text-muted">Version</span>
+                    <span class="text-xs font-mono text-text">v{{ meta.versionNumber }}</span>
+                    <span class="text-[10px] text-text-muted flex-1 text-right">auto-incremented on save</span>
                   </div>
-                  <textarea v-model="meta.description" class="input h-16 resize-none" placeholder="Description (short abstract)" @input="isDirty=true"/>
+                  <textarea v-model="meta.description" class="input h-16 resize-none" placeholder="Short Abstract (e.g. Invoice Processing)" @input="isDirty=true"/>
+                  <div class="space-y-1">
+                    <div class="flex items-center justify-between">
+                      <label class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Business Process Description</label>
+                      <button @click="showDescriptionModal = true" class="text-text-muted hover:text-accent transition-colors" title="Expand editor">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                        </svg>
+                      </button>
+                    </div>
+                    <textarea v-model="meta.processDescription" class="input h-32 resize-none text-[11px]" placeholder="Detailed natural language description of the process..." @input="isDirty=true"/>
+                  </div>
                   <label class="flex items-center gap-2 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20 cursor-pointer hover:bg-indigo-500/10 transition-colors group">
                     <input type="checkbox" v-model="meta.reusable" class="accent-indigo-500" @change="isDirty=true" />
                     <div class="flex-1">
                       <div class="text-xs font-semibold text-indigo-300 group-hover:text-indigo-200 transition-colors">Mark as Reusable</div>
-                      <div class="text-[10px] text-slate-600">Enables this workflow to be called as a sub-process by others.</div>
+                      <div class="text-[10px] text-text-muted">Enables this workflow to be called as a sub-process by others.</div>
                     </div>
                   </label>
                 </div>
@@ -232,12 +243,12 @@
               </template>
 
               <div class="space-y-2">
-                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Blackboard Schema</h3>
+                <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Blackboard Schema</h3>
                 <div v-for="(field, key) in bbSchema" :key="key"
                      class="flex items-center gap-2 group">
-                  <span class="text-xs font-mono text-slate-300 w-28 truncate">{{ key }}</span>
-                  <span class="text-xs text-slate-500 flex-1">{{ field.type }}</span>
-                  <button @click="removeBBField(key)" class="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 text-xs transition">✕</button>
+                  <span class="text-xs font-mono text-text w-28 truncate">{{ key }}</span>
+                  <span class="text-xs text-text-muted flex-1">{{ field.type }}</span>
+                  <button @click="removeBBField(key)" class="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 text-xs transition">✕</button>
                 </div>
                 <button @click="showBBModal = true" class="btn-ghost text-xs w-full justify-center border border-dashed border-border hover:border-accent/50">
                   + Add Field
@@ -246,16 +257,16 @@
 
               <!-- Agents summary -->
               <div v-if="agents.length" class="space-y-2">
-                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Agents ({{ agents.length }})</h3>
-                <div v-for="a in agents" :key="a.name" class="text-xs text-slate-500 flex items-center gap-2 py-1">
-                  <span class="font-mono text-slate-400 truncate flex-1">{{ a.name }}</span>
-                  <span v-if="a.model" class="text-[10px] text-slate-600 truncate">{{ a.model.split('/').pop() }}</span>
+                <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Agents ({{ agents.length }})</h3>
+                <div v-for="a in agents" :key="a.name" class="text-xs text-text-muted flex items-center gap-2 py-1">
+                  <span class="font-mono text-text-muted truncate flex-1">{{ a.name }}</span>
+                  <span v-if="a.model" class="text-[10px] text-text-muted truncate">{{ a.model.split('/').pop() }}</span>
                 </div>
               </div>
 
               <!-- System Prompt (relocated to bottom) -->
               <div class="space-y-1 pt-2 border-t border-border/50">
-                <label class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">System Prompt (Global Personality)</label>
+                <label class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">System Prompt (Global Personality)</label>
                 <textarea v-model="meta.systemPrompt" class="input h-32 font-mono text-[11px] leading-relaxed resize-none" placeholder="You are a helpful assistant…" @input="isDirty=true"/>
               </div>
             </div>
@@ -304,6 +315,35 @@
     <!-- ── Modals ──────────────────────────────────────────────────────── -->
     <BBFieldModal  v-if="showBBModal"   @close="showBBModal = false"   @add="addBBField" />
     <AddStateModal v-if="showAddState" @close="showAddState = false" @add="onAddState" />
+    
+    <!-- Description Pop-out Modal -->
+    <div v-if="showDescriptionModal" class="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/60 backdrop-blur-sm">
+      <div class="bg-surface-1 border border-border w-full max-w-4xl h-full max-h-[80vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <header class="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
+          <div>
+            <h2 class="text-sm font-semibold text-text">Process Description</h2>
+            <p class="text-xs text-text-muted">Describe the business logic and AI agents will follow these rules.</p>
+          </div>
+          <button @click="showDescriptionModal = false" class="btn-ghost p-1">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </header>
+        <div class="flex-1 p-4 bg-surface-0 overflow-hidden">
+          <CodeEditor
+            v-model="meta.processDescription"
+            language="text"
+            height="100%"
+            class="h-full border-none"
+          />
+        </div>
+        <footer class="px-6 py-4 border-t border-border flex justify-end gap-3 shrink-0 bg-surface-1">
+          <button @click="showDescriptionModal = false" class="btn-primary px-6">Done</button>
+        </footer>
+      </div>
+    </div>
+
     <!-- Start Run Modal -->
     <StartRunModal
       v-if="showRunModal"
@@ -370,9 +410,10 @@ const isDirty           = ref(false)
 const showRunModal      = ref(false)
 const selected          = ref(null)
 const pendingConnection = ref(null)
-const showBBModal       = ref(false)
-const showAddState      = ref(false)
-const flowKey           = ref(0)
+const showBBModal          = ref(false)
+const showAddState         = ref(false)
+const showDescriptionModal  = ref(false)
+const flowKey              = ref(0)
 const showTimeoutEdges  = ref(true)
 
 // -- Generation Tab State (lifted for persistence) --

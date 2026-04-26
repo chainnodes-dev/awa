@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full overflow-hidden">
 
     <!-- Empty state -->
-    <div v-if="!logs.length" class="flex flex-col items-center justify-center h-full gap-2 text-slate-600 text-xs">
+    <div v-if="!logs.length" class="flex flex-col items-center justify-center h-full gap-2 text-text-muted text-xs">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-40">
         <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
       </svg>
@@ -31,8 +31,8 @@
           />
 
           <!-- Method / Tool labels -->
-          <span class="text-[11px] font-mono text-slate-400 shrink-0">{{ log.method }}</span>
-          <span v-if="log.tool_name" class="text-[10px] text-slate-600 shrink-0">·</span>
+          <span class="text-[11px] font-mono text-text-muted shrink-0">{{ log.method }}</span>
+          <span v-if="log.tool_name" class="text-[10px] text-text-muted shrink-0">·</span>
           <span v-if="log.tool_name" class="text-[11px] font-mono text-accent/80 truncate">{{ log.tool_name }}</span>
 
           <span class="flex-1"/>
@@ -41,11 +41,11 @@
           <span class="text-[10px] font-mono text-amber-500/70 shrink-0">{{ log.duration_ms }}ms</span>
 
           <!-- Timestamp -->
-          <span class="text-[10px] text-slate-600 shrink-0 ml-1">{{ fmtTime(log.created_at) }}</span>
+          <span class="text-[10px] text-text-muted shrink-0 ml-1">{{ fmtTime(log.created_at) }}</span>
 
           <!-- Chevron -->
           <svg
-            class="w-3 h-3 text-slate-600 shrink-0 transition-transform duration-150 ml-1"
+            class="w-3 h-3 text-text-muted shrink-0 transition-transform duration-150 ml-1"
             :class="expanded.has(log.id || log.created_at) ? 'rotate-180' : ''"
             viewBox="0 0 20 20" fill="currentColor"
           >
@@ -60,12 +60,12 @@
           <div class="px-3 py-2 bg-black/10">
              <div class="flex flex-col gap-1 text-[10px]">
                 <div class="flex gap-2">
-                   <span class="text-slate-500 w-16">Server:</span>
-                   <span class="text-slate-300 font-mono break-all">{{ log.server_url }}</span>
+                   <span class="text-text-muted w-16">Server:</span>
+                   <span class="text-text font-mono break-all">{{ log.server_url }}</span>
                 </div>
                 <div class="flex gap-2">
-                   <span class="text-slate-500 w-16">Context:</span>
-                   <span class="text-slate-400 font-mono">{{ log.state_name }} <span class="text-slate-600 px-1">/</span> {{ log.agent_name }}</span>
+                   <span class="text-text-muted w-16">Context:</span>
+                   <span class="text-text-muted font-mono">{{ log.state_name }} <span class="text-text-muted px-1">/</span> {{ log.agent_name }}</span>
                 </div>
              </div>
           </div>
@@ -78,14 +78,14 @@
 
           <!-- Input section -->
           <div v-if="log.input" class="px-3 py-2">
-            <div class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Input</div>
-            <pre class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-64 overflow-y-auto">{{ fmtJson(log.input) }}</pre>
+            <div class="text-[10px] text-text-muted font-semibold uppercase tracking-wider mb-1.5">Input</div>
+            <pre class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-64 overflow-y-auto">{{ fmtJson(log.input) }}</pre>
           </div>
 
           <!-- Output section -->
           <div v-if="log.output" class="px-3 py-2">
-            <div class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Output</div>
-            <pre class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-96 overflow-y-auto">{{ fmtJson(log.output) }}</pre>
+            <div class="text-[10px] text-text-muted font-semibold uppercase tracking-wider mb-1.5">Output</div>
+            <pre class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-96 overflow-y-auto">{{ fmtJson(log.output) }}</pre>
           </div>
         </div>
       </div>

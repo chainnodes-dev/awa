@@ -12,12 +12,12 @@
         </div>
       </div>
       <div class="flex flex-col items-center">
-        <span class="text-sm font-semibold text-slate-200">{{ loadingLabel }}</span>
-        <span class="text-[10px] text-slate-500 animate-pulse">{{ loadingSubLabel }}</span>
+        <span class="text-sm font-semibold text-text">{{ loadingLabel }}</span>
+        <span class="text-[10px] text-text-muted animate-pulse">{{ loadingSubLabel }}</span>
       </div>
       <button
         @click="loading = false"
-        class="mt-4 px-3 py-1 text-[10px] text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-500 rounded transition-colors"
+        class="mt-4 px-3 py-1 text-[10px] text-text-muted hover:text-text border border-slate-700 hover:border-slate-500 rounded transition-colors"
       >
         Dismiss Overlay
       </button>
@@ -27,11 +27,11 @@
     <div class="flex border-b border-border shrink-0">
       <button
         @click="activeTab = 'generate'"
-        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors', activeTab === 'generate' ? 'text-violet-400 border-b-2 border-violet-400' : 'text-slate-600 hover:text-slate-400']"
+        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors', activeTab === 'generate' ? 'text-violet-400 border-b-2 border-violet-400' : 'text-text-muted hover:text-text-muted']"
       >Generate</button>
       <button
         @click="activeTab = 'trace'"
-        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5', activeTab === 'trace' ? 'text-teal-400 border-b-2 border-teal-400' : 'text-slate-600 hover:text-slate-400']"
+        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5', activeTab === 'trace' ? 'text-teal-400 border-b-2 border-teal-400' : 'text-text-muted hover:text-text-muted']"
       >
         Trace
         <span v-if="interactions.length" class="flex h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" />
@@ -45,7 +45,7 @@
         <!-- Model Provider -->
         <div class="p-3 rounded-lg bg-surface-0/50 border border-border/50 space-y-1.5">
           <div class="flex items-center justify-between">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Model Provider</label>
+            <label class="text-[10px] text-text-muted uppercase font-bold tracking-tighter">Model Provider</label>
             <span v-if="activeProviderLabel" class="text-[9px] text-violet-400 font-medium tracking-wide bg-violet-400/10 px-1.5 py-0.5 rounded">{{ activeProviderLabel }}</span>
           </div>
           <select
@@ -60,7 +60,7 @@
 
         <!-- Process Description -->
         <div class="space-y-2">
-          <label class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Process Description</label>
+          <label class="text-[10px] text-text-muted uppercase font-bold tracking-tighter">Process Description</label>
           <textarea
             :value="description"
             @input="onDescriptionInput"
@@ -72,11 +72,11 @@
         <!-- Pipeline Steps -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Generation Pipeline</label>
+            <label class="text-[10px] text-text-muted uppercase font-bold tracking-tighter">Generation Pipeline</label>
             <button
               v-if="props.pipelineStep > 0"
               @click="resetPipeline"
-              class="text-[9px] text-slate-500 hover:text-red-400 uppercase font-bold underline decoration-dotted underline-offset-2"
+              class="text-[9px] text-text-muted hover:text-red-400 uppercase font-bold underline decoration-dotted underline-offset-2"
             >Reset</button>
           </div>
 
@@ -90,7 +90,7 @@
                   'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold transition-all',
                   props.pipelineStep > i   ? 'bg-emerald-500 text-white cursor-pointer hover:scale-110 active:scale-95' :
                   props.pipelineStep === i ? 'bg-violet-500 text-white ring-2 ring-violet-400/30 cursor-pointer hover:scale-110 active:scale-95' :
-                                             'bg-surface-0 text-slate-600 border border-border cursor-pointer hover:border-violet-500/50 hover:text-slate-300'
+                                             'bg-surface-0 text-text-muted border border-border cursor-pointer hover:border-violet-500/50 hover:text-text'
                 ]"
                 :title="`Run Step ${i + 1}: ${step.label}`"
               >
@@ -99,14 +99,14 @@
               </button>
               <span :class="[
                 'text-[8px] text-center leading-tight transition-colors',
-                props.pipelineStep === i ? 'text-violet-400 font-bold' : 'text-slate-600'
+                props.pipelineStep === i ? 'text-violet-400 font-bold' : 'text-text-muted'
               ]">{{ step.label }}</span>
             </div>
           </div>
 
           <!-- Current step description -->
           <div v-if="props.pipelineStep < pipelineSteps.length" class="p-2.5 rounded bg-surface-0/60 border border-border/50">
-            <p class="text-[10px] text-slate-400 leading-relaxed">
+            <p class="text-[10px] text-text-muted leading-relaxed">
               <span class="text-violet-400 font-semibold">Step {{ props.pipelineStep + 1 }}:</span>
               {{ pipelineSteps[props.pipelineStep].description }}
             </p>
@@ -151,14 +151,14 @@
         <!-- Divider -->
         <div class="flex items-center gap-2 pt-1">
           <div class="flex-1 h-px bg-border/50"/>
-          <span class="text-[9px] text-slate-600 uppercase tracking-widest font-bold">Refine</span>
+          <span class="text-[9px] text-text-muted uppercase tracking-widest font-bold">Refine</span>
           <div class="flex-1 h-px bg-border/50"/>
         </div>
 
         <!-- Inline refinement -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <p class="text-[10px] text-slate-500">Request a targeted change to the current workflow.</p>
+            <p class="text-[10px] text-text-muted">Request a targeted change to the current workflow.</p>
             <span v-if="history.length" class="text-[9px] text-emerald-500 font-bold uppercase tracking-tighter">History Active</span>
           </div>
           <textarea
@@ -182,7 +182,7 @@
             <button
               v-if="history.length"
               @click="clearHistory"
-              class="px-3 py-1.5 text-[10px] text-slate-500 hover:text-red-400 border border-border hover:border-red-500/30 rounded-lg transition-colors"
+              class="px-3 py-1.5 text-[10px] text-text-muted hover:text-red-400 border border-border hover:border-red-500/30 rounded-lg transition-colors"
               title="Clear refinement history"
             >Clear</button>
           </div>

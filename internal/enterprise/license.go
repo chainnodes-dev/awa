@@ -51,6 +51,20 @@ func NewVerifier(pubKey *rsa.PublicKey) *Verifier {
 	return &Verifier{publicKey: pubKey}
 }
 
+// Signer handles license generation using an RSA private key.
+type Signer struct {
+	privateKey *rsa.PrivateKey
+}
+
+func NewSigner(privKey *rsa.PrivateKey) *Signer {
+	return &Signer{privateKey: privKey}
+}
+
+func (s *Signer) Sign(claims *LicenseClaims) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	return token.SignedString(s.privateKey)
+}
+
 // Verify decodes and validates a signed JWT license token.
 func (v *Verifier) Verify(tokenString string) (*LicenseClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &LicenseClaims{}, func(t *jwt.Token) (interface{}, error) {
@@ -113,4 +127,26 @@ func ParseRSAPublicKey(pemStr string) (*rsa.PublicKey, error) {
 		return nil, errors.New("not an RSA public key")
 	}
 	return rsaPub, nil
+}
+
+// ParseRSAPrivateKey parses a PEM-encoded RSA private key.
+func ParseRSAPrivateKey(pemStr string) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode([]byte(pemStr))
+	if block == nil {
+		return nil, errors.New("failed to decode PEM block")
+	}
+	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		// Fallback to PKCS8
+		p8, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key: %w", err)
+		}
+		rsaPriv, ok := p8.(*rsa.PrivateKey)
+		if !ok {
+			return nil, errors.New("not an RSA private key")
+		}
+		return rsaPriv, nil
+	}
+	return priv, nil
 }

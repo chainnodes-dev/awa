@@ -16,14 +16,14 @@
           <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
         </svg>
 
-        <span class="text-sm font-semibold text-slate-200 flex-1">
+        <span class="text-sm font-semibold text-text flex-1">
           {{ resolvedTitle }}
-          <span :class="['ml-2 text-[10px] font-mono text-slate-600 uppercase tracking-widest px-1.5 py-0.5 rounded', badgeClass]">
+          <span :class="['ml-2 text-[10px] font-mono text-text-muted uppercase tracking-widest px-1.5 py-0.5 rounded', badgeClass]">
             {{ language === 'text' ? 'plain text' : 'JavaScript' }}
           </span>
         </span>
 
-        <span class="text-[10px] text-slate-600 mr-2 hidden sm:block">Esc to close</span>
+        <span class="text-[10px] text-text-muted mr-2 hidden sm:block">Esc to close</span>
 
         <button class="btn-primary text-xs px-4 py-1.5" @click="$emit('close')">Done</button>
       </div>

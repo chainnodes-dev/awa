@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full overflow-hidden">
 
     <!-- Empty state -->
-    <div v-if="!calls.length" class="flex flex-col items-center justify-center h-full gap-2 text-slate-600 text-xs">
+    <div v-if="!calls.length" class="flex flex-col items-center justify-center h-full gap-2 text-text-muted text-xs">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-40">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
@@ -31,8 +31,8 @@
           />
 
           <!-- State / agent labels -->
-          <span class="text-[11px] font-mono text-slate-300 truncate">{{ call.stateName }}</span>
-          <span class="text-[10px] text-slate-600 shrink-0">·</span>
+          <span class="text-[11px] font-mono text-text truncate">{{ call.stateName }}</span>
+          <span class="text-[10px] text-text-muted shrink-0">·</span>
           <span class="text-[11px] font-mono text-accent/80 truncate">{{ call.agentName }}</span>
 
           <span class="flex-1"/>
@@ -44,11 +44,11 @@
           >{{ call.response.trigger }}</span>
 
           <!-- Timestamp -->
-          <span class="text-[10px] text-slate-600 shrink-0 ml-1">{{ fmtTime(call.timestamp) }}</span>
+          <span class="text-[10px] text-text-muted shrink-0 ml-1">{{ fmtTime(call.timestamp) }}</span>
 
           <!-- Chevron -->
           <svg
-            class="w-3 h-3 text-slate-600 shrink-0 transition-transform duration-150 ml-1"
+            class="w-3 h-3 text-text-muted shrink-0 transition-transform duration-150 ml-1"
             :class="expanded.has(call.id) ? 'rotate-180' : ''"
             viewBox="0 0 20 20" fill="currentColor"
           >
@@ -62,7 +62,7 @@
           <!-- System prompt section -->
           <div class="px-3 py-2">
             <button
-              class="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 font-semibold uppercase tracking-wider mb-1.5 transition-colors"
+              class="flex items-center gap-1.5 text-[10px] text-text-muted hover:text-text font-semibold uppercase tracking-wider mb-1.5 transition-colors"
               @click="toggleSection(call.id, 'system')"
             >
               <svg
@@ -76,14 +76,14 @@
             </button>
             <pre
               v-if="sectionOpen(call.id, 'system')"
-              class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-64 overflow-y-auto"
+              class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-64 overflow-y-auto"
             >{{ call.system }}</pre>
           </div>
 
           <!-- User messages section -->
           <div class="px-3 py-2">
             <button
-              class="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 font-semibold uppercase tracking-wider mb-1.5 transition-colors"
+              class="flex items-center gap-1.5 text-[10px] text-text-muted hover:text-text font-semibold uppercase tracking-wider mb-1.5 transition-colors"
               @click="toggleSection(call.id, 'messages')"
             >
               <svg
@@ -107,29 +107,29 @@
                       'text-[10px] font-mono font-semibold px-1 py-0.5 rounded',
                       msg.role === 'user'      ? 'text-sky-400 bg-sky-500/10'
                       : msg.role === 'assistant' ? 'text-violet-400 bg-violet-500/10'
-                      : 'text-slate-400 bg-white/5',
+                      : 'text-text-muted bg-white/5',
                     ]"
                   >{{ msg.role }}</span>
                 </div>
-                <pre class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto">{{ msgContent(msg) }}</pre>
+                <pre class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto">{{ msgContent(msg) }}</pre>
               </div>
             </div>
           </div>
 
           <!-- Response section -->
           <div v-if="call.response" class="px-3 py-2">
-            <div class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Response</div>
+            <div class="text-[10px] text-text-muted font-semibold uppercase tracking-wider mb-1.5">Response</div>
 
             <!-- Reasoning -->
             <div v-if="call.response.reasoning" class="mb-2 rounded bg-black/20 px-2.5 py-2">
-              <div class="text-[10px] text-slate-600 mb-1">Reasoning</div>
-              <p class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words leading-relaxed">{{ call.response.reasoning }}</p>
+              <div class="text-[10px] text-text-muted mb-1">Reasoning</div>
+              <p class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed">{{ call.response.reasoning }}</p>
             </div>
 
             <!-- Raw content -->
             <div class="rounded bg-black/20 px-2.5 py-2">
-              <div class="text-[10px] text-slate-600 mb-1">Raw content</div>
-              <pre class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words leading-relaxed max-h-64 overflow-y-auto">{{ call.response.content }}</pre>
+              <div class="text-[10px] text-text-muted mb-1">Raw content</div>
+              <pre class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed max-h-64 overflow-y-auto">{{ call.response.content }}</pre>
             </div>
           </div>
 

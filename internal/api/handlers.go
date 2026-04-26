@@ -35,9 +35,10 @@ type Handlers struct {
 	scheduler       SchedulerAdder
 	llmRegistry     *llm.Registry
 	licenseVerifier *enterprise.Verifier
+	licenseSigner   *enterprise.Signer
 }
 
-func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier) *Handlers {
+func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer) *Handlers {
 	return &Handlers{
 		engine:          engine,
 		store:           s,
@@ -46,6 +47,7 @@ func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTSer
 		scheduler:       sched,
 		llmRegistry:     llmReg,
 		licenseVerifier: verifier,
+		licenseSigner:   signer,
 	}
 }
 
@@ -312,7 +314,13 @@ func (h *Handlers) getLicenseClaims(ctx context.Context) (*enterprise.LicenseCla
 	if tenant.LicenseToken == "" {
 		return &enterprise.LicenseClaims{Tier: enterprise.TierFree, MaxWorkflows: 5, MaxRuns: 100}, nil
 	}
-	return h.licenseVerifier.Verify(tenant.LicenseToken)
+	claims, err := h.licenseVerifier.Verify(tenant.LicenseToken)
+	if err == nil && claims.Tier == enterprise.TierCommunity {
+		// Community tier has very high limits but isn't "enterprise"
+		if claims.MaxWorkflows == 0 { claims.MaxWorkflows = 1000 }
+		if claims.MaxRuns == 0 { claims.MaxRuns = 100000 }
+	}
+	return claims, err
 }
 
 func (h *Handlers) checkCreateWorkflowLimit(c *gin.Context) error {

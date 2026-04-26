@@ -131,13 +131,14 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			apiKeys.DELETE("/:id", h.RevokeAPIKey)
 		}
 
-		// Tenant management — super_admin only.
-		tenants := api.Group("/tenants", auth.RequireRole(auth.RoleSuperAdmin))
+		// Tenant management — admin and super_admin.
+		tenants := api.Group("/tenants", auth.RequireRole(auth.RoleAdmin, auth.RoleSuperAdmin))
 		{
 			tenants.POST("", h.CreateTenant)
 			tenants.GET("", h.ListTenants)
 			tenants.GET("/:id", h.GetTenant)
 			tenants.DELETE("/:id", h.DeleteTenant)
+			tenants.POST("/:id/license/generate", h.GenerateLicenseToken)
 		}
 
 		// Enterprise Licensing & Branding

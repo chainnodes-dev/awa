@@ -27,5 +27,10 @@ export const useTenantStore = defineStore('tenants', () => {
     tenants.value = tenants.value.filter(t => t.id !== id)
   }
 
-  return { tenants, loading, fetchAll, create, remove }
+  async function generateLicense(id, params) {
+    const { data } = await api.post(`/tenants/${id}/license/generate`, params)
+    return data
+  }
+
+  return { tenants, loading, fetchAll, create, remove, generateLicense }
 })

@@ -17,20 +17,20 @@
         :width="labelWidth + 12"
         :height="20"
         rx="4"
-        :fill="isSelected ? '#1e1b4b' : '#1a1d27'"
+        :fill="isSelected ? 'var(--color-accent)' : 'var(--color-surface-2)'"
         :stroke="strokeColor"
         stroke-width="1"
       />
       <text
         text-anchor="middle"
         dominant-baseline="middle"
-        :fill="isSelected ? '#a5b4fc' : labelColor"
+        :fill="isSelected ? 'white' : 'var(--color-text)'"
         font-size="11"
         font-family="JetBrains Mono, monospace"
       >{{ isTimeout ? '⏱ ' : '' }}{{ label }}</text>
       <!-- Guard chip -->
       <g v-if="data?.guard" :transform="`translate(0, 14)`">
-        <text text-anchor="middle" :fill="'#f59e0b'" font-size="9" font-family="monospace" opacity="0.8">
+        <text text-anchor="middle" fill="var(--color-text-muted)" font-size="9" font-family="monospace" opacity="0.8">
           {{ data.guard.slice(0, 28) }}{{ data.guard.length > 28 ? '…' : '' }}
         </text>
       </g>
@@ -60,10 +60,10 @@ const isTimeout  = computed(() => !!props.data?.isTimeout)
 
 // Timeout edges render in amber; normal edges in the default slate palette.
 const strokeColor = computed(() => {
-  if (isSelected.value) return '#6366f1'
-  return isTimeout.value ? '#92400e' : '#3a3d4a'
+  if (isSelected.value) return 'var(--color-accent)'
+  return isTimeout.value ? '#92400e' : 'var(--color-border)'
 })
-const labelColor = computed(() => isTimeout.value ? '#d97706' : '#64748b')
+const labelColor = computed(() => isTimeout.value ? '#d97706' : 'var(--color-text)')
 
 // Keep as a reactive computed so it redraws when node positions change.
 // (Destructuring .value immediately would freeze the values at mount time.)
