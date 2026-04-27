@@ -44,6 +44,7 @@ type BlackboardDef struct {
 type FieldDef struct {
 	Type     string      `yaml:"type"               json:"type"` // string | number | bool | object
 	Required bool        `yaml:"required,omitempty" json:"required"`
+	IsOutput bool        `yaml:"is_output,omitempty" json:"is_output"`
 	Default  interface{} `yaml:"default,omitempty"  json:"default,omitempty"`
 }
 

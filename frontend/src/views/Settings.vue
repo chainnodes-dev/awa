@@ -220,21 +220,45 @@
             Overrides are stored in-memory and will reset on server restart.
           </p>
 
-          <div v-for="(content, id) in systemPrompts" :key="id" class="space-y-2">
+          <div v-for="(content, id) in systemPrompts" :key="id" class="space-y-2 group">
             <div class="flex items-center justify-between">
-              <span class="text-[10px] font-mono text-text-muted uppercase tracking-wider">{{ id.replace(/_/g, ' ') }}</span>
-              <button @click="savePrompt(id)" :disabled="savingPrompt[id]" class="text-[10px] text-violet-400 hover:text-violet-300 font-bold uppercase transition-colors">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-mono text-violet-400/80 uppercase tracking-widest font-bold">{{ id.replace(/workflow_/g, '').replace(/_/g, ' ') }}</span>
+                <button 
+                  @click="openPopout(id)"
+                  class="p-1 rounded hover:bg-surface-2 text-text-muted hover:text-violet-400 transition-all opacity-0 group-hover:opacity-100"
+                  title="Full-screen Editor"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                  </svg>
+                </button>
+              </div>
+              <button @click="savePrompt(id)" :disabled="savingPrompt[id]" class="text-[10px] bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 px-2 py-1 rounded font-bold uppercase transition-all">
                 {{ savingPrompt[id] ? 'Saving...' : 'Save Override' }}
               </button>
             </div>
-            <textarea
-              v-model="systemPrompts[id]"
-              class="input w-full h-32 font-mono text-[11px] leading-relaxed resize-y"
-              placeholder="Enter custom system prompt..."
-            />
+            
+            <div class="h-80 shadow-inner rounded-lg border border-border/50 overflow-hidden">
+              <CodeEditor
+                v-model="systemPrompts[id]"
+                language="text"
+                height="100%"
+                :show-badge="false"
+              />
+            </div>
           </div>
         </section>
       </template>
+
+      <!-- Pop-out Editor Modal -->
+      <CodeEditorModal
+        v-if="activePopoutId"
+        v-model="systemPrompts[activePopoutId]"
+        :title="activePopoutId.replace(/_/g, ' ').toUpperCase()"
+        language="text"
+        @close="activePopoutId = null"
+      />
 
     </div>
   </div>
@@ -246,11 +270,19 @@ import { useAuthStore, api } from '@/stores/auth'
 import { useLLMStore } from '@/stores/llm'
 import { useEnterpriseStore } from '@/stores/enterprise'
 import { useTheme } from '@/composables/useTheme'
+import CodeEditor from '@/components/designer/CodeEditor.vue'
+import CodeEditorModal from '@/components/designer/CodeEditorModal.vue'
 
 const authStore = useAuthStore()
-const llmStore  = useLLMStore()
-const entStore  = useEnterpriseStore()
+const llmStore = useLLMStore()
+const entStore = useEnterpriseStore()
 const { theme, setTheme } = useTheme()
+
+const activePopoutId = ref(null)
+
+function openPopout(id) {
+  activePopoutId.value = id
+}
 
 const isAdmin = computed(() => authStore.user?.role === 'admin' || authStore.user?.role === 'super_admin')
 
@@ -435,6 +467,10 @@ const systemPrompts = reactive({
   workflow_generator_base: '',
   skill_analyser_preamble: '',
   workflow_refinement_addendum: '',
+  workflow_decompose: '',
+  workflow_categorise: '',
+  workflow_wire: '',
+  workflow_implement_finish: '',
 })
 const savingPrompt = reactive({})
 

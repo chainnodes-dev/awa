@@ -27,7 +27,18 @@
       </select>
     </div>
     <div class="space-y-1">
-      <label class="text-xs text-text-muted">Instructions</label>
+      <div class="flex items-center justify-between">
+        <label class="text-xs text-text-muted">Instructions</label>
+        <button
+          class="text-text-muted hover:text-accent transition-colors"
+          title="Open in fullscreen editor"
+          @click="showInstructionsModal = true"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+          </svg>
+        </button>
+      </div>
       <textarea class="input text-xs leading-relaxed resize-none h-16" v-model="form.instructions" placeholder="Describe what should happen in this state…" />
       <!-- Generate Code button — only shown for code nodes -->
       <div v-if="form.type === 'code'" class="pt-0.5">
@@ -202,11 +213,45 @@
           </div>
           <div class="space-y-1 flex-1">
             <label class="text-xs text-text-muted">Version</label>
-            <input
+            <select
               class="input font-mono text-xs"
               v-model="form.process_version"
-              placeholder="latest"
-            />
+            >
+              <option value="">latest</option>
+              <option v-for="v in availableVersions" :key="v" :value="v">v{{ v }}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Full-width Subprocess Summary -->
+        <div v-if="subprocessDef" class="rounded-lg bg-violet-500/5 border border-violet-500/20 p-3 space-y-3 w-full">
+          <div class="space-y-3">
+            <div v-if="subprocessRequiredInputs.length" class="space-y-1">
+              <div class="text-[9px] text-text-muted uppercase tracking-wider font-bold border-b border-violet-500/10 pb-0.5">Mandatory Inputs</div>
+              <div class="grid grid-cols-1 gap-1">
+                <div v-for="p in subprocessRequiredInputs" :key="p.name" class="flex items-center gap-2 text-[10px]">
+                  <span class="font-mono text-indigo-300 w-1/2 truncate">{{ p.name }}</span>
+                  <span class="text-[9px] text-text-muted italic">{{ p.type }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div v-if="subprocessOutputs.length" class="space-y-1">
+              <div class="text-[9px] text-text-muted uppercase tracking-wider font-bold border-b border-teal-500/10 pb-0.5">Workflow Results</div>
+              <div class="grid grid-cols-1 gap-1">
+                <div v-for="p in subprocessOutputs" :key="p.name" class="flex items-center gap-2 text-[10px]">
+                  <span class="font-mono text-teal-300 w-1/2 truncate">{{ p.name }}</span>
+                  <span class="text-[9px] text-text-muted italic">{{ p.type }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div v-if="!subprocessRequiredInputs.length && !subprocessOutputs.length" class="text-[10px] text-text-muted italic bg-surface-0/30 p-2 rounded border border-dashed border-border/40 text-center">
+              No public I/O contract declared
+            </div>
+          </div>
+          <div class="flex items-center pt-1 border-t border-border/30">
+            <span class="text-[9px] text-text-muted font-mono uppercase tracking-tighter">Reference: {{ subprocessDef.metadata.name }} v{{ subprocessDef.metadata.version }}</span>
           </div>
         </div>
 
@@ -231,10 +276,14 @@
         <ProcessMappingEditor
           label="Input Mappings (to sub-process)"
           v-model:mappings="form.input_mappings"
+          :child-options="subprocessRequiredInputs"
+          :parent-options="Object.keys(bbSchema)"
         />
         <ProcessMappingEditor
           label="Output Mappings (from sub-process)"
           v-model:mappings="form.output_mappings"
+          :child-options="subprocessOutputs"
+          :parent-options="Object.keys(bbSchema)"
         />
       </div>
     </template>
@@ -352,6 +401,15 @@
     @close="showCodeModal = false"
   />
 
+  <!-- Fullscreen instructions editor pop-out -->
+  <CodeEditorModal
+    v-if="showInstructionsModal"
+    v-model="form.instructions"
+    :state-name="form.name + ' Instructions'"
+    language="text"
+    @close="showInstructionsModal = false"
+  />
+
   <!-- HITL Form Preview Modal -->
   <div v-if="showPreview" class="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm" @click.self="showPreview = false">
     <div class="bg-surface-1 border border-border rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden animate-in zoom-in duration-200">
@@ -409,37 +467,16 @@ const props = defineProps({
 })
 const emit = defineEmits(['update', 'delete'])
 
-// Supported state types: initial, terminal, intermediate, script, code, hitl, wait, subprocess
-const STATE_TYPES = ['initial', 'terminal', 'intermediate', 'script', 'code', 'hitl', 'wait', 'subprocess']
-
-// When a process is selected from the picker, pre-populate the mapping rows
-// with the process's declared port names (bbField left blank for the user to fill).
-// Only populates rows that aren't already filled to preserve manual edits.
-function onProcessSelected(p) {
-  if (!p) return
-  if (p.inputs?.length) {
-    const existing = new Set(form.input_mappings.map(m => m.name))
-    p.inputs.forEach(port => {
-      if (!existing.has(port.name)) {
-        form.input_mappings.push({ name: port.name, bbField: '' })
-      }
-    })
-  }
-  if (p.outputs?.length) {
-    const existing = new Set(form.output_mappings.map(m => m.name))
-    p.outputs.forEach(port => {
-      if (!existing.has(port.name)) {
-        form.output_mappings.push({ name: port.name, bbField: '' })
-      }
-    })
-  }
-}
-
 // Helper to convert subprocess mappings object { portName: bbField } → array of { name, bbField }
 function mappingsToArray(obj) {
   if (!obj) return []
   return Object.entries(obj).map(([name, bbField]) => ({ name, bbField }))
 }
+
+// Supported state types: initial, terminal, intermediate, script, code, hitl, wait, subprocess
+const STATE_TYPES = ['initial', 'terminal', 'intermediate', 'script', 'code', 'hitl', 'wait', 'subprocess']
+
+// ── Reactive State ──────────────────────────────────────────────────────────
 
 const form = reactive({
   name:           props.node.name         ?? '',
@@ -472,10 +509,82 @@ const agentForm = reactive({
   mcp_servers: props.agentDef?.config?.mcp_servers ?? '',
 })
 
+const availableVersions = ref([])
+const subprocessDef    = ref(null)
+
+const subprocessRequiredInputs = computed(() => {
+  const s = subprocessDef.value?.blackboard?.schema
+  if (!s) return []
+  return Object.entries(s).filter(([_, f]) => f.required).map(([k, v]) => ({ name: k, type: v.type }))
+})
+
+const subprocessOutputs = computed(() => {
+  const s = subprocessDef.value?.blackboard?.schema
+  if (!s) return []
+  return Object.entries(s).filter(([_, f]) => f.is_output).map(([k, v]) => ({ name: k, type: v.type }))
+})
+
+// Fetch versions when a process is selected or on mount if already set
+watch(() => form.process_ref, async (name) => {
+  if (!name) {
+    availableVersions.value = []
+    subprocessDef.value = null
+    return
+  }
+  try {
+    const { data } = await api.get(`/workflows/${name}/versions`)
+    availableVersions.value = data.map(v => v.version_number).sort((a, b) => b - a)
+  } catch {}
+  fetchSubprocessDef()
+}, { immediate: true })
+
+watch(() => form.process_version, () => {
+  fetchSubprocessDef()
+})
+
+async function fetchSubprocessDef() {
+  if (!form.process_ref) return
+  try {
+    const version = form.process_version || 'latest'
+    // Use the versioned API endpoint to get the full definition including blackboard schema
+    const { data } = await api.get(`/workflows/${form.process_ref}/v/${version}`)
+    subprocessDef.value = data
+  } catch (err) {
+    console.error("Failed to fetch subprocess def:", err)
+  }
+}
+
+function onProcessSelected(p) {
+  if (!p) return
+  subprocessDef.value = p
+  form.process_version = '' // Reset to latest on new selection
+  
+  // Initial mapping suggestion
+  if (p.blackboard?.schema) {
+    const schema = p.blackboard.schema
+    const required = Object.entries(schema).filter(([_, f]) => f.required).map(([k]) => k)
+    const outputs  = Object.entries(schema).filter(([_, f]) => f.is_output).map(([k]) => k)
+
+    const existingInput = new Set(form.input_mappings.map(m => m.name))
+    required.forEach(name => {
+      if (!existingInput.has(name)) form.input_mappings.push({ name, bbField: '' })
+    })
+
+    const existingOutput = new Set(form.output_mappings.map(m => m.name))
+    outputs.forEach(name => {
+      if (!existingOutput.has(name)) form.output_mappings.push({ name, bbField: '' })
+    })
+  }
+  
+  // Also fetch the specific version details to be sure we have everything
+  fetchSubprocessDef()
+}
+
 const scaffoldScript  = ref(null)
 const scaffoldLoading = ref(false)
 const scaffoldError   = ref('')
 const showCodeModal   = ref(false)
+const showInstructionsModal = ref(false)
 
 const codegenExplanation = ref('')
 

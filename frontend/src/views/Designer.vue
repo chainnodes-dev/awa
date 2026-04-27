@@ -204,6 +204,10 @@
                     <span class="text-[10px] text-text-muted flex-1 text-right">auto-incremented on save</span>
                   </div>
                   <textarea v-model="meta.description" class="input h-16 resize-none" placeholder="Short Abstract (e.g. Invoice Processing)" @input="isDirty=true"/>
+                  <div class="space-y-2">
+                    <label class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Cron Schedule</label>
+                    <CronEditor v-model="meta.schedule" @change="isDirty=true" />
+                  </div>
                   <div class="space-y-1">
                     <div class="flex items-center justify-between">
                       <label class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Business Process Description</label>
@@ -225,34 +229,11 @@
                 </div>
               </div>
 
-              <!-- Reusable configuration -->
-              <template v-if="meta.reusable">
-                <div class="space-y-4">
-                  <IOPortEditor
-                    title="Inputs"
-                    :ports="meta.inputs"
-                    show-required
-                    @change="isDirty = true"
-                  />
-                  <IOPortEditor
-                    title="Outputs"
-                    :ports="meta.outputs"
-                    @change="isDirty = true"
-                  />
-                </div>
-              </template>
-
-              <div class="space-y-2">
-                <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Blackboard Schema</h3>
-                <div v-for="(field, key) in bbSchema" :key="key"
-                     class="flex items-center gap-2 group">
-                  <span class="text-xs font-mono text-text w-28 truncate">{{ key }}</span>
-                  <span class="text-xs text-text-muted flex-1">{{ field.type }}</span>
-                  <button @click="removeBBField(key)" class="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 text-xs transition">✕</button>
-                </div>
-                <button @click="showBBModal = true" class="btn-ghost text-xs w-full justify-center border border-dashed border-border hover:border-accent/50">
-                  + Add Field
-                </button>
+              <div class="space-y-4">
+                <BlackboardSchemaEditor
+                  :schema="bbSchema"
+                  @change="isDirty = true"
+                />
               </div>
 
               <!-- Agents summary -->
@@ -264,9 +245,9 @@
                 </div>
               </div>
 
-              <!-- System Prompt (relocated to bottom) -->
+              <!-- Workflow Prompt (relocated to bottom) -->
               <div class="space-y-1 pt-2 border-t border-border/50">
-                <label class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">System Prompt (Global Personality)</label>
+                <label class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Workflow Prompt (Global Personality)</label>
                 <textarea v-model="meta.systemPrompt" class="input h-32 font-mono text-[11px] leading-relaxed resize-none" placeholder="You are a helpful assistant…" @input="isDirty=true"/>
               </div>
             </div>
@@ -352,13 +333,13 @@ import TransitionEdge from '@/components/designer/TransitionEdge.vue'
 import StartRunModal  from '@/components/shared/StartRunModal.vue'
 
 import PendingConnectionPanel from '@/components/designer/PendingConnectionPanel.vue'
+import CronEditor from '@/components/designer/CronEditor.vue'
 import StatePanel             from '@/components/designer/StatePanel.vue'
 import EdgePanel              from '@/components/designer/EdgePanel.vue'
-import BBFieldModal           from '@/components/designer/BBFieldModal.vue'
+import BlackboardSchemaEditor from '@/components/designer/BlackboardSchemaEditor.vue'
 import AddStateModal          from '@/components/designer/AddStateModal.vue'
 import GeneratePanel          from '@/components/designer/GeneratePanel.vue'
 import CodeEditorModal       from '@/components/designer/CodeEditorModal.vue'
-import IOPortEditor           from '@/components/designer/IOPortEditor.vue'
 
 import { useWorkflowStore } from '@/stores/workflows'
 import { useWorkflowIO }    from '@/composables/useWorkflowIO'
@@ -378,7 +359,7 @@ const nodes   = ref([])
 const edges   = ref([])
 const agents  = ref([])
 const meta    = reactive({ 
-  name: '', version: '1.0.0', versionNumber: 0, description: '', systemPrompt: '', processDescription: '',
+  name: '', version: '1.0.0', versionNumber: 0, description: '', systemPrompt: '', processDescription: '', schedule: '',
   reusable: false, inputs: [], outputs: [], capabilities: []
 })
 const bbSchema = reactive({})
@@ -393,7 +374,6 @@ const isDirty           = ref(false)
 const showRunModal      = ref(false)
 const selected          = ref(null)
 const pendingConnection = ref(null)
-const showBBModal          = ref(false)
 const showAddState         = ref(false)
 const showDescriptionModal  = ref(false)
 const flowKey              = ref(0)
@@ -427,7 +407,6 @@ const {
   getAgent,
   updateNode, updateEdge, deleteSelected,
   addState, onAddState,
-  addBBField, removeBBField,
 } = useCanvasActions({ nodes, edges, agents, isDirty, selected, pendingConnection, showAddState, bbSchema, fitView, layout })
 
 async function onAIApply(payload) {

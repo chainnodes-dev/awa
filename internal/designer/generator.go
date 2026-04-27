@@ -84,7 +84,7 @@ func (g *Generator) WithProvider(p llm.Provider) *Generator {
 }
 
 func (g *Generator) GetPrompt(id string) string {
-	return g.prompts.Get(id, "")
+	return g.prompts.Get(id, GetDefaultPrompt(id))
 }
 
 func (g *Generator) SetPrompt(id, content string) {
@@ -324,6 +324,7 @@ Rules for refinement:
 // extractYAMLBlock finds the first ```yaml ... ``` block in the LLM response,
 // or falls back to the raw content if no code block is present.
 func extractYAMLBlock(content string) (string, error) {
+	content = sanitizeYAML(content)
 	// Try ```yaml block first.
 	const startMarker = "```yaml"
 	const endMarker = "```"
@@ -358,6 +359,21 @@ func extractYAMLBlock(content string) (string, error) {
 	}
 
 	return "", fmt.Errorf("response does not contain a YAML block")
+}
+
+// sanitizeYAML replaces tabs with spaces and removes common invisible nuisances
+// that cause YAML unmarshal errors.
+func sanitizeYAML(y string) string {
+	// Replace tabs with 2 spaces
+	y = strings.ReplaceAll(y, "\t", "  ")
+	// Remove zero-width non-breaking spaces (\u00A0)
+	y = strings.ReplaceAll(y, "\u00A0", " ")
+	// Remove carriage returns
+	y = strings.ReplaceAll(y, "\r", "")
+	// Fix fancy Unicode dashes that sometimes creep in from LLM hallucinations
+	y = strings.ReplaceAll(y, "—", "-")
+	y = strings.ReplaceAll(y, "–", "-")
+	return y
 }
 
 // filterServers returns only the entries whose Name is in the requested list.

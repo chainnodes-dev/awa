@@ -145,35 +145,7 @@ func (g *Generator) buildProcessAnalyserPrompt(mcpServers []string, registeredPr
 	base := g.buildSystemPrompt(mcpServers)
 
 	// Prepend decomposition instructions.
-	preamble := g.prompts.Get(PromptIDSkill, `You are a process decomposition engine for the ASM (Agentic State Machine) platform.
-
-Your task is to analyse a process description and convert it into an optimal ASM workflow.
-A "process" is a workflow that may be reusable. Your job is to:
-
-1. **Decompose** the process into atomic, sequential (or branching) steps.
-2. **Classify** each step into the most efficient state type:
-   - Use **subprocess** FIRST when a reusable sub-process in the catalog (see below) already
-     implements the required capability. This is always preferred over reimplementing
-     the same logic inline.
-   - Use **intermediate** (LLM agent) ONLY when genuine reasoning, judgment, or language
-     understanding is required that cannot be expressed deterministically and no
-     reusable process covers it.
-   - Use **code** (JavaScript) when the step requires computation, transformation, loops,
-     or complex conditional logic.
-   - Use **script** (expr-lang) for simple single-expression routing or field updates.
-   - Use **hitl** when the step explicitly requires a human decision.
-   - Use **wait** when the step must pause until external data arrives.
-3. **Identify data dependencies** — what each step reads and writes on the blackboard.
-4. **Honour the declared I/O contract** — all declared input ports MUST appear as
-   blackboard fields; all declared output ports MUST be written before terminal states.
-5. **Abstract Generation** — Populate "metadata.description" with a concise 1-sentence abstract. PRESERVE existing descriptions if present.
-6. **Minimise LLM usage** — prefer code, script, or subprocess nodes where possible.
-
-Ask yourself for each step:
-"Does a reusable process already do this?" If yes, use subprocess.
-"Can this be expressed without an LLM?" If yes, use code or script.
-
-`) + base
+	preamble := g.prompts.Get(PromptIDSkill, DefaultSkillPrompt()) + base
 
 	if len(registeredProcesses) > 0 {
 		preamble += g.buildProcessCatalogSection(registeredProcesses)

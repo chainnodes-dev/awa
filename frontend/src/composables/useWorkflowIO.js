@@ -17,6 +17,7 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
     meta.versionNumber = def.metadata?.version_number ?? 0
     meta.description        = def.metadata?.description         ?? ''
     meta.systemPrompt       = def.metadata?.system_prompt       ?? ''
+    meta.schedule           = def.metadata?.schedule            ?? ''
     meta.reusable           = def.metadata?.reusable            ?? false
     
     // Only overwrite process description if the new definition actually has one.
@@ -112,6 +113,7 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
         version:             meta.version || 'draft',
         description:         meta.description,
         system_prompt:       meta.systemPrompt,
+        schedule:            meta.schedule,
         process_description: meta.processDescription,
         reusable:            meta.reusable || false,
       },

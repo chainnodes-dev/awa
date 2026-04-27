@@ -2,7 +2,7 @@
   <div class="code-editor-editor relative rounded-lg overflow-hidden border border-border bg-surface-0">
     <div ref="editorEl" class="text-xs" />
     <!-- Language badge -->
-    <div class="absolute top-2 right-2 text-[9px] font-mono text-text-muted select-none pointer-events-none uppercase tracking-widest">
+    <div v-if="showBadge" class="absolute top-2 right-2 text-[9px] font-mono text-text-muted select-none pointer-events-none uppercase tracking-widest">
       {{ language }}
     </div>
   </div>
@@ -25,6 +25,7 @@ const props = defineProps({
   bbSchema:   { type: Object, default: () => ({}) },
   height:     { type: String, default: '260px' },
   readonly:   { type: Boolean, default: false },
+  showBadge:  { type: Boolean, default: true },
 })
 const emit = defineEmits(['update:modelValue'])
 

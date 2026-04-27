@@ -8,15 +8,37 @@
       class="flex gap-1.5 items-center px-2 py-1.5 rounded bg-surface-0 border border-border"
     >
       <!-- Port name (child side) -->
+      <select
+        v-if="childOptions.length"
+        class="input font-mono text-[10px] py-0.5 w-28 shrink-0"
+        :value="port.name"
+        @change="update(i, 'name', $event.target.value)"
+      >
+        <option value="">-- port --</option>
+        <option v-for="opt in childOptions" :key="opt" :value="opt">{{ opt }}</option>
+      </select>
       <input
+        v-else
         class="input font-mono text-[10px] py-0.5 w-24 shrink-0"
         :value="port.name"
         placeholder="port"
         @input="update(i, 'name', $event.target.value)"
       />
+
       <span class="text-text-muted text-[10px] shrink-0">→</span>
+
       <!-- Blackboard field (parent side) -->
+      <select
+        v-if="parentOptions.length"
+        class="input font-mono text-[10px] py-0.5 flex-1"
+        :value="port.bbField"
+        @change="update(i, 'bbField', $event.target.value)"
+      >
+        <option value="">-- bb field --</option>
+        <option v-for="opt in parentOptions" :key="opt" :value="opt">{{ opt }}</option>
+      </select>
       <input
+        v-else
         class="input font-mono text-[10px] py-0.5 flex-1"
         :value="port.bbField"
         placeholder="bb.field"
@@ -42,9 +64,10 @@
 import { ref, watch } from 'vue'
 
 const props = defineProps({
-  label:    { type: String, default: 'Mappings' },
-  // Array of { name: string (child port), bbField: string (parent blackboard field) }
-  mappings: { type: Array, default: () => [] },
+  label:         { type: String, default: 'Mappings' },
+  mappings:      { type: Array,  default: () => [] },
+  childOptions:  { type: Array,  default: () => [] },
+  parentOptions: { type: Array,  default: () => [] },
 })
 const emit = defineEmits(['update:mappings'])
 

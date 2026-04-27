@@ -129,7 +129,7 @@ const hasSchema = computed(() => {
 })
 
 const jsonSchema = computed(() => {
-  return convertAsmSchemaToJsonSchema(props.definition?.blackboard?.schema)
+  return convertAsmSchemaToJsonSchema(props.definition?.blackboard?.schema, true)
 })
 
 function syncFromForm(data) {

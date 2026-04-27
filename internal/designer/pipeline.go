@@ -75,7 +75,7 @@ type scriptJobResult struct {
 // description.  All states are typed as 'intermediate' so the canvas can render
 // them immediately.  No transitions, code, or expressions are generated yet.
 func (g *Generator) DecomposeWorkflow(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
-	system := g.prompts.Get(PromptIDDecompose, decomposeSystemPrompt())
+	system := g.prompts.Get(PromptIDDecompose, DefaultDecomposePrompt())
 	system += g.buildMCPSection(req.MCPServers)
 	system += pipelineOutputFormat()
 
@@ -92,7 +92,7 @@ func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*
 	if req.CurrentYAML == "" {
 		return nil, fmt.Errorf("current_yaml is required for the categorise step")
 	}
-	system := g.prompts.Get(PromptIDCategorise, categoriseSystemPrompt())
+	system := g.prompts.Get(PromptIDCategorise, DefaultCategorisePrompt())
 	system += g.buildMCPSection(req.MCPServers)
 	system += pipelineOutputFormat()
 
@@ -112,7 +112,7 @@ func (g *Generator) WireWorkflow(ctx context.Context, req PipelineRequest) (*Pip
 	if req.CurrentYAML == "" {
 		return nil, fmt.Errorf("current_yaml is required for the wire step")
 	}
-	system := g.prompts.Get(PromptIDWire, wireSystemPrompt())
+	system := g.prompts.Get(PromptIDWire, DefaultWirePrompt())
 	system += g.buildMCPSection(req.MCPServers)
 	system += pipelineOutputFormat()
 
@@ -197,7 +197,7 @@ func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*P
 		patchedYAML = req.CurrentYAML
 	}
 
-	finishSystem := g.prompts.Get(PromptIDImplFinish, implementFinishSystemPrompt())
+	finishSystem := g.prompts.Get(PromptIDImplFinish, DefaultImplementFinishPrompt())
 	finishSystem += g.buildMCPSection(req.MCPServers)
 	finishSystem += pipelineOutputFormat()
 	finishMsg := fmt.Sprintf(
@@ -217,48 +217,89 @@ func (g *Generator) runPipelineStep(ctx context.Context, req PipelineRequest, sy
 		{Role: "user", Content: userMsg},
 	}
 
-	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
-		SystemPrompt: system,
-		Messages:     []llm.Message{{Role: "user", Content: userMsg}},
-		MaxTokens:    g.provider.MaxOutputTokens(),
-	})
-	if err != nil {
-		return &PipelineStepResult{Interactions: interaction}, fmt.Errorf("LLM call failed: %w", err)
+	messages := []llm.Message{
+		{Role: "user", Content: userMsg},
 	}
 
-	interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
+	maxRetries := 3
+	var lastYamlStr string
+	var lastDef *asmtypes.WorkflowDef
+	var lastValErr error
+	var lastExtractErr error
 
-	yamlStr, err := extractYAMLBlock(resp.Content)
-	if err != nil {
-		return &PipelineStepResult{Interactions: interaction}, fmt.Errorf("no YAML block in response: %w", err)
-	}
-
-	// SELF-HEALING: AI often produces 'script: "string"' instead of 'script: {trigger: "string"}'
-	// or 'code: "string"' instead of 'code: {code: "string"}'. We fix these common shortcuts here.
-	yamlStr = repairNodeStructures(yamlStr)
-
-	def, _, valErr := asmtypes.LoadFromYAML([]byte(yamlStr))
-	validationError := ""
-	if valErr != nil {
-		if !softValidate {
-			return &PipelineStepResult{YAML: yamlStr, Interactions: interaction},
-				fmt.Errorf("YAML validation failed: %w", valErr)
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+			SystemPrompt: system,
+			Messages:     messages,
+			MaxTokens:    g.provider.MaxOutputTokens(),
+		})
+		if err != nil {
+			return &PipelineStepResult{Interactions: interaction}, fmt.Errorf("LLM call failed: %w", err)
 		}
-		validationError = valErr.Error()
+
+		interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
+		messages = append(messages, llm.Message{Role: "assistant", Content: resp.Content})
+
+		yamlStr, err := extractYAMLBlock(resp.Content)
+		if err != nil {
+			lastExtractErr = err
+			failMsg := fmt.Sprintf("No YAML block found in your response: %v. Please output ONLY a valid YAML block.", err)
+			interaction = append(interaction, llm.Message{Role: "user", Content: failMsg})
+			messages = append(messages, llm.Message{Role: "user", Content: failMsg})
+			continue
+		}
+
+		// SELF-HEALING: AI often produces 'script: "string"' instead of 'script: {trigger: "string"}'
+		// or 'code: "string"' instead of 'code: {code: "string"}'. We fix these common shortcuts here.
+		yamlStr = repairNodeStructures(yamlStr)
+		lastYamlStr = yamlStr
+
+		def, _, valErr := asmtypes.LoadFromYAML([]byte(yamlStr))
+		if valErr != nil {
+			lastValErr = valErr
+			errorDetail := valErr.Error()
+			// Provide specific guidance for common formatting hallucinations
+			if strings.Contains(errorDetail, "cannot start any token") || strings.Contains(errorDetail, "found character") {
+				errorDetail = "You likely used TAB characters for indentation. YAML REQUIRES SPACES. Please rewrite using ONLY SPACES (2 per level)."
+			}
+
+			failMsg := fmt.Sprintf("The generated YAML is invalid and failed to parse: %v. Please fix the formatting errors and ensure you strictly follow the schema rules.", errorDetail)
+			interaction = append(interaction, llm.Message{Role: "user", Content: failMsg})
+			messages = append(messages, llm.Message{Role: "user", Content: failMsg})
+			continue
+		}
+
+		lastDef = def
+		lastValErr = nil
+		break // Success!
+	}
+
+	// If we still have an extraction error after all retries and no YAML at all
+	if lastExtractErr != nil && lastYamlStr == "" {
+		return &PipelineStepResult{Interactions: interaction}, fmt.Errorf("no YAML block in response after %d attempts: %w", maxRetries, lastExtractErr)
+	}
+
+	validationError := ""
+	if lastValErr != nil {
+		if !softValidate {
+			return &PipelineStepResult{YAML: lastYamlStr, Interactions: interaction},
+				fmt.Errorf("YAML validation failed after %d attempts: %w", maxRetries, lastValErr)
+		}
+		validationError = lastValErr.Error()
 	}
 
 	// PERSISTENCE: Ensure the process description is carried through every step.
-	if def != nil {
-		def.Metadata.ProcessDescription = req.ProcessDescription
+	if lastDef != nil {
+		lastDef.Metadata.ProcessDescription = req.ProcessDescription
 		// Update the YAML string to include the persisted description
-		if out, err := yaml.Marshal(def); err == nil {
-			yamlStr = string(out)
+		if out, err := yaml.Marshal(lastDef); err == nil {
+			lastYamlStr = string(out)
 		}
 	}
 
 	return &PipelineStepResult{
-		YAML:            yamlStr,
-		Definition:      def,
+		YAML:            lastYamlStr,
+		Definition:      lastDef,
 		Interactions:    interaction,
 		ValidationError: validationError,
 	}, nil
@@ -267,6 +308,7 @@ func (g *Generator) runPipelineStep(ctx context.Context, req PipelineRequest, sy
 // repairNodeStructures uses simple string/regex replacement to fix common AI YAML shortcuts
 // that violate the strict ASM schema.
 func repairNodeStructures(y string) string {
+	y = sanitizeYAML(y)
 	lines := strings.Split(y, "\n")
 	var out []string
 	for _, line := range lines {
@@ -428,343 +470,3 @@ The YAML must be complete and valid according to the ASM schema.
 `
 }
 
-// ── Default system prompts ────────────────────────────────────────────────────
-
-func decomposeSystemPrompt() string {
-	return `You are a world-class business process architect and workflow decomposition expert for the ASM (Agentic State Machine) platform.
-
-Your task is to transform a high-level business process description into a granular, high-fidelity workflow structure (nodes). 
-
-## Your Goal: Maximum Granularity
-Do not be generic. A "good" decomposition identifies every critical logical pivot and operational step. If a process involves "Checking an invoice and then paying it", that is at least 3 steps: 
-1. Validate invoice data (Check)
-2. Decide on payment (Decision)
-3. Execute payment (Action)
-
-## What to produce
-
-For each state you identify:
-- A descriptive SCREAMING_SNAKE_CASE name (e.g., ` + "`VALIDATE_INVOICE_TOTAL`" + ` instead of ` + "`CHECK`" + `)
-- A clear 2-3 sentence description in the 'instructions' field. This MUST explain:
-    - The specific INPUTS being considered
-    - The logical TRANSFORMATION or DECISION being made
-    - The possible OUTCOMES (triggers)
-- Type: follow the rules below for node typing
-
-### Node typing rules for this step
-- The FIRST state (entry point) MUST have type: initial
-- End states (success, failure, rejected, error) MUST have type: terminal
-- ALL other states: set type: intermediate — specific classification happens in the next step
-
-### Identification Strategy
-1. **Identification of Error Paths**: Explicitly identify where the process can fail (e.g., "Invalid Data", "Unauthorized", "System Timeout") and create dedicated terminal states for these.
-2. **Distinct Operations**: If two actions happen sequentially (e.g., "Get Data" then "Transform Data"), create two separate nodes.
-3. **Decisions/Gateways**: Every time a "if", "whether", or "depending on" is mentioned, ensure there is a preceding node that prepares that decision.
-
-Additionally:
-- Create a 'primary-agent' entry in the agents block (as a YAML list item).
-- **REQUIRED**: Add logical transitions connecting states. Use trigger names like 'next', 'ok', 'error', 'invalid', 'approved'.
-- Set metadata.name, metadata.description, metadata.version: "1", apiVersion: asm/v1, kind: Workflow
-
-## Critical YAML format rules
-
-The 'agents' field MUST be a YAML list:
-` + "```yaml" + `
-agents:
-  - name: primary-agent
-    model: ""
-` + "```" + `
-
-Transitions MUST be in the top-level ` + "`transitions:`" + ` block:
-` + "```yaml" + `
-transitions:
-  - from: VALIDATE_STEP
-    to: PROCESS_STEP
-    trigger: ok
-` + "```" + `
-
-The 'states' field MUST be a YAML list (sequence), NOT a map:
-` + "```yaml" + `
-states:
-  - name: START        # CORRECT: list item
-    type: initial
-` + "```" + `
-WRONG:
-` + "```yaml" + `
-states:
-  START:               # WRONG: map key
-    type: initial
-` + "```" + `
-
-## Rules
-
-1. Exactly one 'initial' state and at least one 'terminal' state.
-2. **CRITICAL**: Every 'instructions' field MUST be wrapped in double-quotes.
-3. **Every non-terminal state MUST have at least one outgoing transition**.
-4. Be thorough — a detailed 10-node workflow is better than a vague 3-node one.
-`
-}
-
-func categoriseSystemPrompt() string {
-	return `You are classifying workflow states into the correct ASM node types.
-
-Given a skeleton workflow YAML (all states typed as 'intermediate') and the original process description,
-assign the correct ASM type to every state.
-
-## Available types and when to use them
-
-| Type | Use when |
-|------|----------|
-| initial | Single entry point of the workflow |
-| terminal | End states (success, failure, cancelled, etc.) |
-| intermediate | Genuine LLM reasoning/decision-making that is non-deterministic |
-| code | Deterministic computation — math, string manipulation, data transformation (JavaScript) |
-| script | Simple one-line deterministic logic — conditions or mappings (expr-lang) |
-| hitl | A human must take an action or approve something |
-| wait | Pause until an external event arrives or a condition is met |
-| emit_event | Fire a platform event to trigger other workflows |
-| subprocess | Invoke a registered sub-workflow (process) |
-
-## Classification rules
-
-1. **Prioritize MCP Servers**: If a step requires external data retrieval or an external action (e.g., looking up a company in GLEIF, checking a stock price, sending an email) and a matching tool is available in the **MCP Servers** list, categorize that state as 'intermediate' so an agent can handle the tool interaction.
-2. Prefer 'code' over 'intermediate' for internal deterministic computation — math, string manipulation, data transformation.
-3. Prefer 'script' over 'code' for logic that fits in a single expr-lang expression.
-4. Use 'intermediate' only when the step genuinely requires LLM reasoning or an MCP tool call.
-5. 'initial' and 'terminal' should stay as determined by the structure.
-
-## Placeholder implementations for non-intermediate types
-
-For any type that requires a code body, inject a minimal placeholder so the YAML stays loadable:
-
-- code nodes: ` + "`code: { code: \"// TODO: implement\\nreturn {trigger: 'done'}\" }`" + `
-- script nodes: ` + "`script: { trigger: '\"done\"' }`" + `
-- hitl nodes: add ` + "`assignee: \"team-placeholder\"`" + `
-- wait nodes: add ` + "`condition: \"true\"` and `on_condition: \"done\"`" + `
-- emit_event nodes: ` + "`emit_event: { event_name: placeholder_event, completion_trigger: done }`" + `
-
-## Node Structure Requirements
-
-**CRITICAL**: Strictly adhere to the following object structures. Do NOT flatten these into strings.
-
-### type: code
-Must have a ` + "`" + `code` + "`" + ` object with a nested ` + "`code`" + ` string field.
-` + "```yaml" + `
-# CORRECT
-- name: MY_CODE_NODE
-  type: code
-  code:
-    code: "// TODO: implement" # Nested key
-
-# WRONG (causes unmarshal error)
-- name: MY_CODE_NODE
-  type: code
-  code: "// TODO: implement" # DO NOT DO THIS
-` + "```" + `
-
-### type: script
-Must have a ` + "`script`" + ` object with a nested ` + "`trigger`" + ` field.
-` + "```yaml" + `
-# CORRECT
-- name: MY_SCRIPT_NODE
-  type: script
-  script:
-    trigger: "'done'"
-
-# WRONG
-- name: MY_SCRIPT_NODE
-  type: script
-  script: "'done'" # DO NOT DO THIS
-` + "```" + `
-
-## Rules
-
-- Do NOT change state names, instructions, or transitions
-- Do NOT change the type of 'initial' or 'terminal' states
-- Do NOT generate a blackboard schema yet
-- Output the complete updated YAML with all types correctly assigned
-`
-}
-
-func wireSystemPrompt() string {
-	return `You are a workflow architect defining the control flow and data contract for an ASM workflow.
-
-Given a categorised workflow YAML and the original process description, your task is to define:
-
-## 1. Complete transitions block
-
-Replace the placeholder transitions with the correct control flow.
-
-**Critical YAML format rules for Transitions:**
-Transitions MUST be a list of objects in the top-level ` + "`transitions:`" + ` block.
-
-` + "```yaml" + `
-transitions:
-  - from: START        # Hyphen for list item
-    to: NEXT_STATE
-    trigger: approved
-  - from: BRANCH_STATE
-    to: SUCCESS
-    trigger: ok
-    guard: "amount > 100" # Use quotes for expressions
-` + "```" + `
-
-- Use meaningful trigger names (e.g. 'approved', 'rejected', 'error', 'timeout_occurred')
-- **HITL Nodes**: MUST have both 'approved' and 'rejected' triggers unless specified otherwise.
-- **Timeouts**: For any state requiring a time limit, set 'timeout: "<duration>"' (e.g. "1h") and 'on_timeout: timeout_occurred' on the state. Add a matching transition from that state with 'trigger: timeout_occurred'.
-- Add guards (expr-lang conditions) where conditional branching is needed
-- Add parallel fan-out with 'to_nodes' where steps can run concurrently
-- Ensure every non-terminal state has at least one outgoing transition
-- Ensure every state is reachable from the initial state
-
-## 2. Blackboard schema
-
-Define ONLY the fields required as initial inputs to start the workflow or those needing a specific default value.
-
-**CRITICAL**: Do NOT include fields that are produced or updated during the runtime of the workflow (e.g., by LLM agents, scripts, or tool calls). The platform handles dynamic field creation automatically.
-
-**Critical YAML format rules for Blackboard Schema:**
-The 'schema' field MUST be a YAML map (object), NOT a list (sequence):
-
-` + "```yaml" + `
-blackboard:
-  schema:
-    vendor_name:      # CORRECT: This is a map key
-      type: string
-` + "```" + `
-
-WRONG (causes unmarshal error):
-` + "```yaml" + `
-blackboard:
-  schema:
-    - name: vendor_name # WRONG: This is a list item
-      type: string
-` + "```" + `
-
-Available field types: 'string', 'number', 'bool', 'object'
-
-Do NOT add fields that are only used internally by LLM agents.
-
-## 3. Identify MCP Tool Requirements
-
-For every 'intermediate' node (agent) that was categorized to use an MCP server:
-- Explicitly mention the name of the required MCP server and the specific tool in the 'instructions' field.
-- The next step (Implementation) will use this to correctly wire the agent.
-
-## 4. Update instructions for non-intermediate nodes
-
-For each code/script/hitl/wait/emit_event node, update the 'instructions' field to include:
-- A clear description of what the node does
-- The exact list of valid trigger names it may fire (so Step 4 code generators have full context)
-
-## Node Structure Requirements
-
-**CRITICAL**: Strictly adhere to the following object structures. Do NOT flatten these into strings.
-
-### type: code
-Must have a ` + "`" + `code` + "`" + ` object with a nested ` + "`code`" + ` string field.
-` + "```yaml" + `
-# CORRECT
-- name: MY_CODE_NODE
-  type: code
-  code:
-    code: "// TODO: implement" # Nested key
-` + "```" + `
-
-### type: script
-Must have a ` + "`script`" + ` object with a nested ` + "`trigger`" + ` field.
-` + "```yaml" + `
-# CORRECT
-- name: MY_SCRIPT_NODE
-  type: script
-  script:
-    trigger: "blackboard.amount > 100"
-` + "```" + `
-
-## Rules
-
-- Keep placeholder code/script/hitl/wait/emit_event implementations as-is
-- Keep all existing state names and types
-- Transitions MUST be in the top-level 'transitions:' block, NEVER inside a state
-- The 'states' field MUST be a YAML list (sequence), NOT a map.
-- **CRITICAL**: ALL 'instructions' and 'guard' strings MUST be wrapped in double-quotes. This prevents colons in descriptions or ternary expressions from breaking the YAML.
-`
-}
-
-func implementFinishSystemPrompt() string {
-	return `You are finalising an ASM workflow that already has its structure, types, wiring, and
-code/script node implementations defined.
-
-Your task is to implement the remaining nodes and produce a clean, complete, runnable workflow.
-
-## What needs implementing
-
-1. **intermediate nodes**: 
-   - Assign an ` + "`agent`" + ` by name (e.g., ` + "`agent: researcher`" + `). Ensure this agent is defined in the top-level ` + "`agents:`" + ` block.
-   - Write a production-quality ` + "`instructions`" + ` prompt for the LLM agent. Include: clear task description, relevant blackboard fields, and the exact trigger names to fire.
-
-2. **hitl nodes**:
-   - Set a real 'assignee' (e.g. "finance-team", "approvers", "managers")
-   - If the description implies a structured form, generate a 'form_schema' JSON Schema
-   - Write clear instructions describing what the human must review or decide
-
-3. **wait nodes**: Replace the placeholder condition with a real expr-lang expression,
-   or set 'on_event' + 'on_event_match' for event-driven waiting.
-
-4. **Timeouts**: Ensure every node with a 'timeout' field also has a valid 'on_timeout: timeout_occurred' field and a matching transition.
-
-5. **emit_event nodes**: Set a meaningful 'event_name' (e.g. "invoice.approved") and
-   include relevant 'payload_fields' from the blackboard schema.
-
-6. **Agents block**: Ensure all agents have appropriate entries. 
-   - Set 'model: ""' to designate the use of the platform default.
-   - **MCP Servers**: For any agent requiring external tools, add the logical name of the required MCP server to its 'mcp_servers' list (e.g., ` + "`mcp_servers: [\"gleif-server\"]`" + `).
-   - Use the "Available MCP Servers" list provided in the system context to find the correct names.
-
-## Node Structure Requirements
-
-**CRITICAL**: Strictly adhere to the following object structures. Do NOT flatten these into strings.
-
-### type: code
-Must have a ` + "`code`" + ` object with a nested ` + "`code`" + ` string field.
-` + "```yaml" + `
-# CORRECT
-- name: MY_CODE_NODE
-  type: code
-  code:
-    code: "return {trigger: 'done'};" # Nested key
-
-# WRONG (causes unmarshal error)
-- name: MY_CODE_NODE
-  type: code
-  code: "return {trigger: 'done'};" # DO NOT DO THIS
-` + "```" + `
-
-### type: script
-Must have a ` + "`script`" + ` object with a nested ` + "`trigger`" + ` (and optionally ` + "`updates`" + `) field.
-` + "```yaml" + `
-# CORRECT
-- name: MY_SCRIPT_NODE
-  type: script
-  script:
-    trigger: "blackboard.amount > 100"
-
-# WRONG
-- name: MY_SCRIPT_NODE
-  type: script
-  script: "blackboard.amount > 100" # DO NOT DO THIS
-` + "```" + `
-
-## Rules
-
-- Preserve all code/script node implementations exactly as-is
-- Transitions MUST be in the top-level 'transitions:' block, NEVER inside a state
-- The 'states' field MUST be a YAML list (sequence), NOT a map.
-- **CRITICAL**: ALL 'instructions' prompts MUST be wrapped in double-quotes.
-` + "```yaml" + `
-states:
-  - name: START        # CORRECT
-    type: initial
-` + "```" + `
-`
-}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,6 +20,16 @@ func LoadFromFile(path string) (*WorkflowDef, string, error) {
 
 // LoadFromYAML parses workflow YAML bytes, expanding {{ env.VAR }} or {{ .Env.VAR }} references.
 func LoadFromYAML(data []byte) (*WorkflowDef, string, error) {
+	// SANITIZATION: Replace tabs with spaces and remove invisible characters
+	// to prevent common YAML unmarshal errors ("found character that cannot start any token").
+	s := string(data)
+	s = strings.ReplaceAll(s, "\t", "  ")
+	s = strings.ReplaceAll(s, "\u00A0", " ")
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "—", "-")
+	s = strings.ReplaceAll(s, "–", "-")
+	data = []byte(s)
+
 	expanded, err := expandEnv(data)
 	if err != nil {
 		return nil, "", fmt.Errorf("expand env vars: %w", err)

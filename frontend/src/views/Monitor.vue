@@ -370,7 +370,7 @@
     <StartRunModal
       v-if="showRunModal && workflowDef"
       :definition="workflowDef"
-      :initial-data="run?.blackboard"
+      :initial-data="rerunInitialData"
       @close="showRunModal = false"
       @started="(newRun) => router.push(`/monitor/${newRun.id}`).then(() => location.reload())"
     />
@@ -445,6 +445,19 @@ const currentFormSchema = computed(() => currentStateDef.value?.form_schema)
 
 const blackboardSchema = computed(() => {
   return convertAsmSchemaToJsonSchema(workflowDef.value?.blackboard?.schema)
+})
+
+const rerunInitialData = computed(() => {
+  if (!run.value?.blackboard || !workflowDef.value?.blackboard?.schema) return {}
+  const schema = workflowDef.value.blackboard.schema
+  const bb = run.value.blackboard
+  const filtered = {}
+  for (const k of Object.keys(schema)) {
+    if (bb[k] !== undefined) {
+      filtered[k] = bb[k]
+    }
+  }
+  return filtered
 })
 
 const visibleTabs  = computed(() => {

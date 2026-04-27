@@ -5,35 +5,36 @@
  * @param {Object} asmSchema - The blackboard schema from the workflow definition.
  * @returns {Object|null} A standard JSON Schema object, or null if no schema is provided.
  */
-export function convertAsmSchemaToJsonSchema(asmSchema) {
+export function convertAsmSchemaToJsonSchema(asmSchema, onlyRequired = false) {
   if (!asmSchema || Object.keys(asmSchema).length === 0) return null
 
   const properties = {}
   const required = []
 
   for (const [key, field] of Object.entries(asmSchema)) {
+    if (onlyRequired && !field.required) continue
+
     // Basic mapping of ASM types to JSON Schema types
     let type = field.type || 'string'
     if (type === 'bool') type = 'boolean'
 
     properties[key] = {
       type,
-      // Create a readable title from the field name (e.g., "invoice_id" -> "Invoice Id")
       title: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
       default: field.default
     }
 
-    // Add to required list if the field is marked as required in ASM
     if (field.required) {
       required.push(key)
     }
   }
 
+  if (Object.keys(properties).length === 0) return null
+
   return {
     type: 'object',
     properties,
     required,
-    // Add a default title if none provided
-    title: 'Blackboard Data'
+    title: onlyRequired ? 'Required Inputs' : 'Blackboard Data'
   }
 }

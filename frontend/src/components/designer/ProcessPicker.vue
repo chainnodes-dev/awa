@@ -10,8 +10,8 @@
         <svg class="text-violet-400/60 shrink-0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
         </svg>
-        <span v-if="selected" class="font-mono text-xs text-text flex-1 truncate">{{ selected.metadata.name }}</span>
-        <span v-else class="text-xs text-text-muted flex-1">— select a process —</span>
+        <span v-if="selected" class="font-mono text-xs text-text flex-1 truncate" :title="selected.metadata.name.replace(/-/g, ' ')">{{ formatName(selected.metadata.name) }}</span>
+        <span v-else class="text-xs text-text-muted flex-1">select a process</span>
         <svg class="text-text-muted shrink-0 transition-transform" :class="open && 'rotate-180'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
@@ -45,7 +45,9 @@
             @click="pick(p)"
           >
             <div class="flex items-center gap-2 mb-0.5">
-              <span class="font-mono text-xs text-violet-400 font-medium">{{ p.metadata.name }}</span>
+              <span class="font-mono text-xs text-violet-400 font-medium" :title="p.metadata.name.replace(/-/g, ' ')">
+                {{ formatName(p.metadata.name) }}
+              </span>
               <span v-if="p.inputs?.length || p.outputs?.length" class="text-[9px] text-text-muted">
                 {{ p.inputs?.length || 0 }}↓ {{ p.outputs?.length || 0 }}↑
               </span>
@@ -56,35 +58,7 @@
       </div>
     </div>
 
-    <!-- Selected process summary + clear -->
-    <template v-if="selected">
-      <div class="rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2.5 space-y-1.5">
-        <!-- Port info -->
-        <div class="flex gap-4">
-          <div v-if="selected.inputs?.length" class="space-y-0.5">
-            <div class="text-[9px] text-text-muted uppercase tracking-wider font-semibold">Inputs</div>
-            <div v-for="p in selected.inputs" :key="p.name" class="flex items-center gap-1.5 text-[10px]">
-              <span class="font-mono text-indigo-300">{{ p.name }}</span>
-              <span class="text-text-muted">{{ p.type }}</span>
-              <span v-if="p.required" class="text-red-400/70">*</span>
-            </div>
-          </div>
-          <div v-if="selected.outputs?.length" class="space-y-0.5">
-            <div class="text-[9px] text-text-muted uppercase tracking-wider font-semibold">Outputs</div>
-            <div v-for="p in selected.outputs" :key="p.name" class="flex items-center gap-1.5 text-[10px]">
-              <span class="font-mono text-teal-300">{{ p.name }}</span>
-              <span class="text-text-muted">{{ p.type }}</span>
-            </div>
-          </div>
-          <div v-if="!selected.inputs?.length && !selected.outputs?.length" class="text-[10px] text-text-muted italic">No ports declared</div>
-        </div>
-        <!-- Workflow ref + clear -->
-        <div class="flex items-center gap-2 pt-0.5">
-          <span class="text-[10px] text-text-muted font-mono flex-1 truncate">Ver: {{ selected.metadata.version }}</span>
-          <button type="button" class="text-[10px] text-text-muted hover:text-red-400 transition-colors" @click="clear">Clear</button>
-        </div>
-      </div>
-    </template>
+    <!-- Search results hidden -->
   </div>
 </template>
 
@@ -108,6 +82,8 @@ const selected = computed(() =>
   processes.value.find(p => p.metadata.name === props.modelValue) ?? null
 )
 
+defineExpose({ selected })
+
 const filtered = computed(() => {
   const q = query.value.toLowerCase()
   if (!q) return processes.value
@@ -124,6 +100,25 @@ async function fetchProcesses() {
   } catch { /* non-fatal */ } finally {
     loading.value = false
   }
+}
+
+const selectedInputs = computed(() => {
+  const s = selected.value?.blackboard?.schema
+  if (!s) return []
+  return Object.entries(s).filter(([_, f]) => f.required).map(([k, v]) => ({ name: k, type: v.type, required: true }))
+})
+
+const selectedOutputs = computed(() => {
+  const s = selected.value?.blackboard?.schema
+  if (!s) return []
+  return Object.entries(s).filter(([_, f]) => f.is_output).map(([k, v]) => ({ name: k, type: v.type }))
+})
+
+function formatName(name) {
+  if (!name) return ''
+  const clean = name.replace(/-/g, ' ')
+  if (clean.length > 18) return clean.slice(0, 15) + '...'
+  return clean
 }
 
 function pick(p) {

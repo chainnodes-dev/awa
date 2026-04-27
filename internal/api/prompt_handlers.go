@@ -22,6 +22,12 @@ func (h *Handlers) GetPrompts(c *gin.Context) {
 	prompts["workflow_generator_base"] = h.generator.GetPrompt("workflow_generator_base")
 	prompts["skill_analyser_preamble"] = h.generator.GetPrompt("skill_analyser_preamble")
 	prompts["workflow_refinement_addendum"] = h.generator.GetPrompt("workflow_refinement_addendum")
+	
+	// Pipeline steps
+	prompts["workflow_decompose"] = h.generator.GetPrompt("workflow_decompose")
+	prompts["workflow_categorise"] = h.generator.GetPrompt("workflow_categorise")
+	prompts["workflow_wire"] = h.generator.GetPrompt("workflow_wire")
+	prompts["workflow_implement_finish"] = h.generator.GetPrompt("workflow_implement_finish")
 
 	c.JSON(http.StatusOK, prompts)
 }
