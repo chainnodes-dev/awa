@@ -17,6 +17,7 @@ import (
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/health"
+	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 )
@@ -24,6 +25,7 @@ import (
 type Server struct {
 	httpServer *http.Server
 	hub        *Hub
+	mcpMgr     *mcp.Manager
 }
 
 func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, bus events.Bus, gen *designer.Generator, checker *health.Checker, sched SchedulerAdder, llmReg *llm.Registry) *Server {
@@ -79,7 +81,9 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 		}
 	}
 
-	handlers := NewHandlers(engine, s, jwtSvc, gen, sched, llmReg, verifier, signer)
+	mcpMgr := mcp.NewManager(s)
+	allowStdio := cfg.AllowStdioMCP // Assume this exists in config
+	handlers := NewHandlers(engine, s, jwtSvc, gen, sched, llmReg, verifier, signer, mcpMgr, allowStdio)
 
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -104,6 +108,7 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 			Handler: router,
 		},
 		hub: hub,
+		mcpMgr: mcpMgr,
 	}
 }
 
@@ -112,6 +117,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.mcpMgr.Shutdown()
 	return s.httpServer.Shutdown(ctx)
 }
 

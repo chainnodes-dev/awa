@@ -17,6 +17,7 @@
    - [Agent Configuration](#45-agent-configuration)
    - [MCP Servers](#46-mcp-servers)
    - [HITL Form Schemas & Preview](#47-hitl-form-schemas--preview)
+   - [Sentinel (Perpetual) Workflows](#48-sentinel-perpetual-workflows)
 5. [AI-Assisted Authoring](#5-ai-assisted-authoring)
    - [AI Workflow Generator](#51-ai-workflow-generator)
    - [Code Node Generation](#52-code-node-generation)
@@ -193,8 +194,13 @@ amount > 10000
 
 If multiple outgoing transitions have the same trigger, the first one whose guard passes wins. Transitions with no guard always pass.
 
-**Timeout routing:**
-Set a **Timeout** on a state (e.g. `30m`) and an **On Timeout** trigger name. If the state does not complete within that duration, the timeout trigger fires automatically and routes to wherever that transition points.
+**Shorthand Transitions (YAML only)**
+For faster iteration when editing YAML directly, you can define transitions using the `to_nodes` or `to` shorthand inside a state definition. These are automatically converted to formal transitions when the workflow is loaded:
+
+```yaml
+- name: market_check
+  to_nodes: ["decide_action"]
+```
 
 ---
 
@@ -244,6 +250,13 @@ MCP (Model Context Protocol) servers expose tools that LLM agents can call durin
 3. Multiple servers can be selected — the agent will have access to all their tools
 4. The resolved value stored in the workflow (shown in small text below the chips) uses the `{{ env.ENV_VAR }}` template syntax, e.g. `{{ env.MCP_GLEIF_URL }}`. This means the actual URL is supplied via the environment and never hardcoded in the workflow definition.
 
+**Local (STDIO) MCP Servers:**
+ASM supports local tool servers running via `npx`, `docker`, or direct binaries. 
+1. Ensure the API server is started with `ASM_ALLOW_STDIO_MCP=true`.
+2. In the MCP Management screen, create a new server with **Transport: stdio**.
+3. Set the **Command** (e.g., `npx`) and **Arguments** (e.g., `-y @modelcontextprotocol/server-postgres`).
+4. Local servers are managed automatically—they are started when an agent needs them and shut down when the run finishes.
+
 ---
 
 ### 4.7 HITL Form Schemas & Preview
@@ -261,6 +274,22 @@ Click the **Preview Form** button to open an interactive modal. This shows exact
 
 **Persistence:**
 Once you click **Apply** in the state panel and **Save** the workflow, the schema is stored within the workflow definition and will be used for every run that hits that state.
+
+---
+
+### 4.8 Sentinel (Perpetual) Workflows
+
+ASM workflows are typically short-lived, but you can build **Sentinels**—perpetual agents that monitor data and react indefinitely.
+
+**The "Pulse" Pattern:**
+1. Create a `wait` state (e.g., `IDLE_PULSE`) at the end of your workflow logic.
+2. Set the `wait_time` (e.g., `7200` for 2 hours).
+3. Draw a transition from this wait state back to your initial logic state (e.g., `MARKET_CHECK`).
+4. Start the workflow run once—it will loop forever, sleeping for the specified duration between cycles.
+
+**Benefits:**
+- **Memory Persistence:** The Blackboard is NOT reset between pulses. The agent can remember previous values to calculate trends.
+- **Low Overhead:** The workflow consumes zero resources while in the `wait` state (it is persisted to the database and woken up by Temporal).
 
 ---
 

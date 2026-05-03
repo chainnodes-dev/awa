@@ -14,6 +14,7 @@ import (
 	"github.com/asm-platform/asm/internal/designer"
 	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/executor/llm"
+	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -36,6 +37,8 @@ type Handlers struct {
 	llmRegistry     *llm.Registry
 	licenseVerifier *enterprise.Verifier
 	licenseSigner   *enterprise.Signer
+	mcpManager      *mcp.Manager
+	allowStdioMCP   bool
 }
 
 func (h *Handlers) ReloadLicenseKeys(ctx context.Context) error {
@@ -64,7 +67,7 @@ func (h *Handlers) ReloadLicenseKeys(ctx context.Context) error {
 	return nil
 }
 
-func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer) *Handlers {
+func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer, mcpMgr *mcp.Manager, allowStdio bool) *Handlers {
 	return &Handlers{
 		engine:          engine,
 		store:           s,
@@ -74,6 +77,8 @@ func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTSer
 		llmRegistry:     llmReg,
 		licenseVerifier: verifier,
 		licenseSigner:   signer,
+		mcpManager:      mcpMgr,
+		allowStdioMCP:   allowStdio,
 	}
 }
 

@@ -40,6 +40,7 @@ type Config struct {
 	AdminPassword    string // seed admin password on first boot
 	LicensePublicKey  string // PEM-encoded RSA public key for verification
 	LicensePrivateKey string // PEM-encoded RSA private key for signing (optional)
+	AllowStdioMCP     bool   // If true, allow starting local stdio MCP servers
 
 	// Logging
 	LogLevel string
@@ -69,6 +70,7 @@ func Load() *Config {
 		LogLevel:          getEnv("LOG_LEVEL", "info"),
 		LicensePublicKey:  getEnv("LICENSE_PUBLIC_KEY", ""),
 		LicensePrivateKey: getEnv("LICENSE_PRIVATE_KEY", ""),
+		AllowStdioMCP:     getEnv("ASM_ALLOW_STDIO_MCP", "false") == "true",
 	}
 }
 

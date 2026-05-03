@@ -1,13 +1,10 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -17,6 +14,7 @@ import (
 
 	"github.com/asm-platform/asm/internal/auth"
 	"github.com/asm-platform/asm/internal/designer"
+	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/store"
 )
 
@@ -63,17 +61,22 @@ func (h *Handlers) ListMCPServers(c *gin.Context) {
 // POST /api/v1/mcp-servers   (admin only)
 func (h *Handlers) CreateMCPServer(c *gin.Context) {
 	var body struct {
-		Name        string `json:"name"        binding:"required"`
-		URL         string `json:"url"`
-		EnvVar      string `json:"env_var"`
-		Description string `json:"description"`
+		Name        string   `json:"name"        binding:"required"`
+		Transport   string   `json:"transport"   binding:"required"` // "sse" or "stdio"
+		URL         string   `json:"url"`
+		Command     string   `json:"command"`
+		Args        []string `json:"args"`
+		EnvVar      string   `json:"env_var"`
+		EnvValue    string   `json:"env_value"`
+		Description string   `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if body.URL == "" && body.EnvVar == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of url or env_var is required"})
+
+	if body.Transport == "stdio" && !h.allowStdioMCP {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Local stdio MCP servers are disabled by the system administrator"})
 		return
 	}
 
@@ -88,8 +91,12 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 	srv := &store.MCPServer{
 		TenantID:    tenantID,
 		Name:        body.Name,
+		Transport:   body.Transport,
 		URL:         body.URL,
+		Command:     body.Command,
+		Args:        body.Args,
 		EnvVar:      body.EnvVar,
+		EnvValue:    body.EnvValue,
 		Description: body.Description,
 		CreatedBy:   createdBy,
 	}
@@ -105,22 +112,46 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 	id := c.Param("id")
 	var body struct {
-		URL         string `json:"url"`
-		EnvVar      string `json:"env_var"`
-		Description string `json:"description"`
+		Transport   string   `json:"transport"`
+		URL         string   `json:"url"`
+		Command     string   `json:"command"`
+		Args        []string `json:"args"`
+		EnvVar      string   `json:"env_var"`
+		EnvValue    string   `json:"env_value"`
+		Description string   `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	if body.Transport == "stdio" && !h.allowStdioMCP {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Local stdio MCP servers are disabled by the system administrator"})
+		return
+	}
+
+	existing, err := h.store.GetMCPServer(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "MCP server not found"})
+		return
+	}
+
 	srv := &store.MCPServer{
 		ID:          id,
+		TenantID:    existing.TenantID,
+		Name:        existing.Name, // Keep existing name
+		Transport:   body.Transport,
 		URL:         body.URL,
+		Command:     body.Command,
+		Args:        body.Args,
 		EnvVar:      body.EnvVar,
+		EnvValue:    body.EnvValue,
 		Description: body.Description,
+		CreatedBy:   existing.CreatedBy,
+		CreatedAt:   existing.CreatedAt,
 	}
 	if err := h.store.UpdateMCPServer(c.Request.Context(), srv); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, srv)
@@ -146,15 +177,37 @@ func (h *Handlers) PingMCPServer(c *gin.Context) {
 		return
 	}
 
-	// Resolve the URL: prefer direct URL, fall back to env var.
-	url := srv.URL
-	if url == "" && srv.EnvVar != "" {
-		url = os.Getenv(srv.EnvVar)
-	}
-	if url == "" {
-		c.JSON(http.StatusOK, gin.H{"status": "unknown", "error": "no URL configured"})
+	if srv.Transport == "stdio" {
+		start := time.Now()
+		_, err := h.mcpManager.GetClient(c.Request.Context(), srv.Name)
+		duration := time.Since(start).Milliseconds()
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"status": "offline", "error": err.Error(), "latency_ms": duration})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "online", "latency_ms": duration})
 		return
 	}
+
+	// Handle stdio transport
+	if srv.Transport == "stdio" {
+		if srv.Command == "" {
+			c.JSON(http.StatusOK, gin.H{"status": "unknown", "error": "no command configured"})
+			return
+		}
+		// Try to start a test client
+		_, closer, err := h.mcpManager.TestStdioClient(srv.Command, srv.Args, srv.EnvVar, srv.EnvValue)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"status": "offline", "error": fmt.Sprintf("failed to start process: %v", err)})
+			return
+		}
+		closer.Close()
+		c.JSON(http.StatusOK, gin.H{"status": "online", "latency_ms": 0})
+		return
+	}
+
+	// Resolve the URL: prefer direct URL, fall back to env var.
+	url := srv.URL
 
 	// Attempt a HEAD request with a short timeout.
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
@@ -184,75 +237,71 @@ func (h *Handlers) PingMCPServer(c *gin.Context) {
 // POST /api/v1/mcp-servers/discover
 func (h *Handlers) DiscoverMCPServer(c *gin.Context) {
 	var body struct {
-		URL string `json:"url" binding:"required"`
+		Transport string   `json:"transport"`
+		URL       string   `json:"url"`
+		Command   string   `json:"command"`
+		Args      []string `json:"args"`
+		EnvVar    string   `json:"env_var"`
+		EnvValue  string   `json:"env_value"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "url is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
+		return
+	}
+
+	if body.Transport == "stdio" && !h.allowStdioMCP {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Local stdio MCP servers are disabled"})
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	var client mcp.Client
 
-	// Helper: send a JSON-RPC request to the MCP server.
-	sendRPC := func(id int, method string, params interface{}) (json.RawMessage, error) {
-		reqBody := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      id,
-			"method":  method,
-			"params":  params,
+	if body.Transport == "stdio" {
+		if body.Command == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "command is required for stdio transport"})
+			return
 		}
-		payload, _ := json.Marshal(reqBody)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, body.URL, bytes.NewReader(payload))
+		stdioClient, closer, err := h.mcpManager.TestStdioClient(body.Command, body.Args, body.EnvVar, body.EnvValue)
 		if err != nil {
-			return nil, fmt.Errorf("build request: %w", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to start server: %v", err)})
+			return
 		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("connect to MCP server: %w", err)
+		defer closer.Close()
+		client = stdioClient
+	} else {
+		if body.URL == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "url is required for sse transport"})
+			return
 		}
-		defer resp.Body.Close()
-
-		respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MB cap
-		if err != nil {
-			return nil, fmt.Errorf("read response: %w", err)
-		}
-
-		var rpcResp struct {
-			Result json.RawMessage        `json:"result"`
-			Error  map[string]interface{} `json:"error"`
-		}
-		if err := json.Unmarshal(respBytes, &rpcResp); err != nil {
-			return nil, fmt.Errorf("parse JSON-RPC response: %w (body: %s)", err, string(respBytes[:min(200, len(respBytes))]))
-		}
-		if rpcResp.Error != nil {
-			return nil, fmt.Errorf("MCP error: %v", rpcResp.Error["message"])
-		}
-		return rpcResp.Result, nil
+		client = mcp.NewSSEClient(body.URL)
 	}
 
-	// Step 1: initialize
-	initParams := map[string]interface{}{
+	// 1. Initialize
+	initReq := map[string]interface{}{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]interface{}{},
-		"clientInfo": map[string]string{
-			"name":    "asm-platform",
-			"version": "1.0.0",
+		"clientInfo": map[string]interface{}{
+			"name":    "asm-platform-discovery",
+			"version": "1.0",
 		},
 	}
-	_, err := sendRPC(1, "initialize", initParams)
+	_, err := client.Call(ctx, "initialize", initReq)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"error": err.Error()})
+		c.JSON(http.StatusOK, gin.H{"error": fmt.Sprintf("Failed to initialize MCP: %v", err)})
 		return
 	}
 
-	// Step 2: tools/list
-	toolsResult, err := sendRPC(2, "tools/list", map[string]interface{}{})
+	// 2. Initialized notification
+	if err := client.Notify(ctx, "notifications/initialized", map[string]interface{}{}); err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": fmt.Sprintf("Failed to send initialized notification: %v", err)})
+		return
+	}
+
+	// 3. Fetch tools
+	toolsResult, err := client.Call(ctx, "tools/list", map[string]interface{}{})
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"error": err.Error()})
 		return

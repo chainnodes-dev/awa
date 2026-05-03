@@ -108,6 +108,12 @@ type StateDef struct {
 	// FormSchema is an optional JSON Schema used to render a custom input form
 	// in the dashboard when type == "hitl".
 	FormSchema map[string]interface{} `yaml:"form_schema,omitempty" json:"form_schema,omitempty"`
+
+	// Shorthand transitions (synthesized into formal Transitions at load time)
+	To          string       `yaml:"to,omitempty"            json:"to,omitempty"`
+	ToNodes     []string     `yaml:"to_nodes,omitempty"      json:"to_nodes,omitempty"`
+	ElseToNodes []string     `yaml:"else_to_nodes,omitempty" json:"else_to_nodes,omitempty"`
+	Transitions []Transition `yaml:"transitions,omitempty"    json:"transitions,omitempty"`
 }
 
 // EmitEventDef is the configuration for a state of type "emit_event".

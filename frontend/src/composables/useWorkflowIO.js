@@ -49,7 +49,16 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
     const rawTransitions = [...(def.transitions ?? [])]
     if (def.states) {
       def.states.forEach(s => {
+        // Formal transitions list inside state
         if (s.transitions) rawTransitions.push(...s.transitions.map(t => ({ ...t, from: s.name })))
+        // Shorthand "to_nodes" / "to"
+        if (s.to_nodes?.length > 0 || s.to) {
+          rawTransitions.push({ from: s.name, to: s.to, to_nodes: s.to_nodes, trigger: '' })
+        }
+        // Shorthand "else_to_nodes"
+        if (s.else_to_nodes?.length > 0) {
+          rawTransitions.push({ from: s.name, to_nodes: s.else_to_nodes, trigger: 'else' })
+        }
       })
     }
 
@@ -173,12 +182,16 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
       const result  = await wfStore.save(yamlStr)
       fromLoad.value = true
       const newDef  = result.definition ?? result
+      meta.name          = newDef.metadata?.name ?? meta.name
       meta.version       = newDef.metadata?.version ?? meta.version
       meta.versionNumber = result.version_number ?? newDef.metadata?.version_number ?? meta.versionNumber
-      isDirty.value = false
-      nextTick(() => { fromLoad.value = false })
+      
       try { versions.value = await wfStore.fetchVersions(meta.name) } catch { /* ignore */ }
       router.replace(`/designer/${meta.name}/${meta.version}`)
+      
+      await nextTick()
+      isDirty.value = false
+      fromLoad.value = false
       return result
     } catch (e) {
       alert(e.message)
@@ -222,18 +235,21 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
     }
   }
 
-  function importYAML() {
+  async function importYAML() {
     yamlError.value = ''
     try {
       const def = yaml.load(yamlSource.value)
       if (!def) throw new Error('YAML is empty or invalid.')
       loadDefinition(def, null, false)
       view.value = 'canvas'
-      nextTick(() => { flowKey.value++ })
+      await nextTick()
+      flowKey.value++
       isDirty.value = true
+      return true
     } catch (e) {
       yamlError.value = e.message
       alert('Failed to import YAML: ' + e.message)
+      return false
     }
   }
 

@@ -111,7 +111,7 @@
             {{ yamlError }}
           </div>
           <div class="px-4 py-2 border-t border-border flex gap-3">
-            <button @click="importYAML" class="btn-primary text-xs">Import to Canvas</button>
+            <button @click="handleImportYAML" class="btn-primary text-xs">Import to Canvas</button>
           </div>
         </div>
       </template>
@@ -418,6 +418,15 @@ async function onAIApply(payload) {
   // Skips agent-assignment checks — the workflow may not be fully wired yet.
   if (meta.name) {
     try { await saveWorkflow(true) } catch { /* best-effort */ }
+  }
+}
+
+async function handleImportYAML() {
+  const ok = await importYAML()
+  if (ok) {
+    await nextTick()
+    await nextTick()
+    applyLayout(false)
   }
 }
 

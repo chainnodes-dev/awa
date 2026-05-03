@@ -15,12 +15,19 @@ type MCPServer struct {
 	TenantID string `json:"tenant_id"`
 	// Name is the logical identifier used in workflow YAML agent configs.
 	Name string `json:"name"`
-	// URL is the HTTP endpoint of the MCP server.
-	// May be left empty if EnvVar is used instead (for parity with the YAML registry).
+	// Transport defines how to connect: "sse" (default) or "stdio" (local command).
+	Transport string `json:"transport"`
+	// URL is the HTTP endpoint (used if Transport == "sse").
 	URL string `json:"url,omitempty"`
-	// EnvVar is an environment variable key whose value is the server URL.
-	// Referenced in workflow YAML as {{ env.ENV_VAR }}.
-	EnvVar      string    `json:"env_var,omitempty"`
+	// Command is the local executable to run (used if Transport == "stdio").
+	Command string `json:"command,omitempty"`
+	// Args are the CLI arguments for the Command (used if Transport == "stdio").
+	Args []string `json:"args,omitempty"`
+	// EnvVar is an environment variable key.
+	EnvVar string `json:"env_var,omitempty"`
+	// EnvValue is the actual value for the environment variable.
+	// If set, this value will be used instead of looking up in the system environment.
+	EnvValue string `json:"env_value,omitempty"`
 	Description string    `json:"description"`
 	CreatedBy   string    `json:"created_by,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`

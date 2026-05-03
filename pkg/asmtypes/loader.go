@@ -40,6 +40,42 @@ func LoadFromYAML(data []byte) (*WorkflowDef, string, error) {
 		return nil, "", fmt.Errorf("parse yaml: %w", err)
 	}
 
+	// SYNTHESIS: Convert shorthand "to_nodes" in states into formal Transitions
+	// if they aren't already explicitly defined in the transitions block.
+	for _, s := range def.States {
+		// Include formal transitions defined inside the state
+		for _, t := range s.Transitions {
+			t.From = s.Name
+			def.Transitions = append(def.Transitions, t)
+		}
+
+		if s.To != "" || len(s.ToNodes) > 0 {
+			// Check if we already have an explicit transition from this state
+			hasExplicit := false
+			for _, t := range def.Transitions {
+				if t.From == s.Name && t.Trigger == "" { // Default trigger
+					hasExplicit = true
+					break
+				}
+			}
+			if !hasExplicit {
+				def.Transitions = append(def.Transitions, Transition{
+					From:    s.Name,
+					To:      s.To,
+					ToNodes: s.ToNodes,
+					Trigger: "", // Default/Completion trigger
+				})
+			}
+		}
+		if len(s.ElseToNodes) > 0 {
+			def.Transitions = append(def.Transitions, Transition{
+				From:    s.Name,
+				ToNodes: s.ElseToNodes,
+				Trigger: "else",
+			})
+		}
+	}
+
 	if err := validate(&def); err != nil {
 		return nil, "", fmt.Errorf("validate workflow: %w", err)
 	}
@@ -114,9 +150,7 @@ func validate(def *WorkflowDef) error {
 			return fmt.Errorf("transition from '%s' has no target states (neither 'to' nor 'to_nodes')", t.From)
 		}
 
-		if t.Trigger == "" {
-			return fmt.Errorf("transition from '%s' has no trigger", t.From)
-		}
+
 	}
 
 	// All agent references in states must exist

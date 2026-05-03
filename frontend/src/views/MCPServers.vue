@@ -77,17 +77,21 @@
 
           <!-- Connection details -->
           <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-            <div v-if="srv.url" class="flex items-center gap-1.5 text-text-muted">
-              <span class="text-text-muted">URL</span>
+            <div v-if="srv.transport === 'stdio'" class="flex items-center gap-1.5 text-text-muted">
+              <span class="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 text-[9px] uppercase font-bold tracking-wider">Local</span>
+              <span class="font-mono">{{ srv.command }} {{ srv.args?.join(' ') }}</span>
+            </div>
+            <div v-else-if="srv.url" class="flex items-center gap-1.5 text-text-muted">
+              <span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[9px] uppercase font-bold tracking-wider">Remote</span>
               <span class="font-mono">{{ srv.url }}</span>
             </div>
             <div v-if="srv.env_var" class="flex items-center gap-1.5 text-text-muted">
-              <span class="text-text-muted">ENV</span>
+              <span class="text-text-muted uppercase text-[9px]">Env</span>
               <span class="font-mono" v-text="'$' + srv.env_var"></span>
             </div>
-            <div v-if="srv.created_by" class="flex items-center gap-1.5 text-text-muted">
-              <span class="text-text-muted">By</span>
-              <span>{{ srv.created_by }}</span>
+            <div v-if="srv.created_by" class="flex items-center gap-1.5 text-text-muted ml-auto">
+              <span class="text-[9px] uppercase tracking-tighter opacity-50">By</span>
+              <span class="opacity-80">{{ srv.created_by }}</span>
             </div>
           </div>
 
@@ -206,19 +210,38 @@ export const MCPServerModal = defineComponent({
     const isEdit = !!p.server?.id
     const form = ref({
       name:        p.server?.name        ?? '',
+      transport:   p.server?.transport   ?? 'sse',
       url:         p.server?.url         ?? '',
+      command:     p.server?.command     ?? '',
+      args:        p.server?.args?.join(' ') ?? '',
       env_var:     p.server?.env_var     ?? '',
+      env_value:   p.server?.env_value   ?? '',
       description: p.server?.description ?? '',
     })
+    const showSecret  = ref(false)
     const saving      = ref(false)
     const discovering = ref(false)
     const error       = ref('')
 
     async function discover() {
-      if (!form.value.url) { error.value = 'Enter a URL first to discover tools'; return }
+      if (form.value.transport === 'sse' && !form.value.url) { 
+        error.value = 'Enter a URL first to discover tools'; return 
+      }
+      if (form.value.transport === 'stdio' && !form.value.command) {
+        error.value = 'Enter an executable command first to discover tools'; return
+      }
+      
       discovering.value = true; error.value = ''
       try {
-        const { data } = await api.post('/mcp-servers/discover', { url: form.value.url })
+        const payload = {
+          transport: form.value.transport,
+          url: form.value.url,
+          command: form.value.command,
+          args: form.value.args.match(/(?:[^\s"]+|"[^"]*")+/g)?.map(s => s.replace(/^"|"$/g, '')) || [],
+          env_var: form.value.env_var,
+          env_value: form.value.env_value
+        }
+        const { data } = await api.post('/mcp-servers/discover', payload)
         if (data.error) {
           error.value = data.error
         } else {
@@ -233,18 +256,23 @@ export const MCPServerModal = defineComponent({
 
     async function save() {
       if (!form.value.name) { error.value = 'Name is required'; return }
-      if (!form.value.url && !form.value.env_var) { error.value = 'Provide either a URL or an env var key'; return }
+      if (form.value.transport === 'sse' && !form.value.url && !form.value.env_var) { 
+        error.value = 'Provide either a URL or an env var key'; return 
+      }
+      if (form.value.transport === 'stdio' && !form.value.command) {
+        error.value = 'Executable command is required for local servers'; return
+      }
       saving.value = true; error.value = ''
       try {
         let res
+        const payload = {
+          ...form.value,
+          args: form.value.args.match(/(?:[^\s"]+|"[^"]*")+/g)?.map(s => s.replace(/^"|"$/g, '')) || []
+        }
         if (isEdit) {
-          res = await api.put('/mcp-servers/' + p.server.id, {
-            url: form.value.url,
-            env_var: form.value.env_var,
-            description: form.value.description,
-          })
+          res = await api.put('/mcp-servers/' + p.server.id, payload)
         } else {
-          res = await api.post('/mcp-servers', form.value)
+          res = await api.post('/mcp-servers', payload)
         }
         emit('saved', res.data)
       } catch (e) {
@@ -259,7 +287,6 @@ export const MCPServerModal = defineComponent({
 
     return () => h('div', {
       class: 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50',
-      onClick: e => e.target === e.currentTarget && emit('close'),
     }, [
       h('div', { class: 'card w-[520px] p-6 space-y-4' }, [
         h('h3', { class: 'font-semibold text-text' }, isEdit ? 'Edit MCP Server' : 'Register MCP Server'),
@@ -270,47 +297,127 @@ export const MCPServerModal = defineComponent({
             class: inputClass + ' font-mono',
             value: form.value.name,
             placeholder: 'invoice-parser',
-            disabled: isEdit,
             onInput: e => form.value.name = e.target.value,
           }),
           !isEdit && h('p', { class: 'text-[10px] text-text-muted' }, 'Logical identifier used in workflow YAML agent configs.'),
         ]),
 
-        // URL + Discover button
+        // Transport Type Toggle
         h('div', { class: 'space-y-1.5' }, [
-          h('label', { class: 'text-xs text-text-muted' }, 'URL'),
+          h('label', { class: 'text-xs text-text-muted' }, 'Transport Type'),
           h('div', { class: 'flex gap-2' }, [
-            h('input', {
-              class: inputClass + ' font-mono flex-1',
-              value: form.value.url,
-              placeholder: 'http://invoice-parser:8090',
-              onInput: e => form.value.url = e.target.value,
-            }),
-            h('button', {
-              class: 'btn-ghost text-xs border border-border px-3 shrink-0 gap-1.5 ' + (discovering.value ? 'animate-pulse' : ''),
-              onClick: discover,
-              disabled: busy() || !form.value.url,
-              title: 'Connect to the server and discover its tools',
-            }, [
-              h('svg', { width: '12', height: '12', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-                h('circle', { cx: '11', cy: '11', r: '8' }),
-                h('line', { x1: '21', y1: '21', x2: '16.65', y2: '16.65' }),
-              ]),
-              discovering.value ? 'Discovering...' : 'Discover',
-            ]),
-          ]),
+            ['sse', 'Remote (SSE)'], ['stdio', 'Local (Stdio)']
+          ].map(([val, label]) => h('button', {
+            class: 'flex-1 py-2 text-xs rounded-lg border transition-all ' + 
+                   (form.value.transport === val ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' : 'bg-white/3 border-border text-text-muted'),
+            onClick: () => form.value.transport = val,
+          }, label))),
         ]),
 
-        h('div', { class: 'space-y-1.5' }, [
-          h('label', { class: 'text-xs text-text-muted' }, 'Env Var Key'),
-          h('input', {
-            class: inputClass + ' font-mono',
-            value: form.value.env_var,
-            placeholder: 'MCP_INVOICE_PARSER_URL',
-            onInput: e => form.value.env_var = e.target.value,
-          }),
-          h('p', { class: 'text-[10px] text-text-muted' }, 'Provide URL or env var (or both). Env vars are resolved at runtime by the worker.'),
-        ]),
+        // Conditional inputs based on transport
+        form.value.transport === 'sse' ? [
+          // URL + Discover button
+          h('div', { class: 'space-y-1.5' }, [
+            h('label', { class: 'text-xs text-text-muted' }, 'URL'),
+            h('div', { class: 'flex gap-2' }, [
+              h('input', {
+                class: inputClass + ' font-mono flex-1',
+                value: form.value.url,
+                placeholder: 'http://localhost:8090/sse',
+                onInput: e => form.value.url = e.target.value,
+              }),
+              h('button', {
+                class: 'btn-ghost text-xs border border-border px-3 shrink-0 gap-1.5 ' + (discovering.value ? 'animate-pulse' : ''),
+                onClick: discover,
+                disabled: busy() || !form.value.url,
+              }, discovering.value ? 'Checking...' : 'Discover'),
+            ]),
+          ]),
+          h('div', { class: 'grid grid-cols-2 gap-3' }, [
+            h('div', { class: 'space-y-1.5' }, [
+              h('label', { class: 'text-xs text-text-muted' }, 'Env Var Key'),
+              h('input', {
+                class: inputClass + ' font-mono opacity-60 cursor-not-allowed',
+                value: form.value.env_var,
+                readonly: true,
+                placeholder: 'BRAVE_API_KEY',
+              }),
+            ]),
+            h('div', { class: 'space-y-1.5' }, [
+              h('div', { class: 'flex justify-between items-center' }, [
+                h('label', { class: 'text-xs text-text-muted' }, 'API KEY'),
+                h('button', {
+                  class: 'text-[10px] text-primary hover:underline cursor-pointer',
+                  type: 'button',
+                  onClick: () => showSecret.value = !showSecret.value
+                }, showSecret.value ? 'Hide' : 'Show'),
+              ]),
+              h('input', {
+                class: inputClass + ' font-mono',
+                type: showSecret.value ? 'text' : 'password',
+                value: form.value.env_value,
+                placeholder: '••••••••',
+                onInput: e => form.value.env_value = e.target.value,
+              }),
+            ]),
+          ]),
+        ] : [
+          // Stdio Command + Args
+          h('div', { class: 'space-y-1.5' }, [
+            h('label', { class: 'text-xs text-text-muted' }, 'Executable Command'),
+            h('div', { class: 'flex gap-2' }, [
+              h('input', {
+                class: inputClass + ' font-mono flex-1',
+                value: form.value.command,
+                placeholder: 'npx',
+                onInput: e => form.value.command = e.target.value,
+              }),
+              h('button', {
+                class: 'btn-ghost text-xs border border-border px-3 shrink-0 gap-1.5 ' + (discovering.value ? 'animate-pulse' : ''),
+                onClick: discover,
+                disabled: busy() || !form.value.command,
+              }, discovering.value ? 'Checking...' : 'Discover'),
+            ]),
+          ]),
+          h('div', { class: 'space-y-1.5' }, [
+            h('label', { class: 'text-xs text-text-muted' }, 'Arguments (space separated)'),
+            h('input', {
+              class: inputClass + ' font-mono',
+              value: form.value.args,
+              placeholder: '-y @modelcontextprotocol/server-coingecko',
+              onInput: e => form.value.args = e.target.value,
+            }),
+          ]),
+          h('div', { class: 'grid grid-cols-2 gap-3' }, [
+            h('div', { class: 'space-y-1.5' }, [
+              h('label', { class: 'text-xs text-text-muted' }, 'Env Var Key'),
+              h('input', {
+                class: inputClass + ' font-mono opacity-60 cursor-not-allowed',
+                value: form.value.env_var,
+                readonly: true,
+                placeholder: 'BRAVE_API_KEY',
+              }),
+            ]),
+            h('div', { class: 'space-y-1.5' }, [
+              h('div', { class: 'flex justify-between items-center' }, [
+                h('label', { class: 'text-xs text-text-muted' }, 'API KEY'),
+                h('button', {
+                  class: 'text-[10px] text-primary hover:underline cursor-pointer',
+                  type: 'button',
+                  onClick: () => showSecret.value = !showSecret.value
+                }, showSecret.value ? 'Hide' : 'Show'),
+              ]),
+              h('input', {
+                class: inputClass + ' font-mono',
+                type: showSecret.value ? 'text' : 'password',
+                value: form.value.env_value,
+                placeholder: '••••••••',
+                onInput: e => form.value.env_value = e.target.value,
+              }),
+            ]),
+          ]),
+          h('p', { class: 'text-[10px] text-amber-400/70 italic' }, 'Warning: Local commands run on the host system. Ensure you trust the package.'),
+        ],
 
         // Description — read-only, populated by Discover
         h('div', { class: 'space-y-1.5' }, [

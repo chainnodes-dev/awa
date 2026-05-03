@@ -14,6 +14,7 @@ import (
 	"github.com/asm-platform/asm/internal/auth"
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/health"
+	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -81,7 +82,8 @@ func testRouter(t *testing.T) testEnv {
 		t.Fatalf("generate test token: %v", err)
 	}
 
-	handlers := NewHandlers(eng, s, jwtSvc, nil, nil, nil, nil, nil) // nil generator, scheduler, llmRegistry, verifier, licenseSigner: disabled in tests
+	mcpMgr := mcp.NewManager(s)
+	handlers := NewHandlers(eng, s, jwtSvc, nil, nil, nil, nil, nil, mcpMgr, true) // nil generator, etc.
 	router := gin.New()
 	registerRoutes(router, handlers, NewHub(bus), jwtSvc, health.New())
 
