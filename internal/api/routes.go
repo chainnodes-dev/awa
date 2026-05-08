@@ -26,6 +26,8 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 	// Auth endpoints (no token required).
 	authGroup := r.Group("/api/v1/auth")
 	{
+		authGroup.GET("/status", h.GetAuthStatus)
+		authGroup.POST("/setup", h.SetupAdmin)
 		authGroup.POST("/login", h.Login)
 		authGroup.POST("/refresh", h.RefreshToken)
 		authGroup.POST("/logout", auth.RequireAuth(jwtSvc), h.Logout)

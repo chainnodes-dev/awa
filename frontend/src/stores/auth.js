@@ -125,5 +125,23 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { user, loading, error, isAuthenticated, role, hasRole, login, refresh, logout, init }
+  async function checkStatus() {
+    const { data } = await axios.get('/api/v1/auth/status')
+    return data
+  }
+
+  async function setup(username, password) {
+    loading.value = true
+    error.value = null
+    try {
+      await axios.post('/api/v1/auth/setup', { username, password })
+    } catch (e) {
+      error.value = e.response?.data?.error ?? 'Setup failed'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { user, loading, error, isAuthenticated, role, hasRole, login, refresh, logout, init, checkStatus, setup }
 })

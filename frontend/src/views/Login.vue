@@ -3,8 +3,8 @@
     <div class="w-full max-w-sm bg-surface-1 rounded-xl shadow-lg p-8 space-y-6">
       <!-- Logo / title -->
       <div class="text-center space-y-1">
-        <h1 class="text-2xl font-bold text-text">ASM Platform</h1>
-        <p class="text-sm text-text-muted">Agentic State Machine</p>
+        <h1 class="text-2xl font-bold text-text">Phaxa</h1>
+        <p class="text-sm text-text-muted">Agentic Logic & Orchestration</p>
       </div>
 
       <!-- Form -->
@@ -57,7 +57,7 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -65,6 +65,13 @@ const authStore = useAuthStore()
 const router = useRouter()
 
 const form = reactive({ username: '', password: '' })
+
+onMounted(async () => {
+  const status = await authStore.checkStatus()
+  if (!status.initialized) {
+    router.push('/setup')
+  }
+})
 
 async function submit() {
   try {

@@ -9,6 +9,12 @@ const routes = [
     meta: { public: true, title: 'Sign In' }
   },
   {
+    path: '/setup',
+    name: 'Setup',
+    component: () => import('@/views/Setup.vue'),
+    meta: { public: true, title: 'Initial Setup' }
+  },
+  {
     path: '/',
     redirect: '/dashboard'
   },

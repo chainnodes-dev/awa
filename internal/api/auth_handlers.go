@@ -150,3 +150,85 @@ func (h *Handlers) Logout(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+// GetAuthStatus checks if the platform has been initialized (at least one user exists).
+// GET /api/v1/auth/status
+func (h *Handlers) GetAuthStatus(c *gin.Context) {
+	initialized, err := h.store.HasAnyUser(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check auth status"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"initialized": initialized})
+}
+
+// SetupAdmin creates the first tenant and admin user.
+// POST /api/v1/auth/setup
+func (h *Handlers) SetupAdmin(c *gin.Context) {
+	// 1. Ensure no users exist.
+	initialized, err := h.store.HasAnyUser(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check auth status"})
+		return
+	}
+	if initialized {
+		c.JSON(http.StatusForbidden, gin.H{"error": "platform already initialized"})
+		return
+	}
+
+	var body struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 2. Ensure default tenant exists.
+	hasTenant, err := h.store.HasAnyTenant(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check tenant status"})
+		return
+	}
+
+	var tenantID string
+	if !hasTenant {
+		t := &store.Tenant{
+			Name: "Default Tenant",
+			Slug: "default",
+		}
+		if err := h.store.CreateTenant(c.Request.Context(), t); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create default tenant"})
+			return
+		}
+		tenantID = t.ID
+	} else {
+		t, err := h.store.GetTenantBySlug(c.Request.Context(), "default")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get default tenant"})
+			return
+		}
+		tenantID = t.ID
+	}
+
+	// 3. Create the super admin user.
+	hash, err := auth.HashPassword(body.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not hash password"})
+		return
+	}
+
+	u := &store.User{
+		TenantID:     tenantID,
+		Username:     body.Username,
+		PasswordHash: hash,
+		Role:         string(auth.RoleSuperAdmin),
+	}
+	if err := h.store.CreateUser(c.Request.Context(), u); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create admin user"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "platform initialized successfully"})
+}

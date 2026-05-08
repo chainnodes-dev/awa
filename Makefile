@@ -9,6 +9,12 @@ infra:
 stop:
 	docker-compose down
 
+# Reset the database (empty all tables)
+reset-db:
+	@DB_URL=$$(grep -E '^(DATABASE_URL|DB_URL)=' .env | head -n 1 | cut -d '=' -f 2-); \
+	if [ -z "$$DB_URL" ]; then DB_URL="postgres://asm:asm_secret@localhost:5433/asm?sslmode=disable"; fi; \
+	psql "$$DB_URL" -c "TRUNCATE TABLE users, tenants, workflow_definitions, workflow_runs, state_transitions, hitl_requests, mcp_servers, llm_configs, api_keys, system_settings, audit_logs CASCADE;"
+
 # Run the API server
 server:
 	go run ./cmd/server
