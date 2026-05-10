@@ -10,8 +10,8 @@ import (
 
 // seedWorkflows loads built-in example workflows into the store on first boot.
 // It is a no-op if any workflow definitions already exist.
-func seedWorkflows(s store.Store) {
-	ctx := store.WithTenantID(context.Background(), store.DefaultTenantID)
+func seedWorkflows(s store.Store, tenantID string) {
+	ctx := store.WithTenantID(context.Background(), tenantID)
 
 	existing, err := s.ListDefinitions(ctx, store.DefinitionFilter{Limit: 1})
 	if err != nil || len(existing) > 0 {

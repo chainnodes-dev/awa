@@ -8,8 +8,8 @@ import (
 )
 
 // seedMCPServers ensures that a core set of MCP servers is registered in the DB.
-func seedMCPServers(s store.Store) {
-	ctx := store.WithTenantID(context.Background(), store.DefaultTenantID)
+func seedMCPServers(s store.Store, tenantID string) {
+	ctx := store.WithTenantID(context.Background(), tenantID)
 
 	// Check if we already have servers. If so, don't double-seed.
 	existing, err := s.ListMCPServers(ctx)
@@ -151,7 +151,7 @@ func seedMCPServers(s store.Store) {
 
 	for _, srv := range servers {
 		toSeed := srv
-		toSeed.TenantID = store.DefaultTenantID
+		toSeed.TenantID = tenantID
 		
 		found := false
 		for _, ex := range existing {

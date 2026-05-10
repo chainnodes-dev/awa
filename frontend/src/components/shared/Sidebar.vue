@@ -3,13 +3,9 @@
     <!-- Logo / Home -->
     <RouterLink to="/dashboard" :title="entStore.branding?.name || 'Home'" class="mb-8 w-10 h-10 flex items-center justify-center shrink-0 cursor-pointer hover:scale-105 transition-transform overflow-hidden">
       <img v-if="entStore.branding?.logo_url" :src="entStore.branding.logo_url" class="w-full h-full object-contain" />
-      <div v-else class="w-9 h-9 rounded-lg bg-accent flex items-center justify-center">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="3" r="2" fill="white"/>
-          <circle cx="3" cy="13" r="2" fill="white"/>
-          <circle cx="13" cy="13" r="2" fill="white"/>
-          <line x1="8" y1="5" x2="3" y2="11" stroke="white" stroke-width="1.5"/>
-          <line x1="8" y1="5" x2="13" y2="11" stroke="white" stroke-width="1.5"/>
+      <div v-else class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
         </svg>
       </div>
     </RouterLink>

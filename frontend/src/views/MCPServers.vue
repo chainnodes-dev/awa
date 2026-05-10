@@ -19,31 +19,31 @@
       </button>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-6">
+    <div class="flex-1 overflow-y-auto p-6 bg-surface-0">
       <!-- Non-admin notice -->
-      <div v-if="!isAdmin" class="px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm mb-6">
+      <div v-if="!isAdmin" class="px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-sm mb-6">
         MCP server management requires admin privileges. You can view registered servers and their status.
       </div>
 
       <div v-if="loading" class="text-text-muted text-sm py-12 text-center">Loading...</div>
 
       <div v-else-if="!servers.length" class="card p-12 text-center">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="mx-auto mb-4 text-slate-700">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="mx-auto mb-4 text-text-muted opacity-50">
           <rect x="2" y="2" width="20" height="8" rx="2"/>
           <rect x="2" y="14" width="20" height="8" rx="2"/>
           <circle cx="6" cy="6" r="1" fill="currentColor"/>
           <circle cx="6" cy="18" r="1" fill="currentColor"/>
         </svg>
-        <p class="text-text-muted text-sm mb-1">No MCP servers registered</p>
+        <p class="text-text text-sm mb-1 font-medium">No MCP servers registered</p>
         <p class="text-text-muted text-xs mb-4">Add an MCP server to make its tools available to workflow agents.</p>
         <button v-if="isAdmin" @click="openModal(null)" class="btn-primary text-xs">Add Server</button>
       </div>
 
       <!-- Server cards -->
-      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="srv in servers" :key="srv.id || srv.name" class="card p-5 space-y-3 relative overflow-hidden group">
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div v-for="srv in servers" :key="srv.id || srv.name" class="card p-4 space-y-2 relative overflow-hidden group">
           <!-- Background decoration -->
-          <div class="absolute -right-4 -top-4 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
+          <div class="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity text-text pointer-events-none">
             <svg width="120" height="120" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="20" height="20" rx="2"/></svg>
           </div>
 
@@ -59,53 +59,49 @@
 
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
-                <span class="font-display text-sm font-bold text-white tracking-tight uppercase">{{ srv.name }}</span>
-                <span v-if="healthLatency[srv.id]" class="text-[10px] font-mono text-green-400/70">{{ healthLatency[srv.id] }}ms</span>
+                <span class="font-display text-sm font-bold text-text tracking-tight uppercase">{{ srv.name }}</span>
+                <span v-if="healthLatency[srv.id]" class="text-[10px] font-mono text-green-500 font-bold">{{ healthLatency[srv.id] }}ms</span>
               </div>
-              <p class="text-xs text-gray-400 leading-relaxed line-clamp-2">{{ srv.description || 'No capabilities discovered yet' }}</p>
+              <p class="text-sm text-text-muted leading-relaxed line-clamp-2 h-10">{{ srv.description || 'No capabilities discovered yet' }}</p>
             </div>
 
             <!-- Actions -->
             <div class="flex gap-1 shrink-0">
-              <button @click="pingServer(srv)" :disabled="healthStatus[srv.id] === 'checking'" class="btn-ghost p-1.5" title="Check availability">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <button @click="pingServer(srv)" :disabled="healthStatus[srv.id] === 'checking'" class="btn-ghost p-1" title="Check availability">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                 </svg>
               </button>
               <template v-if="isAdmin">
-                <button @click="openModal(srv)" class="btn-ghost p-1.5 text-indigo-400 hover:text-indigo-300">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-                <button @click="confirmDelete(srv)" class="btn-ghost p-1.5 text-red-400 hover:text-red-300">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                <button @click="openModal(srv)" class="btn-ghost p-1 text-indigo-500 hover:text-indigo-600" title="Settings">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
               </template>
             </div>
           </div>
 
           <!-- Connection details -->
-          <div class="flex flex-wrap gap-x-4 gap-y-2 pt-2 border-t border-white/5">
-            <div v-if="srv.transport === 'stdio'" class="flex items-center gap-1.5 text-[10px] text-gray-500">
-              <span class="px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-bold uppercase tracking-widest text-[8px]">Local</span>
-              <span class="font-mono text-gray-300">{{ srv.command }} {{ srv.args?.join(' ') }}</span>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-2 border-t border-border/40">
+            <div v-if="srv.transport === 'stdio'" class="flex items-center gap-1.5 text-[11px]">
+              <span class="px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-[8px]">Local</span>
+              <span class="font-mono text-text opacity-50 truncate max-w-[120px]">{{ srv.command }}</span>
             </div>
-            <div v-else-if="srv.url" class="flex items-center gap-1.5 text-[10px] text-gray-500">
-              <span class="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-bold uppercase tracking-widest text-[8px]">Remote</span>
-              <span class="font-mono text-gray-300">{{ srv.url }}</span>
+            <div v-else-if="srv.url" class="flex items-center gap-1.5 text-[11px]">
+              <span class="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold uppercase tracking-widest text-[8px]">Remote</span>
+              <span class="font-mono text-text opacity-50 truncate max-w-[140px] font-bold">{{ new URL(srv.url).hostname }}</span>
             </div>
             
             <!-- Env vars list -->
             <div v-if="srv.env_vars && Object.keys(srv.env_vars).length" class="flex flex-wrap gap-1">
-              <div v-for="(v, k) in srv.env_vars" :key="k" class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
-                <span class="text-[8px] text-gray-500 font-mono tracking-tighter">{{ k }}</span>
-                <span class="w-1 h-1 rounded-full bg-indigo-500/50"/>
-                <span class="text-[8px] text-indigo-400 font-mono">{{ v ? '••••' : 'ENV' }}</span>
+              <div v-for="(v, k) in srv.env_vars" :key="k" class="flex items-center gap-1 px-1.5 py-0.5 rounded border border-border/50">
+                <span class="text-[9px] text-text-muted font-mono">{{ k }}</span>
+                <span class="text-[9px] text-indigo-500/60 font-bold font-mono">••</span>
               </div>
             </div>
           </div>
 
           <!-- Health error message -->
-          <div v-if="healthError[srv.id]" class="mt-2 text-[10px] text-red-400 bg-red-500/5 rounded px-3 py-2 font-mono break-all border border-red-500/10">
+          <div v-if="healthError[srv.id]" class="mt-2 text-[10px] text-red-500 bg-red-500/5 rounded px-2 py-1.5 font-mono truncate border border-red-500/10" :title="healthError[srv.id]">
             {{ healthError[srv.id] }}
           </div>
         </div>
@@ -180,17 +176,6 @@ function openModal(srv) {
   modalServer.value = srv
 }
 
-async function confirmDelete(srv) {
-  if (!srv.id) return
-  if (!confirm('Remove MCP server "' + srv.name + '"?')) return
-  try {
-    await api.delete('/mcp-servers/' + srv.id)
-    servers.value = servers.value.filter(s => s.id !== srv.id)
-  } catch (e) {
-    alert(e.response?.data?.error ?? e.message)
-  }
-}
-
 function onSaved(srv) {
   modalServer.value = undefined
   const idx = servers.value.findIndex(s => s.id === srv.id)
@@ -232,6 +217,7 @@ export const MCPServerModal = defineComponent({
 
     const saving      = ref(false)
     const discovering = ref(false)
+    const deleting    = ref(false)
     const error       = ref('')
 
     function addEnv() { envList.value.push({ key: '', val: '' }) }
@@ -288,21 +274,34 @@ export const MCPServerModal = defineComponent({
       }
     }
 
+    async function doDelete() {
+      if (!confirm('Permanently remove this server?')) return
+      deleting.value = true
+      try {
+        await api.delete('/mcp-servers/' + p.server.id)
+        location.reload() // Simple way to refresh the list since we don't have a shared store here
+      } catch (e) {
+        error.value = e.response?.data?.error ?? e.message
+      } finally {
+        deleting.value = false
+      }
+    }
+
     const inputClass = 'input text-sm font-mono'
 
     return () => h('div', {
-      class: 'fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] p-4',
+      class: 'fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[100] p-4',
     }, [
-      h('div', { class: 'card w-full max-w-xl p-8 space-y-6 shadow-2xl border-white/10 max-h-[90vh] overflow-y-auto' }, [
+      h('div', { class: 'card w-full max-w-xl p-8 space-y-6 shadow-2xl border-border max-h-[90vh] overflow-y-auto' }, [
         h('div', { class: 'flex justify-between items-center' }, [
-          h('h3', { class: 'text-lg font-bold text-white uppercase tracking-tight' }, isEdit ? 'Configure MCP Server' : 'Register New MCP Server'),
-          h('button', { class: 'text-gray-500 hover:text-white', onClick: () => emit('close') }, '\u2715')
+          h('h3', { class: 'text-lg font-bold text-text uppercase tracking-tight' }, isEdit ? 'Configure MCP Server' : 'Register New MCP Server'),
+          h('button', { class: 'text-text-muted hover:text-text', onClick: () => emit('close') }, '\u2715')
         ]),
 
         // Basic Info
         h('div', { class: 'grid grid-cols-2 gap-4' }, [
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Logical Name'),
+            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Logical Name'),
             h('input', {
               class: inputClass,
               value: form.value.name,
@@ -311,12 +310,12 @@ export const MCPServerModal = defineComponent({
             }),
           ]),
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Transport'),
-            h('div', { class: 'flex p-1 bg-white/5 rounded-lg border border-white/5' }, [
+            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Transport'),
+            h('div', { class: 'flex p-1 bg-surface-2 rounded-lg border border-border' }, [
               ['stdio', 'Local'], ['sse', 'Remote']
             ].map(([val, label]) => h('button', {
-              class: 'flex-1 py-1.5 text-[10px] font-bold uppercase rounded transition-all ' + 
-                     (form.value.transport === val ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-500 hover:text-gray-300'),
+              class: 'flex-1 py-1.5 text-[11px] font-bold uppercase rounded transition-all ' + 
+                     (form.value.transport === val ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text'),
               onClick: () => form.value.transport = val,
             }, label))),
           ]),
@@ -325,7 +324,7 @@ export const MCPServerModal = defineComponent({
         // Transport Specifics
         form.value.transport === 'stdio' ? [
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Executable / Command'),
+            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Executable / Command'),
             h('input', {
               class: inputClass,
               value: form.value.command,
@@ -334,7 +333,7 @@ export const MCPServerModal = defineComponent({
             }),
           ]),
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Arguments'),
+            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Arguments'),
             h('input', {
               class: inputClass,
               value: form.value.args,
@@ -344,7 +343,7 @@ export const MCPServerModal = defineComponent({
           ]),
         ] : [
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'SSE Endpoint URL'),
+            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'SSE Endpoint URL'),
             h('input', {
               class: inputClass,
               value: form.value.url,
@@ -357,9 +356,9 @@ export const MCPServerModal = defineComponent({
         // Environment Variables
         h('div', { class: 'space-y-3' }, [
           h('div', { class: 'flex justify-between items-center' }, [
-            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Environment Variables / Secrets'),
+            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Environment Variables / Secrets'),
             h('button', { 
-              class: 'text-[10px] font-bold text-indigo-400 hover:text-indigo-300',
+              class: 'text-[11px] font-bold text-indigo-500 hover:text-indigo-600',
               onClick: addEnv
             }, '+ Add Variable')
           ]),
@@ -378,7 +377,7 @@ export const MCPServerModal = defineComponent({
               onInput: v => e.val = v.target.value,
             }),
             h('button', { 
-              class: 'p-2 text-gray-600 hover:text-red-400',
+              class: 'p-2 text-text-muted hover:text-red-500',
               onClick: () => removeEnv(idx)
             }, '\u2715')
           ])))
@@ -387,27 +386,29 @@ export const MCPServerModal = defineComponent({
         // Capabilities / Discovery
         h('div', { class: 'space-y-1.5' }, [
           h('div', { class: 'flex justify-between items-end' }, [
-            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Discovered Capabilities'),
+            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Discovered Capabilities'),
             h('button', {
-              class: 'btn-ghost text-[10px] px-3 h-7 gap-1.5 ' + (discovering.value ? 'animate-pulse' : ''),
+              class: 'btn-ghost text-[11px] px-3 h-7 gap-1.5 ' + (discovering.value ? 'animate-pulse' : ''),
               onClick: discover,
               disabled: saving.value || discovering.value,
             }, discovering.value ? 'Syncing...' : 'Discover Tools'),
           ]),
           h('div', {
-            class: 'p-3 rounded-lg bg-white/3 border border-white/5 text-xs text-gray-400 leading-relaxed font-mono min-h-[60px] max-h-32 overflow-y-auto'
+            class: 'p-3 rounded-lg bg-surface-2 border border-border text-xs text-text-muted leading-relaxed font-mono min-h-[60px] max-h-32 overflow-y-auto'
           }, form.value.description || 'No tools discovered yet.')
         ]),
 
-        error.value && h('div', { class: 'p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs' }, error.value),
+        error.value && h('div', { class: 'p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs' }, error.value),
 
         h('div', { class: 'flex gap-3 pt-4' }, [
-          h('button', { class: 'flex-1 btn-ghost py-3', onClick: () => emit('close') }, 'Cancel'),
+          isEdit && h('button', { class: 'btn-danger px-4', onClick: doDelete, disabled: deleting.value }, deleting.value ? '...' : 'Delete'),
+          h('div', { class: 'flex-1' }),
+          h('button', { class: 'btn-ghost px-6', onClick: () => emit('close') }, 'Cancel'),
           h('button', { 
-            class: 'flex-[2] btn-primary py-3 font-bold uppercase tracking-widest text-xs', 
+            class: 'btn-primary px-8 font-bold uppercase tracking-widest text-[11px]', 
             onClick: save, 
             disabled: saving.value || discovering.value 
-          }, saving.value ? 'Saving...' : 'Register Connection'),
+          }, saving.value ? 'Saving...' : 'Save Configuration'),
         ]),
       ]),
     ])

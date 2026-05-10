@@ -35,6 +35,7 @@
     background: var(--color-bg);
     color: var(--color-text);
     transition: background-color 0.3s ease, color 0.3s ease;
+    font-size: 17px;
   }
 
   #app { height: 100%; display: flex; flex-direction: column; }
@@ -88,13 +89,13 @@
   }
 
   .card {
-    @apply rounded-xl shadow-sm border;
+    @apply rounded-xl shadow-sm border transition-all;
     background-color: var(--color-surface);
     border-color: var(--color-border);
   }
   
   .input {
-    @apply rounded-lg px-3 py-2 text-sm outline-none transition-colors w-full border;
+    @apply rounded-lg px-4 py-2.5 text-sm outline-none transition-colors w-full border;
     background-color: var(--color-input-bg);
     border-color: var(--color-border);
     color: var(--color-text);

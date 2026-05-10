@@ -31,19 +31,20 @@ type Server struct {
 func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, bus events.Bus, gen *designer.Generator, checker *health.Checker, sched SchedulerAdder, llmReg *llm.Registry) *Server {
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
 
-	// Seed the default tenant and admin user on first boot.
-	if cfg.AdminPassword != "" {
-		go seedAdmin(cfg, s)
-	}
+	// Seed the platform in order (Tenant -> Users -> Workflows/MCP).
+	go func() {
+		ctx := context.Background()
+		t, err := ensureDefaultTenant(ctx, s)
+		if err != nil {
+			slog.Error("Failed to ensure default tenant", "error", err)
+			return
+		}
 
-	// Seed built-in demo workflows if the store is empty.
-	go seedWorkflows(s)
-
-	// Seed LLM configs from env vars if not present.
-	go seedLLMConfigs(cfg, s)
-
-	// Seed core MCP servers.
-	go seedMCPServers(s)
+		seedAdminWithTenant(cfg, s, t)
+		seedWorkflows(s, t.ID)
+		seedLLMConfigs(cfg, s, t.ID)
+		seedMCPServers(s, t.ID)
+	}()
 
 	hub := NewHub(bus)
 	hub.Start(context.Background())
@@ -126,17 +127,13 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 // seedAdmin ensures the default tenant exists and creates the initial super_admin
 // user on first boot when ADMIN_PASSWORD is set.
-func seedAdmin(cfg *config.Config, s store.Store) {
+func seedAdminWithTenant(cfg *config.Config, s store.Store, defaultTenant *store.Tenant) {
 	ctx := context.Background()
 
-	// 1. Ensure the default tenant exists.
-	defaultTenant, err := ensureDefaultTenant(ctx, s)
-	if err != nil {
-		slog.Error("Failed to ensure default tenant", "error", err)
+	// 2. Create the admin user if no users exist yet.
+	if cfg.AdminPassword == "" {
 		return
 	}
-
-	// 2. Create the admin user if no users exist yet.
 	has, err := s.HasAnyUser(ctx)
 	if err != nil || has {
 		return
@@ -181,8 +178,8 @@ func ensureDefaultTenant(ctx context.Context, s store.Store) (*store.Tenant, err
 	if !has {
 		t := &store.Tenant{
 			ID:   store.DefaultTenantID,
-			Name: "Default",
-			Slug: "default",
+			Name: "Phaxa",
+			Slug: "phaxa",
 		}
 		if err := s.CreateTenant(ctx, t); err != nil {
 			return nil, fmt.Errorf("create default tenant: %w", err)
@@ -206,8 +203,8 @@ func ensureDefaultTenant(ctx context.Context, s store.Store) (*store.Tenant, err
 
 // seedLLMConfigs ensures that at least one LLM provider is configured
 // by reading from environment variables on first boot.
-func seedLLMConfigs(cfg *config.Config, s store.Store) {
-	ctx := store.WithTenantID(context.Background(), store.DefaultTenantID)
+func seedLLMConfigs(cfg *config.Config, s store.Store, tenantID string) {
+	ctx := store.WithTenantID(context.Background(), tenantID)
 
 	// Only seed if no LLM configs exist for the default tenant.
 	existing, err := s.ListLLMConfigs(ctx)
