@@ -65,9 +65,33 @@
 
     <!-- Failure reason banner -->
     <div v-if="run?.status === 'failed' && run?.failure_reason"
-         class="mx-4 mt-3 mb-1 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono shrink-0">
-      <span class="font-semibold">Run failed:</span> {{ run.failure_reason }}
+         class="mx-4 mt-3 mb-1 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono shrink-0 flex items-center justify-between">
+      <div class="flex-1">
+        <span class="font-semibold">Run failed:</span> {{ run.failure_reason }}
+      </div>
+      <button 
+        v-if="workflowYAML"
+        @click="showDebugModal = true" 
+        class="btn bg-violet-600 hover:bg-violet-500 text-white text-[10px] px-3 py-1.5 ml-4 shadow-lg shadow-violet-600/20 gap-1.5 uppercase font-bold tracking-wider"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+          <path d="M12 8v4"/><path d="M12 16h.01"/>
+        </svg>
+        Debug with AI
+      </button>
     </div>
+
+    <!-- AI Debug Modal -->
+    <AIDebugModal
+      v-if="showDebugModal && run"
+      :run-id="run.id"
+      :original-YAML="workflowYAML"
+      :failed-node="run.current_state"
+      :error-message="run.failure_reason"
+      :blackboard="run.blackboard"
+      @close="showDebugModal = false"
+    />
 
     <!-- HITL resolve error banner -->
     <div v-if="resolveError"
@@ -394,6 +418,7 @@ import EventLog        from '@/components/monitor/EventLog.vue'
 import LLMDebugPanel   from '@/components/monitor/LLMDebugPanel.vue'
 import MCPAuditLogPanel from '@/components/monitor/MCPAuditLogPanel.vue'
 import JsonSchemaForm  from '@/components/monitor/JsonSchemaForm.vue'
+import AIDebugModal    from '@/components/monitor/AIDebugModal.vue'
 import StartRunModal from '@/components/shared/StartRunModal.vue'
 import { useExecutionStore } from '@/stores/execution'
 import { useWorkflowStore }  from '@/stores/workflows'
@@ -411,8 +436,10 @@ const { layout } = useLayout()
 const activeTab    = ref('blackboard')
 const showTriggerModal = ref(false)
 const showRunModal = ref(false)
+const showDebugModal = ref(false)
 const triggerName  = ref('')
 const workflowDef  = ref(null)
+const workflowYAML = ref('')
 const nodeTypes    = shallowRef({ stateNode: StateNode })
 const hitlForm     = ref(null)
 const showBlackboardTweak = ref(false)
@@ -511,10 +538,11 @@ async function loadRun() {
     await execStore.fetchMCPLogs(route.params.id)
   }
   if (r) {
-    const { definition } = await wfStore
+    const { definition, yaml: src } = await wfStore
       .fetchOne(r.workflow_name, r.workflow_version)
-      .catch(() => ({ definition: null }))
+      .catch(() => ({ definition: null, yaml: '' }))
     workflowDef.value = definition
+    workflowYAML.value = src
   }
 }
 

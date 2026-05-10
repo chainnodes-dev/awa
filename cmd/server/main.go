@@ -26,44 +26,7 @@ import (
 	temporalpkg "github.com/asm-platform/asm/internal/temporal"
 )
 
-// seedLLMConfigs inserts LLM provider configs from env vars on first boot.
-// It is a no-op if any llm_configs rows already exist for the default tenant.
-func seedLLMConfigs(ctx context.Context, s store.Store, cfg *config.Config) {
-	hasAny, err := s.HasAnyLLMConfig(ctx)
-	if err != nil || hasAny {
-		return
-	}
-	type seed struct{ provider, apiKey, baseURL, model string }
-	seeds := []seed{
-		{"anthropic", cfg.AnthropicKey, "", cfg.DefaultModel},
-		{"openai", cfg.OpenAIKey, "", cfg.DefaultModel},
-		{"grok", cfg.GrokKey, "", "grok-3"},
-		{"deepseek", cfg.DeepseekKey, "", "deepseek-chat"},
-		{"gemini", cfg.GeminiKey, "", "gemini-2.0-flash"},
-		{"ollama", "", cfg.OllamaURL, cfg.OllamaModel},
-	}
-	for _, sd := range seeds {
-		if sd.provider == "ollama" {
-			if sd.baseURL == "" {
-				continue
-			}
-		} else if sd.apiKey == "" {
-			continue
-		}
-		_ = s.UpsertLLMConfig(ctx, &store.LLMConfig{
-			TenantID:     store.DefaultTenantID,
-			Provider:     sd.provider,
-			APIKey:       sd.apiKey,
-			BaseURL:      sd.baseURL,
-			DefaultModel: sd.model,
-			Enabled:      true,
-		})
-	}
-	if cfg.LLMProvider != "" {
-		_ = s.SetDefaultProvider(ctx, cfg.LLMProvider)
-	}
-	slog.Info("Seeded LLM configs from environment")
-}
+// Removed redundant seedLLMConfigs. Seeding is now handled via api.SeedLLMConfigs.
 
 func main() {
 	// Load .env if present. Existing environment variables take precedence so
@@ -129,10 +92,20 @@ func main() {
 	}
 	defer s.Close()
 
-	// -- LLM Config: seed DB from env on first boot, then load registry from DB --
-	tenantCtx := store.WithTenantID(ctx, store.DefaultTenantID)
-	seedLLMConfigs(tenantCtx, s, cfg)
+	// -- Ensure Default Tenant exists --
+	defaultTenant, err := api.EnsureDefaultTenant(ctx, s)
+	if err != nil {
+		slog.Error("Failed to ensure default tenant", "error", err)
+		os.Exit(1)
+	}
+	tenantCtx := store.WithTenantID(ctx, defaultTenant.ID)
 
+	// -- Seeding (Sync) --
+	api.SeedAdminWithTenant(cfg, s, defaultTenant)
+	api.SeedLLMConfigs(cfg, s, defaultTenant.ID)
+	// Workflows and MCP seeding will happen below after mcpEntries are loaded.
+
+	// -- LLM Config: Load registry from DB --
 	llmRegistry, activeLLMProvider, err := llm.BuildRegistryFromDB(tenantCtx, s)
 	if err != nil {
 		slog.Warn("Failed to build LLM registry from DB, using empty registry", "error", err)
@@ -177,42 +150,23 @@ func main() {
 	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
 	registryPath := filepath.Join(projectRoot, "mcp_registry.yaml")
 
-	var gen *designer.Generator
 	mcpEntries, regErr := designer.LoadMCPRegistry(registryPath)
 	if regErr != nil {
 		slog.Warn("MCP registry not loaded; AI generation will have no server context", "error", regErr)
 		mcpEntries = nil
 	}
+
+	// -- Seeding (Sync - Continued) --
+	api.SeedWorkflows(s, defaultTenant.ID)
+	api.SeedMCPServers(s, defaultTenant.ID, mcpEntries)
+
+	var gen *designer.Generator
 	// Use the active LLM provider if available.
 	if llmProv, _ := llmRegistry.Get(activeLLMProvider); llmProv != nil {
 		gen = designer.NewGenerator(llmProv, mcpEntries, s)
 		slog.Info("AI workflow generator enabled", "provider", activeLLMProvider)
 	} else {
 		slog.Info("AI workflow generator disabled (no LLM provider configured)")
-	}
-
-	// -- MCP Server Registry: seed from YAML if DB table is empty --
-	// The mcp_registry.yaml is the operator-curated source of truth for teams that
-	// haven't yet managed servers via the API. Once the DB has any entries, those
-	// take precedence (see ListMCPServers handler). Seeding is idempotent: we only
-	// insert when HasAnyMCPServer returns false for the default tenant.
-	if len(mcpEntries) > 0 {
-		seedCtx := store.WithTenantID(ctx, store.DefaultTenantID)
-		if hasAny, err := s.HasAnyMCPServer(seedCtx); err == nil && !hasAny {
-			for _, e := range mcpEntries {
-				srv := &store.MCPServer{
-					TenantID:    store.DefaultTenantID,
-					Name:        e.Name,
-					EnvVars:     map[string]string{e.EnvVar: ""},
-					Description: e.Description,
-					CreatedBy:   "seed",
-				}
-				if err := s.CreateMCPServer(seedCtx, srv); err != nil {
-					slog.Warn("MCP seed: failed to insert entry", "name", e.Name, "error", err)
-				}
-			}
-			slog.Info("MCP server registry seeded from YAML", "count", len(mcpEntries))
-		}
 	}
 
 	// -- Scheduler --
@@ -231,7 +185,7 @@ func main() {
 	slog.Info("Scheduler started")
 
 	// -- API Server --
-	srv := api.NewServer(cfg, engine, s, bus, gen, checker, sched, llmRegistry)
+	srv := api.NewServer(cfg, engine, s, bus, gen, mcpEntries, checker, sched, llmRegistry)
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)

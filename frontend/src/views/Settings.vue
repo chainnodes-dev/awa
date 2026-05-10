@@ -471,6 +471,7 @@ const systemPrompts = reactive({
   workflow_categorise: '',
   workflow_wire: '',
   workflow_implement_finish: '',
+  workflow_debugger: '',
 })
 const savingPrompt = reactive({})
 

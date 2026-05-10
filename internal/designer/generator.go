@@ -84,10 +84,19 @@ func (g *Generator) WithProvider(p llm.Provider) *Generator {
 }
 
 func (g *Generator) GetPrompt(id string) string {
+	if g == nil || g.prompts == nil {
+		return GetDefaultPrompt(id)
+	}
 	return g.prompts.Get(id, GetDefaultPrompt(id))
 }
 
 func (g *Generator) SetPrompt(id, content string) {
+	if g == nil {
+		return
+	}
+	if g.prompts == nil {
+		g.prompts = NewPromptManager()
+	}
 	g.prompts.Set(id, content)
 }
 
@@ -176,6 +185,81 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 	}, nil
 }
 
+// DebugWorkflowRequest is the input to the AI debugger.
+type DebugWorkflowRequest struct {
+	WorkflowYAML       string                 `json:"workflow_yaml"`
+	FailedNodeName     string                 `json:"failed_node_name"`
+	ErrorMessage       string                 `json:"error_message"`
+	BlackboardSnapshot map[string]interface{} `json:"blackboard_snapshot,omitempty"`
+}
+
+// DebugWorkflowResult holds the fix proposed by the LLM.
+type DebugWorkflowResult struct {
+	YAML        string `json:"yaml"`
+	Explanation string `json:"explanation"`
+	// Interaction is the trace for this debug session.
+	Interactions []llm.Message `json:"interactions"`
+}
+
+// DebugWorkflow calls the LLM to analyze a failure and propose a fix.
+func (g *Generator) DebugWorkflow(ctx context.Context, req DebugWorkflowRequest) (*DebugWorkflowResult, error) {
+	system := g.buildCoreRules()
+	system += "\n\n" + g.GetPrompt(PromptIDDebug)
+
+	userMsg := fmt.Sprintf("Workflow YAML:\n```yaml\n%s\n```\n\nFailed Node: %s\nError: %s\n", 
+		req.WorkflowYAML, req.FailedNodeName, req.ErrorMessage)
+	
+	if len(req.BlackboardSnapshot) > 0 {
+		bbJson, _ := json.MarshalIndent(req.BlackboardSnapshot, "", "  ")
+		userMsg += fmt.Sprintf("\nBlackboard Snapshot:\n```json\n%s\n```\n", string(bbJson))
+	}
+
+	messages := []llm.Message{
+		{Role: "user", Content: userMsg},
+	}
+
+	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+		SystemPrompt: system,
+		Messages:     messages,
+		MaxTokens:    g.provider.MaxOutputTokens(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("LLM debug call failed: %w", err)
+	}
+
+	// The debugger prompt asks for JSON.
+	var result struct {
+		YAML        string `json:"yaml"`
+		Explanation string `json:"explanation"`
+	}
+	
+	// Try to extract JSON from the response if it's wrapped in markdown.
+	jsonStr := resp.Content
+	if start := strings.Index(jsonStr, "{"); start != -1 {
+		if end := strings.LastIndex(jsonStr, "}"); end != -1 {
+			jsonStr = jsonStr[start : end+1]
+		}
+	}
+
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		// Fallback: if it's not valid JSON, maybe it returned raw YAML?
+		// But our prompt specifically asks for JSON.
+		return nil, fmt.Errorf("failed to parse AI debug response as JSON: %w\nResponse: %s", err, resp.Content)
+	}
+
+	interactions := []llm.Message{
+		{Role: "system", Content: system},
+		{Role: "user", Content: userMsg},
+		{Role: "assistant", Content: resp.Content},
+	}
+
+	return &DebugWorkflowResult{
+		YAML:         result.YAML,
+		Explanation:  result.Explanation,
+		Interactions: interactions,
+	}, nil
+}
+
 // extractAndValidate extracts a YAML block from the LLM response and validates
 // it by round-tripping through the workflow loader.
 func (g *Generator) extractAndValidate(content string) (string, *asmtypes.WorkflowDef, error) {
@@ -200,10 +284,8 @@ func (g *Generator) extractAndValidate(content string) (string, *asmtypes.Workfl
 
 // buildSystemPrompt produces the system prompt that teaches the LLM the YAML schema
 // and lists the available MCP servers.
-func (g *Generator) buildSystemPrompt(requestedServers []string) string {
-	var sb strings.Builder
-
-	sb.WriteString(g.prompts.Get(PromptIDBase, `You are an expert workflow designer for the Phaxa (Phaxa) platform.
+func (g *Generator) buildCoreRules() string {
+	return g.prompts.Get(PromptIDBase, `You are an expert workflow designer for the Phaxa (Phaxa) platform.
 Produce a valid Phaxa workflow YAML based on the user's description.
 
 ## YAML Schema & Node Types
@@ -275,7 +357,13 @@ agents:
 11. **Versioning**: Use simple increasing integers for 'metadata.version' (e.g., "1", "2", "3"). NEVER use semantic versioning like "1.0.0".
 12. **CRITICAL**: Every 'instructions' field MUST be wrapped in double-quotes to prevent YAML parsing errors (e.g. ` + "`" + `instructions: "Task: verify invoice"` + "`" + `).
 13. **Process Description**: Always include 'metadata.process_description' with a professional 2-3 sentence summary of the business logic.
-`))
+14. **Script Nodes**: The 'script' block MUST be an object with BOTH 'trigger' (a valid expr string evaluating to a trigger name) and 'updates' (an object mapping fields to expr strings). Example: script: { trigger: "'ok'", updates: { status: "'processed'" } }. NEVER leave 'trigger' empty.
+`)
+}
+
+func (g *Generator) buildSystemPrompt(requestedServers []string) string {
+	var sb strings.Builder
+	sb.WriteString(g.buildCoreRules())
 
 	// Add MCP server context if any servers were requested or all are listed.
 	relevantServers := g.registry

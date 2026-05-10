@@ -112,6 +112,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			designerGroup.POST("/codegen", h.CodegenHandler)
 			designerGroup.GET("/prompts", h.GetPrompts)
 			designerGroup.PUT("/prompts/:id", h.UpdatePrompt)
+			designerGroup.POST("/debug", h.DebugWorkflowHandler)
 			designerGroup.POST("/process/analyse", h.ProcessAnalyseHandler)
 			designerGroup.POST("/process/summarise", h.ProcessSummariseHandler)
 

@@ -83,7 +83,7 @@ func testRouter(t *testing.T) testEnv {
 	}
 
 	mcpMgr := mcp.NewManager(s, true)
-	handlers := NewHandlers(eng, s, jwtSvc, nil, nil, nil, nil, nil, mcpMgr, true) // nil generator, etc.
+	handlers := NewHandlers(eng, s, jwtSvc, nil, nil, nil, nil, nil, nil, mcpMgr, true) // nil generator, etc.
 	router := gin.New()
 	registerRoutes(router, handlers, NewHub(bus), jwtSvc, health.New())
 

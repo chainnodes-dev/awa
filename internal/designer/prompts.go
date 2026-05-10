@@ -56,6 +56,7 @@ const (
 	PromptIDCategorise     = "workflow_categorise"
 	PromptIDWire           = "workflow_wire"
 	PromptIDImplFinish     = "workflow_implement_finish"
+	PromptIDDebug          = "workflow_debugger"
 )
 
 // GetDefaultPrompt returns the hardcoded system prompt for a given ID.
@@ -75,6 +76,8 @@ func GetDefaultPrompt(id string) string {
 		return DefaultWirePrompt()
 	case PromptIDImplFinish:
 		return DefaultImplementFinishPrompt()
+	case PromptIDDebug:
+		return DefaultDebugPrompt()
 	default:
 		return ""
 	}
@@ -358,3 +361,36 @@ states:
 `
 }
 
+func DefaultDebugPrompt() string {
+	return `You are an expert Phaxa workflow debugger. Your task is to fix errors in a workflow definition.
+
+You will be given:
+1. The current workflow YAML.
+2. The name of the node where the error occurred.
+3. The error message (and stack trace if available).
+4. A snapshot of the blackboard variables at the time of failure.
+
+Your goal is to:
+1. Analyze the cause of the failure.
+2. Produce a corrected version of the workflow YAML.
+3. Provide a brief, professional description of what was fixed and why.
+
+## Rules for Fixing
+- **Robustness**: If a node failed due to missing data, add validation or use default values in expressions.
+- **Error Handling**: If the failure is expected/recoverable, consider adding an 'error' trigger and a transition to a correction node.
+- **Node Specifics**: 
+  - For 'script' nodes: check the syntax of the expr-lang expression.
+  - For 'code' nodes: fix the JavaScript logic.
+  - For 'intermediate' nodes: refine the instructions or the MCP server config.
+- **Preserve Intent**: Do not change the overall goal of the workflow unless the error makes it impossible.
+- **Schema Compliance**: The fixed YAML must adhere to the Phaxa schema (apiVersion: phaxa/v1).
+
+## Output Format
+Respond with a JSON object containing:
+{
+  "yaml": "The complete corrected workflow YAML",
+  "explanation": "Brief summary of the fix"
+}
+
+Ensure the YAML is valid and correctly formatted within the JSON string.`
+}

@@ -295,7 +295,6 @@
     </div>
 
     <!-- ── Modals ──────────────────────────────────────────────────────── -->
-    <BBFieldModal  v-if="showBBModal"   @close="showBBModal = false"   @add="addBBField" />
     <AddStateModal v-if="showAddState" @close="showAddState = false" @add="onAddState" />
     
     <!-- Description Pop-out Modal -->
@@ -340,6 +339,7 @@ import BlackboardSchemaEditor from '@/components/designer/BlackboardSchemaEditor
 import AddStateModal          from '@/components/designer/AddStateModal.vue'
 import GeneratePanel          from '@/components/designer/GeneratePanel.vue'
 import CodeEditorModal       from '@/components/designer/CodeEditorModal.vue'
+import BBFieldModal         from '@/components/designer/BBFieldModal.vue'
 
 import { useWorkflowStore } from '@/stores/workflows'
 import { useWorkflowIO }    from '@/composables/useWorkflowIO'
@@ -378,6 +378,7 @@ const showAddState         = ref(false)
 const showDescriptionModal  = ref(false)
 const flowKey              = ref(0)
 const showTimeoutEdges  = ref(true)
+const showBBModal       = ref(false)
 
 // -- Generation Tab State (lifted for persistence) --
 const generatePrompt       = ref('')
@@ -433,8 +434,22 @@ async function handleImportYAML() {
 // ── Load on mount ────────────────────────────────────────────────────────────
 
 onMounted(async () => {
+  // Check for AI-proposed fix from the Monitor
+  const fixData = sessionStorage.getItem('phaxa_ai_fix')
+  if (fixData) {
+    try {
+      const { yaml: fixYaml, explanation } = JSON.parse(fixData)
+      onAIApply({ yamlStr: fixYaml })
+      sessionStorage.removeItem('phaxa_ai_fix')
+      // Show success toast or notification would be nice here
+      console.log('AI fix applied:', explanation)
+    } catch (e) {
+      console.error('Failed to apply stored AI fix:', e)
+    }
+  }
+
   const { name, version } = route.params
-  if (name && version) {
+  if (name && version && name !== 'new') {
     try {
       const { definition, yaml: src } = await wfStore.fetchOne(name, version)
       loadDefinition(definition, src)

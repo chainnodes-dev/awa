@@ -4,16 +4,18 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/asm-platform/asm/internal/designer"
 	"github.com/asm-platform/asm/internal/store"
 )
 
-// seedMCPServers ensures that a core set of MCP servers is registered in the DB.
-func seedMCPServers(s store.Store, tenantID string) {
+// SeedMCPServers ensures that a core set of MCP servers is registered in the DB.
+func SeedMCPServers(s store.Store, tenantID string, registryEntries []designer.MCPServerEntry) {
 	ctx := store.WithTenantID(context.Background(), tenantID)
 
-	// Check if we already have servers. If so, don't double-seed.
+	// 1. Built-in servers
 	existing, err := s.ListMCPServers(ctx)
-	if err == nil && len(existing) > 15 {
+	if err != nil {
+		slog.Error("Failed to list existing MCP servers during seeding", "error", err)
 		return
 	}
 
@@ -168,6 +170,39 @@ func seedMCPServers(s store.Store, tenantID string) {
 			slog.Error("Failed to seed MCP server", "name", toSeed.Name, "error", err)
 		} else {
 			slog.Info("Seeded internal MCP server", "name", toSeed.Name)
+		}
+	}
+
+	// 2. Registry-based servers (from mcp_registry.yaml)
+	for _, e := range registryEntries {
+		found := false
+		for _, ex := range existing {
+			if ex.Name == e.Name {
+				found = true
+				break
+			}
+		}
+		if found {
+			continue
+		}
+
+		srv := &store.MCPServer{
+			TenantID:    tenantID,
+			Name:        e.Name,
+			EnvVars:     map[string]string{e.EnvVar: ""},
+			Description: e.Description,
+			CreatedBy:   "seed-registry",
+		}
+		// Assuming stdio for registry servers unless specified. 
+		// You might want to extend MCPServerEntry to support more fields.
+		srv.Transport = "stdio" 
+		srv.Command = "npx" // Default
+		srv.Args = []string{"-y", e.Name} // Default
+
+		if err := s.CreateMCPServer(ctx, srv); err != nil {
+			slog.Warn("MCP registry seed: failed to insert entry", "name", e.Name, "error", err)
+		} else {
+			slog.Info("Seeded registry MCP server", "name", e.Name)
 		}
 	}
 }

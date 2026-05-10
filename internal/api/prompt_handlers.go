@@ -28,6 +28,7 @@ func (h *Handlers) GetPrompts(c *gin.Context) {
 	prompts["workflow_categorise"] = h.generator.GetPrompt("workflow_categorise")
 	prompts["workflow_wire"] = h.generator.GetPrompt("workflow_wire")
 	prompts["workflow_implement_finish"] = h.generator.GetPrompt("workflow_implement_finish")
+	prompts["workflow_debugger"] = h.generator.GetPrompt("workflow_debugger")
 
 	c.JSON(http.StatusOK, prompts)
 }

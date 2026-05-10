@@ -28,23 +28,8 @@ type Server struct {
 	mcpMgr     *mcp.Manager
 }
 
-func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, bus events.Bus, gen *designer.Generator, checker *health.Checker, sched SchedulerAdder, llmReg *llm.Registry) *Server {
+func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, bus events.Bus, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, checker *health.Checker, sched SchedulerAdder, llmReg *llm.Registry) *Server {
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
-
-	// Seed the platform in order (Tenant -> Users -> Workflows/MCP).
-	go func() {
-		ctx := context.Background()
-		t, err := ensureDefaultTenant(ctx, s)
-		if err != nil {
-			slog.Error("Failed to ensure default tenant", "error", err)
-			return
-		}
-
-		seedAdminWithTenant(cfg, s, t)
-		seedWorkflows(s, t.ID)
-		seedLLMConfigs(cfg, s, t.ID)
-		seedMCPServers(s, t.ID)
-	}()
 
 	hub := NewHub(bus)
 	hub.Start(context.Background())
@@ -87,7 +72,7 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 
 	mcpMgr := mcp.NewManager(s, cfg.AllowStdioMCP)
 	allowStdio := cfg.AllowStdioMCP // Assume this exists in config
-	handlers := NewHandlers(engine, s, jwtSvc, gen, sched, llmReg, verifier, signer, mcpMgr, allowStdio)
+	handlers := NewHandlers(engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr, allowStdio)
 
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -125,9 +110,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
-// seedAdmin ensures the default tenant exists and creates the initial super_admin
+// SeedAdminWithTenant ensures the default tenant exists and creates the initial super_admin
 // user on first boot when ADMIN_PASSWORD is set.
-func seedAdminWithTenant(cfg *config.Config, s store.Store, defaultTenant *store.Tenant) {
+func SeedAdminWithTenant(cfg *config.Config, s store.Store, defaultTenant *store.Tenant) {
 	ctx := context.Background()
 
 	// 2. Create the admin user if no users exist yet.
@@ -156,9 +141,9 @@ func seedAdminWithTenant(cfg *config.Config, s store.Store, defaultTenant *store
 	slog.Info("Seeded super_admin user", "username", cfg.AdminUsername, "tenant", defaultTenant.Slug)
 }
 
-// ensureDefaultTenant creates the default tenant if it does not yet exist.
+// EnsureDefaultTenant creates the default tenant if it does not yet exist.
 // Returns the default tenant (whether newly created or already present).
-func ensureDefaultTenant(ctx context.Context, s store.Store) (*store.Tenant, error) {
+func EnsureDefaultTenant(ctx context.Context, s store.Store) (*store.Tenant, error) {
 	// 1. Try to find by the fixed ID first.
 	if t, err := s.GetTenant(ctx, store.DefaultTenantID); err == nil {
 		return t, nil
@@ -169,71 +154,75 @@ func ensureDefaultTenant(ctx context.Context, s store.Store) (*store.Tenant, err
 		return t, nil
 	}
 
-	// 3. If neither exists, check if ANY tenant exists.
-	// If the DB is completely empty, create the canonical default tenant.
-	has, err := s.HasAnyTenant(ctx)
-	if err != nil {
-		return nil, err
+	// 3. If the fixed ID doesn't exist, we MUST create it or ensure a viable default.
+	// We want to avoid foreign key violations for handlers that rely on DefaultTenantID.
+	t := &store.Tenant{
+		ID:   store.DefaultTenantID,
+		Name: "Phaxa",
+		Slug: "phaxa",
 	}
-	if !has {
-		t := &store.Tenant{
-			ID:   store.DefaultTenantID,
-			Name: "Phaxa",
-			Slug: "phaxa",
+	if err := s.CreateTenant(ctx, t); err != nil {
+		// If it already exists (e.g. race condition), just return it.
+		if t2, err2 := s.GetTenant(ctx, store.DefaultTenantID); err2 == nil {
+			return t2, nil
 		}
-		if err := s.CreateTenant(ctx, t); err != nil {
-			return nil, fmt.Errorf("create default tenant: %w", err)
+		// If we can't create it and it doesn't exist, fallback to whatever we have.
+		tenants, _ := s.ListTenants(ctx)
+		if len(tenants) > 0 {
+			return tenants[0], nil
 		}
-		slog.Info("Seeded default tenant", "id", t.ID)
-		return t, nil
+		return nil, fmt.Errorf("failed to create default tenant: %w", err)
 	}
-
-	// 4. If some other tenant exists but no "default" one, return the first one
-	// found so that seeding can at least attach the admin user to something.
-	tenants, err := s.ListTenants(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list existing tenants: %w", err)
-	}
-	if len(tenants) == 0 {
-		return nil, fmt.Errorf("HasAnyTenant was true but ListTenants returned 0 rows")
-	}
-	return tenants[0], nil
+	slog.Info("Ensured canonical default tenant exists", "id", t.ID)
+	return t, nil
 }
 
 
-// seedLLMConfigs ensures that at least one LLM provider is configured
+// SeedLLMConfigs ensured that at least one LLM provider is configured
 // by reading from environment variables on first boot.
-func seedLLMConfigs(cfg *config.Config, s store.Store, tenantID string) {
+func SeedLLMConfigs(cfg *config.Config, s store.Store, tenantID string) {
 	ctx := store.WithTenantID(context.Background(), tenantID)
 
-	// Only seed if no LLM configs exist for the default tenant.
-	existing, err := s.ListLLMConfigs(ctx)
-	if err != nil || len(existing) > 0 {
+	hasAny, err := s.HasAnyLLMConfig(ctx)
+	if err != nil || hasAny {
 		return
 	}
 
-	// 1. Seed Ollama if OLLAMA_URL is set.
-	if cfg.OllamaURL != "" {
+	type seed struct{ provider, apiKey, baseURL, model string }
+	seeds := []seed{
+		{"anthropic", cfg.AnthropicKey, "", "claude-3-5-sonnet-latest"},
+		{"openai", cfg.OpenAIKey, "", "gpt-4o"},
+		{"grok", cfg.GrokKey, "", "grok-3"},
+		{"deepseek", cfg.DeepseekKey, "", "deepseek-v4-flash"},
+		{"gemini", cfg.GeminiKey, "", "gemini-2.0-flash"},
+		{"ollama", "", cfg.OllamaURL, cfg.OllamaModel},
+	}
+
+	for _, sd := range seeds {
+		if sd.provider == "ollama" {
+			if sd.baseURL == "" {
+				continue
+			}
+		} else if sd.apiKey == "" {
+			continue
+		}
+
 		err := s.UpsertLLMConfig(ctx, &store.LLMConfig{
-			TenantID:     store.DefaultTenantID,
-			Provider:     "ollama",
-			BaseURL:      cfg.OllamaURL,
-			DefaultModel: cfg.OllamaModel,
+			TenantID:     tenantID,
+			Provider:     sd.provider,
+			APIKey:       sd.apiKey,
+			BaseURL:      sd.baseURL,
+			DefaultModel: sd.model,
 			Enabled:      true,
 		})
 		if err != nil {
-			slog.Error("Failed to seed Ollama config", "error", err)
+			slog.Error("Failed to seed LLM config", "provider", sd.provider, "error", err)
 		} else {
-			slog.Info("Seeded Ollama LLM config", "url", cfg.OllamaURL)
+			slog.Info("Seeded LLM config", "provider", sd.provider)
 		}
 	}
 
-	// 2. Set the default provider if LLM_PROVIDER is set.
 	if cfg.LLMProvider != "" {
-		if err := s.SetDefaultProvider(ctx, cfg.LLMProvider); err != nil {
-			slog.Error("Failed to set default LLM provider", "provider", cfg.LLMProvider, "error", err)
-		} else {
-			slog.Info("Set default LLM provider", "provider", cfg.LLMProvider)
-		}
+		_ = s.SetDefaultProvider(ctx, cfg.LLMProvider)
 	}
 }

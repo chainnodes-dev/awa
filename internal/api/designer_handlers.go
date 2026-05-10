@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -378,5 +379,26 @@ func (h *Handlers) ScaffoldMCPHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (h *Handlers) DebugWorkflowHandler(c *gin.Context) {
+	if h.generator == nil {
+		slog.Warn("DebugWorkflowHandler called but h.generator is nil", "tenant_id", store.TenantIDFromContext(c.Request.Context()))
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI designer not configured (no LLM provider enabled)"})
+		return
+	}
+	var req designer.DebugWorkflowRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := h.generator.DebugWorkflow(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, result)
 }

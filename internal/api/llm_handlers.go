@@ -7,13 +7,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/asm-platform/asm/internal/designer"
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/store"
 )
 
 // ListLLMConfigs returns all provider configs for the current tenant. API keys are masked.
 func (h *Handlers) ListLLMConfigs(c *gin.Context) {
-	ctx := store.WithTenantID(c.Request.Context(), store.DefaultTenantID)
+	ctx := c.Request.Context()
 	configs, err := h.store.ListLLMConfigs(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -44,7 +45,11 @@ func (h *Handlers) UpsertLLMConfig(c *gin.Context) {
 		return
 	}
 
-	ctx := store.WithTenantID(c.Request.Context(), store.DefaultTenantID)
+	ctx := c.Request.Context()
+	tenantID := store.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = store.DefaultTenantID
+	}
 
 	// Preserve existing key if the client sends the masked placeholder or empty string.
 	apiKey := req.APIKey
@@ -57,7 +62,7 @@ func (h *Handlers) UpsertLLMConfig(c *gin.Context) {
 	}
 
 	cfg := &store.LLMConfig{
-		TenantID:        store.DefaultTenantID,
+		TenantID:        tenantID,
 		Provider:        provider,
 		APIKey:          apiKey,
 		BaseURL:         req.BaseURL,
@@ -77,7 +82,7 @@ func (h *Handlers) UpsertLLMConfig(c *gin.Context) {
 // DeleteLLMConfig removes a provider's configuration.
 func (h *Handlers) DeleteLLMConfig(c *gin.Context) {
 	provider := c.Param("provider")
-	ctx := store.WithTenantID(c.Request.Context(), store.DefaultTenantID)
+	ctx := c.Request.Context()
 	if err := h.store.DeleteLLMConfig(ctx, provider); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -97,7 +102,7 @@ func (h *Handlers) SetDefaultProvider(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	ctx := store.WithTenantID(c.Request.Context(), store.DefaultTenantID)
+	ctx := c.Request.Context()
 	if err := h.store.SetDefaultProvider(ctx, req.Provider); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -109,7 +114,7 @@ func (h *Handlers) SetDefaultProvider(c *gin.Context) {
 // TestLLMConnection sends a minimal completion request to verify the provider works.
 func (h *Handlers) TestLLMConnection(c *gin.Context) {
 	provider := c.Param("provider")
-	ctx := store.WithTenantID(c.Request.Context(), store.DefaultTenantID)
+	ctx := c.Request.Context()
 
 	cfg, err := h.store.GetLLMConfig(ctx, provider)
 	if err != nil {
@@ -162,4 +167,18 @@ func (h *Handlers) reloadLLMRegistry(ctx context.Context) {
 	}
 	h.llmRegistry.Reload(reg.Snapshot(), defaultName)
 	slog.Info("LLM registry reloaded", "default", defaultName)
+
+	// Also rebuild the AI generator if we now have a default provider.
+	if defaultName != "" {
+		slog.Info("Attempting to re-initialize AI generator", "provider", defaultName)
+		if prov, err := h.llmRegistry.Get(defaultName); err == nil {
+			h.generator = designer.NewGenerator(prov, h.mcpEntries, h.store)
+			slog.Info("AI workflow generator successfully re-initialized", "provider", defaultName)
+		} else {
+			slog.Warn("Failed to get provider from registry during reload", "provider", defaultName, "error", err)
+		}
+	} else {
+		h.generator = nil
+		slog.Info("AI workflow generator disabled (no default provider)")
+	}
 }
