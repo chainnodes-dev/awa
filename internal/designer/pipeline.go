@@ -85,7 +85,7 @@ func (g *Generator) DecomposeWorkflow(ctx context.Context, req PipelineRequest) 
 
 // ── Step 2: Categorise ───────────────────────────────────────────────────────
 
-// CategoriseNodes assigns the correct ASM node type to every state produced by
+// CategoriseNodes assigns the correct Phaxa node type to every state produced by
 // DecomposeWorkflow.  Placeholder implementations are injected for code/script
 // nodes so the YAML remains loadable throughout the pipeline.
 func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
@@ -306,7 +306,7 @@ func (g *Generator) runPipelineStep(ctx context.Context, req PipelineRequest, sy
 }
 
 // repairNodeStructures uses simple string/regex replacement to fix common AI YAML shortcuts
-// that violate the strict ASM schema.
+// that violate the strict Phaxa schema.
 func repairNodeStructures(y string) string {
 	y = sanitizeYAML(y)
 	lines := strings.Split(y, "\n")
@@ -466,7 +466,7 @@ func pipelineOutputFormat() string {
 
 Respond with ONLY the workflow YAML, wrapped in a ` + "```yaml" + ` code block.
 Do not include any explanation before or after the code block.
-The YAML must be complete and valid according to the ASM schema.
+The YAML must be complete and valid according to the Phaxa schema.
 `
 }
 

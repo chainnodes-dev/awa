@@ -1,4 +1,4 @@
--- ASM Platform - Users & Auth Schema
+-- Phaxa Platform - Users & Auth Schema
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (

@@ -1,4 +1,4 @@
-# ASM Platform — Implementation Plan
+# Phaxa — Implementation Plan
 
 > **Living document.** History through M12 is archived in `implementation-plan-archive.md`.
 > Last updated: 2026-04-18
@@ -47,14 +47,14 @@ The foundational Skill layer has been implemented. A **skill** is a higher-level
 
 | Component | Location | Status |
 |---|---|---|
-| `SkillDef`, `SkillPortDef`, `CapabilityDecl`, `SkillCallDef` types | `pkg/asmtypes/skill.go` | ✅ |
-| `skill_call` state type + `SkillCall *SkillCallDef` on `StateDef` | `pkg/asmtypes/workflow.go` | ✅ |
+| `SkillDef`, `SkillPortDef`, `CapabilityDecl`, `SkillCallDef` types | `pkg/phaxatypes/skill.go` | ✅ |
+| `skill_call` state type + `SkillCall *SkillCallDef` on `StateDef` | `pkg/phaxatypes/workflow.go` | ✅ |
 | Skill Analyser — description → optimised workflow (LLM) | `internal/designer/skill_analyser.go` | ✅ |
 | Skill Renderer — workflow YAML → description + inferred I/O (LLM) | `internal/designer/skill_renderer.go` | ✅ |
 | `POST /api/v1/designer/skill/analyse` | `internal/api/designer_handlers.go` | ✅ |
 | `POST /api/v1/designer/skill/render` | `internal/api/designer_handlers.go` | ✅ |
 | `LoadWorkflowDef` + `GetRunBlackboard` Temporal activities | `internal/temporal/activities.go` | ✅ |
-| `skill_call` branch in `ASMWorkflow` — child workflow via `ExecuteChildWorkflow` | `internal/temporal/workflow.go` | ✅ |
+| `skill_call` branch in `PhaxaWorkflow` — child workflow via `ExecuteChildWorkflow` | `internal/temporal/workflow.go` | ✅ |
 | `SkillPanel.vue` — CodeMirror description editor + fullscreen pop-out | `frontend/src/components/designer/SkillPanel.vue` | ✅ |
 | `SkillInputMappingEditor.vue` — port ↔ blackboard field mapping rows | `frontend/src/components/designer/SkillInputMappingEditor.vue` | ✅ |
 | `skill_call` node — violet style, star icon, config form in StatePanel | `frontend/src/components/designer/StatePanel.vue` | ✅ |
@@ -191,7 +191,7 @@ RegisterEventSubscription activity (idempotent ID = temporalID + "__" + stateNam
 
 **Tasks:**
 
-- [x] `StateEmitEvent` + `EmitEventDef` type in `pkg/asmtypes/workflow.go`
+- [x] `StateEmitEvent` + `EmitEventDef` type in `pkg/phaxatypes/workflow.go`
 - [x] `OnEvent` / `OnEventMatch` fields on `StateDef` for wait-on-event states
 - [x] `migrations/000010_event_subscriptions.up.sql` — `event_subscriptions` table with index on `(tenant_id, event_name)`
 - [x] `EventSubscription` struct + `EventSubscriptionStore` interface + Memory + Postgres implementations
@@ -222,12 +222,12 @@ states:
 
 ### S4.2 — External skill invocation API + API key auth ✅
 
-**Why:** A skill should be callable from outside the platform (e.g., a human-facing app, a webhook, another ASM tenant) without issuing a full user JWT.
+**Why:** A skill should be callable from outside the platform (e.g., a human-facing app, a webhook, another Phaxa tenant) without issuing a full user JWT.
 
-**API key format:** `asm_sk_` + base64url(32 random bytes). Only the SHA-256 hex hash is stored. The raw key is shown once at creation time.
+**API key format:** `phaxa_sk_` + base64url(32 random bytes). Only the SHA-256 hex hash is stored. The raw key is shown once at creation time.
 
 **Auth middleware — `RequireAuthOrAPIKey`:**
-- Checks `X-API-Key` header first, then `Authorization: Bearer asm_sk_...`
+- Checks `X-API-Key` header first, then `Authorization: Bearer phaxa_sk_...`
 - Falls back to standard JWT validation if no API key is present
 - Scopes the request context to the key's tenant via `store.WithTenantID`
 - Calls `TouchAPIKey` asynchronously (non-blocking `last_used_at` update)
@@ -288,7 +288,7 @@ When a `code` state fails (goja throws), surface the JS stack trace in the Monit
 |---|---|
 | Workflow is the single source of truth for skill logic | The skill description is a "projection" rendered from the workflow; editing the description triggers re-analysis (proposed changes), not auto-apply. Avoids two-source-of-truth conflicts. |
 | `SkillDef` and `WorkflowDef` are separate types | Workflow is the implementation; skill is the contract/abstraction. Keeps `workflow.go` focused on execution semantics. |
-| Child workflow output read via `GetRunBlackboard` activity | Instead of changing `ASMWorkflow`'s return signature (which would break Temporal replay determinism), the child's terminal blackboard is read from the store after `ExecuteChildWorkflow` resolves. Clean side-channel. |
+| Child workflow output read via `GetRunBlackboard` activity | Instead of changing `PhaxaWorkflow`'s return signature (which would break Temporal replay determinism), the child's terminal blackboard is read from the store after `ExecuteChildWorkflow` resolves. Clean side-channel. |
 | Analyser instructs LLM to prefer code/script nodes | The key quality lever: "minimise LLM usage — prefer code or script nodes wherever the logic is deterministic". Reduces latency and cost of generated workflows. |
 | Skill description uses CodeMirror text mode | Consistent editor UX with the code node (same pop-out, same dark theme, same keyboard shortcuts). `language="text"` disables JS syntax, enables word-wrap. |
 | AI tab replaced by Skill tab | The Skill panel is a superset — it covers both the AI generation use case (describe → generate) and the reverse (render description from existing workflow). No need for a separate AI chat panel. |

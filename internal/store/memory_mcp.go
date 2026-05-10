@@ -63,8 +63,12 @@ func (s *MemoryStore) UpdateMCPServer(_ context.Context, srv *MCPServer) error {
 	if !ok {
 		return fmt.Errorf("MCP server %q not found", srv.ID)
 	}
+	existing.Name = srv.Name
+	existing.Transport = srv.Transport
 	existing.URL = srv.URL
-	existing.EnvVar = srv.EnvVar
+	existing.Command = srv.Command
+	existing.Args = srv.Args
+	existing.EnvVars = srv.EnvVars
 	existing.Description = srv.Description
 	return nil
 }

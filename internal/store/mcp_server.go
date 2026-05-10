@@ -23,12 +23,10 @@ type MCPServer struct {
 	Command string `json:"command,omitempty"`
 	// Args are the CLI arguments for the Command (used if Transport == "stdio").
 	Args []string `json:"args,omitempty"`
-	// EnvVar is an environment variable key.
-	EnvVar string `json:"env_var,omitempty"`
-	// EnvValue is the actual value for the environment variable.
-	// If set, this value will be used instead of looking up in the system environment.
-	EnvValue string `json:"env_value,omitempty"`
-	Description string    `json:"description"`
+	// EnvVars is a map of environment variable keys and values.
+	// These will be injected into the MCP server process on startup.
+	EnvVars     map[string]string `json:"env_vars,omitempty"`
+	Description string            `json:"description"`
 	CreatedBy   string    `json:"created_by,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 }

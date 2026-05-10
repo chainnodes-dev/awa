@@ -1,4 +1,4 @@
-# Deploying ASM Platform on a MacBook
+# Deploying Phaxa on a MacBook
 
 ## Prerequisites (one-time)
 
@@ -14,8 +14,8 @@ That's the only prerequisite. No Go, no Node, no Temporal — Docker handles eve
 
 **2. Clone the repo**
 ```bash
-git clone https://github.com/bauhaus28/asm-platform
-cd asm-platform
+git clone https://github.com/bauhaus28/phaxa-platform
+cd phaxa-platform
 ```
 
 **3. Create the config file**

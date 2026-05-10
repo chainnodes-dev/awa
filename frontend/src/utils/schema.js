@@ -1,20 +1,20 @@
 /**
- * Converts an ASM Blackboard Schema (map of FieldDefs) to a standard JSON Schema (v7).
+ * Converts an Phaxa Blackboard Schema (map of FieldDefs) to a standard JSON Schema (v7).
  * This allows the JsonSchemaForm component to render structured inputs for the blackboard.
  * 
- * @param {Object} asmSchema - The blackboard schema from the workflow definition.
+ * @param {Object} phaxaSchema - The blackboard schema from the workflow definition.
  * @returns {Object|null} A standard JSON Schema object, or null if no schema is provided.
  */
-export function convertAsmSchemaToJsonSchema(asmSchema, onlyRequired = false) {
-  if (!asmSchema || Object.keys(asmSchema).length === 0) return null
+export function convertPhaxaSchemaToJsonSchema(phaxaSchema, onlyRequired = false) {
+  if (!phaxaSchema || Object.keys(phaxaSchema).length === 0) return null
 
   const properties = {}
   const required = []
 
-  for (const [key, field] of Object.entries(asmSchema)) {
+  for (const [key, field] of Object.entries(phaxaSchema)) {
     if (onlyRequired && !field.required) continue
 
-    // Basic mapping of ASM types to JSON Schema types
+    // Basic mapping of Phaxa types to JSON Schema types
     let type = field.type || 'string'
     if (type === 'bool') type = 'boolean'
 

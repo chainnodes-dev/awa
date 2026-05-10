@@ -1,15 +1,17 @@
 <template>
   <aside class="w-14 flex flex-col items-center py-4 gap-1 border-r border-border bg-surface-1 shrink-0">
     <!-- Logo / Home -->
-    <RouterLink to="/dashboard" :title="entStore.branding?.name || 'Home'" class="mb-6 w-9 h-9 rounded-lg bg-accent flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden">
-      <img v-if="entStore.branding?.logo_url" :src="entStore.branding.logo_url" class="w-full h-full object-cover" />
-      <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="3" r="2" fill="white"/>
-        <circle cx="3" cy="13" r="2" fill="white"/>
-        <circle cx="13" cy="13" r="2" fill="white"/>
-        <line x1="8" y1="5" x2="3" y2="11" stroke="white" stroke-width="1.5"/>
-        <line x1="8" y1="5" x2="13" y2="11" stroke="white" stroke-width="1.5"/>
-      </svg>
+    <RouterLink to="/dashboard" :title="entStore.branding?.name || 'Home'" class="mb-8 w-10 h-10 flex items-center justify-center shrink-0 cursor-pointer hover:scale-105 transition-transform overflow-hidden">
+      <img v-if="entStore.branding?.logo_url" :src="entStore.branding.logo_url" class="w-full h-full object-contain" />
+      <div v-else class="w-9 h-9 rounded-lg bg-accent flex items-center justify-center">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="3" r="2" fill="white"/>
+          <circle cx="3" cy="13" r="2" fill="white"/>
+          <circle cx="13" cy="13" r="2" fill="white"/>
+          <line x1="8" y1="5" x2="3" y2="11" stroke="white" stroke-width="1.5"/>
+          <line x1="8" y1="5" x2="13" y2="11" stroke="white" stroke-width="1.5"/>
+        </svg>
+      </div>
     </RouterLink>
 
     <NavItem to="/dashboard" title="Dashboard">

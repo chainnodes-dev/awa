@@ -2,9 +2,10 @@
   <div class="min-h-screen flex items-center justify-center bg-surface-0">
     <div class="w-full max-w-sm bg-surface-1 rounded-xl shadow-lg p-8 space-y-6">
       <!-- Logo / title -->
-      <div class="text-center space-y-1">
-        <h1 class="text-2xl font-bold text-text">Phaxa</h1>
-        <p class="text-sm text-text-muted">Agentic Logic & Orchestration</p>
+      <div class="text-center space-y-2">
+        <img src="/logo.svg" class="w-12 h-12 mx-auto mb-2 object-contain" />
+        <h1 class="text-2xl font-bold text-text uppercase tracking-widest">Phaxa</h1>
+        <p class="text-[10px] text-text-muted uppercase tracking-[0.2em] opacity-60">Logic & Orchestration</p>
       </div>
 
       <!-- Form -->

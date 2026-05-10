@@ -54,7 +54,7 @@ func Load() *Config {
 		RedisURL:          getEnv("REDIS_URL", "redis://localhost:6379"),
 		TemporalAddress:   getEnv("TEMPORAL_ADDRESS", "localhost:7233"),
 		TemporalNamespace: getEnv("TEMPORAL_NAMESPACE", "default"),
-		TemporalTaskQueue: getEnv("TEMPORAL_TASK_QUEUE", "asm-workers"),
+		TemporalTaskQueue: getEnv("TEMPORAL_TASK_QUEUE", "phaxa-workers"),
 		LLMProvider:       getEnv("LLM_PROVIDER", ""),
 		AnthropicKey:      getEnv("ANTHROPIC_API_KEY", ""),
 		OpenAIKey:         getEnv("OPENAI_API_KEY", ""),
@@ -70,7 +70,7 @@ func Load() *Config {
 		LogLevel:          getEnv("LOG_LEVEL", "info"),
 		LicensePublicKey:  getEnv("LICENSE_PUBLIC_KEY", ""),
 		LicensePrivateKey: getEnv("LICENSE_PRIVATE_KEY", ""),
-		AllowStdioMCP:     getEnv("ASM_ALLOW_STDIO_MCP", "false") == "true",
+		AllowStdioMCP:     getEnv("PHAXA_ALLOW_STDIO_MCP", "false") == "true",
 	}
 }
 

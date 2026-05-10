@@ -1,54 +1,73 @@
 # MCP Server Registry
 # Maps logical server names to environment variable keys and descriptions.
-# Referenced in workflow YAML as: config.mcp_servers: "{{ env.MY_MCP_URL }}"
 #
 # To add a new server:
 #   1. Add an entry here with a unique name, the env var key, and a description.
 #   2. Set the env var in your .env file or deployment config.
-#   3. Reference the server in your agent config by logical name (for the AI generator)
-#      or directly as {{ env.ENV_VAR_KEY }} in your YAML.
 
 mcp_servers:
-  - name: invoice-parser
-    env_var: MCP_INVOICE_PARSER_URL
-    description: "Parses PDF and email-based invoices. Extracts structured fields: vendor, amount, currency, line items, due date."
+  # ── Search & Knowledge ──────────────────────────────────────────────
+  - name: brave-search
+    env_var: BRAVE_API_KEY
+    description: "Real-time web search. Tools: search(query)."
 
-  - name: erp-writer
-    env_var: MCP_ERP_WRITER_URL
-    description: "Writes approved invoices to ERP systems (SAP, NetSuite). Requires: vendor_id, amount, currency, line_items."
+  - name: wikipedia
+    description: "Search and retrieve Wikipedia articles. Tools: search_wikipedia(query), get_article(title)."
 
-  - name: email-sender
-    env_var: MCP_EMAIL_SENDER_URL
-    description: "Sends transactional emails. Tools: send_email(to, subject, body), send_template(template_id, recipient, vars)."
+  # ── Productivity ────────────────────────────────────────────────────
+  - name: google-sheets
+    description: "Manage Google Sheets. Tools: read_spreadsheet(id), update_cell(id, range, value)."
 
-  - name: document-store
-    env_var: MCP_DOCUMENT_STORE_URL
-    description: "Stores and retrieves documents. Tools: upload_document, get_document, list_documents, delete_document."
+  - name: google-drive
+    description: "Access Google Drive files. Tools: list_files(), download_file(id)."
 
-  - name: web-search
-    env_var: MCP_WEB_SEARCH_URL
-    description: "Performs web searches and fetches web pages. Tools: search(query), fetch_url(url)."
+  - name: google-calendar
+    description: "Manage calendar events. Tools: list_events(), create_event(data)."
 
-  - name: code-executor
-    env_var: MCP_CODE_EXECUTOR_URL
-    description: "Executes sandboxed code snippets (Python, JavaScript). Tools: run_python(code), run_js(code)."
+  - name: microsoft-graph
+    description: "Access M365 (Outlook/Teams/OneDrive). Tools: list_messages(), send_teams_message()."
 
-  - name: data-validator
-    env_var: MCP_DATA_VALIDATOR_URL
-    description: "Validates data against JSON schemas, business rules, and regulatory requirements."
+  # ── Infrastructure ──────────────────────────────────────────────────
+  - name: aws-s3
+    description: "Manage Amazon S3 buckets. Tools: list_buckets(), upload_object(bucket, key, body)."
 
-  - name: notification-hub
-    env_var: MCP_NOTIFICATION_HUB_URL
-    description: "Sends multi-channel notifications (Slack, email, SMS, webhooks). Tools: notify(channel, message, recipients)."
+  - name: github
+    env_var: GITHUB_PERSONAL_ACCESS_TOKEN
+    description: "Automate GitHub tasks. Tools: create_issue(repo, title), list_pull_requests(repo)."
 
+  # ── Databases ──────────────────────────────────────────────────────
+  - name: postgres
+    env_var: DATABASE_URL
+    description: "Query PostgreSQL databases. Tools: query(sql), list_tables()."
+
+  - name: mysql
+    description: "Query MySQL/MariaDB databases. Tools: query(sql), describe_table(name)."
+
+  # ── Communication ──────────────────────────────────────────────────
+  - name: slack
+    env_var: SLACK_BOT_TOKEN
+    description: "Interact with Slack. Tools: post_message(channel, text), list_channels()."
+
+  - name: send-mail
+    env_var: RESEND_API_KEY
+    description: "Sends transactional emails via Resend. Tools: send_email(to, subject, html_body)."
+
+  # ── Utilities ──────────────────────────────────────────────────────
+  - name: fetch
+    description: "Fetches and cleans web content for LLMs. Tools: fetch(url)."
+
+  - name: filesystem
+    description: "Access local files (restricted to ./data). Tools: read_file(path), write_file(path, content)."
+
+  # ── Business & Data ────────────────────────────────────────────────
   - name: gleif
     env_var: MCP_GLEIF_URL
-    description: "Provides public data lookups for Legal Entity Identifiers using GLEIF. Tools: gleif_search(query)."
+    description: "Verified legal entity lookups. Tools: gleif_search(query)."
 
   - name: exchange-rates
     env_var: MCP_EXCHANGE_URL
-    description: "Provides current exchange rates and currency conversion using Frankfurter (ECB rates). Tools: get_exchange_rate(amount, from, to)."
+    description: "Currency conversion via Frankfurter. Tools: get_exchange_rate(amount, from, to)."
 
   - name: openfigi
     env_var: MCP_OPENFIGI_URL
-    description: "Provides Financial Instrument Global Identifier (FIGI) lookups from stock tickers using OpenFIGI. Tools: figi_lookup(ticker)."
+    description: "Financial instrument lookups. Tools: figi_lookup(ticker)."

@@ -42,6 +42,9 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 	// Seed LLM configs from env vars if not present.
 	go seedLLMConfigs(cfg, s)
 
+	// Seed core MCP servers.
+	go seedMCPServers(s)
+
 	hub := NewHub(bus)
 	hub.Start(context.Background())
 
@@ -81,7 +84,7 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 		}
 	}
 
-	mcpMgr := mcp.NewManager(s)
+	mcpMgr := mcp.NewManager(s, cfg.AllowStdioMCP)
 	allowStdio := cfg.AllowStdioMCP // Assume this exists in config
 	handlers := NewHandlers(engine, s, jwtSvc, gen, sched, llmReg, verifier, signer, mcpMgr, allowStdio)
 

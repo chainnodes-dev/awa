@@ -203,7 +203,7 @@ func main() {
 				srv := &store.MCPServer{
 					TenantID:    store.DefaultTenantID,
 					Name:        e.Name,
-					EnvVar:      e.EnvVar,
+					EnvVars:     map[string]string{e.EnvVar: ""},
 					Description: e.Description,
 					CreatedBy:   "seed",
 				}

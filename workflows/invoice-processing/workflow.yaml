@@ -1,4 +1,4 @@
-apiVersion: asm/v1
+apiVersion: phaxa/v1
 kind: Workflow
 
 metadata:

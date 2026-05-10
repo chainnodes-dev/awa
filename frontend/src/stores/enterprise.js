@@ -5,7 +5,7 @@ import { api } from './auth'
 export const useEnterpriseStore = defineStore('enterprise', () => {
   const status = ref(null)
   const loading = ref(false)
-  const branding = ref({ name: 'ASM Platform', logo_url: '' })
+  const branding = ref({ name: 'Phaxa', logo_url: '/logo.svg' })
   const secrets = ref({})
   const auditLogs = ref([])
   const analytics = ref({})

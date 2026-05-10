@@ -1,6 +1,6 @@
-# Running the ASM Platform
+# Running Phaxa
 
-This guide describes how to start and operate the ASM platform in different environments.
+This guide describes how to start and operate the Phaxa platform in different environments.
 
 ## Prerequisites
 
@@ -35,7 +35,7 @@ The orchestrator can run in two modes controlled by `EXECUTOR_MODE`:
 
 ## 1. Development Mode (Manual Startup)
 
-This mode is recommended for active development. You start the storage and orchestration dependencies in Docker, but run the ASM services manually for faster feedback loops and easier debugging.
+This mode is recommended for active development. You start the storage and orchestration dependencies in Docker, but run the Phaxa services manually for faster feedback loops and easier debugging.
 
 ### Step 1: Start 3rd-Party Infrastructure
 Start Postgres, Redis, and Temporal:
@@ -97,6 +97,25 @@ This will:
 
 ---
 
+## 3. Production Mode (Pre-built Images)
+
+For stable deployments or shared environments where you don't want to build from source, use the **Production Stack**. This pulls pre-built, versioned images directly from the GitHub Container Registry (GHCR).
+
+### Start Production Stack
+```bash
+docker compose -f docker-compose.prod.yaml up -d
+```
+
+### Advantages
+- **Faster Startup**: No local compilation or `npm build` required.
+- **Consistency**: Uses exact binary versions released via GitHub tags.
+- **Clean Environment**: No Go or Node.js toolchains needed on the host machine.
+
+> [!NOTE]
+> Production images are automatically published to `ghcr.io` whenever a new version tag (e.g. `v1.0.0`) is pushed to the repository.
+
+---
+
 ## Verification & Troubleshooting
 
 ### Database Troubleshooting
@@ -112,3 +131,33 @@ If the worker cannot connect to Temporal, ensure `TEMPORAL_ADDRESS` in `.env` is
 ### Tooling
 - **Makefile**: Reference the `Makefile` in the root for a full list of helper targets.
 - **Docker Desktop**: Use the dashboard to monitor service health and resource usage.
+
+---
+
+## Uninstall & Cleanup
+
+To completely remove Phaxa and its associated data (Postgres, Redis, Temporal) from your machine, follow these steps.
+
+### 1. Stop and Remove Containers
+Stop all Phaxa services and dependencies:
+```bash
+docker compose down
+```
+
+### 2. Wipe Persistent Data (DANGER)
+If you want to delete all your workflows, users, and execution history, remove the Docker volumes:
+```bash
+docker compose down -v
+```
+
+### 3. Cleanup Docker Images
+To free up disk space by removing the Phaxa images:
+```bash
+docker rmi $(docker images 'phaxa/*' -q)
+```
+
+### 4. Remove Configuration
+Optionally delete your local environment configuration:
+```bash
+rm .env
+```

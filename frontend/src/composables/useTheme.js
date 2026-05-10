@@ -1,11 +1,11 @@
 import { ref, watchEffect } from 'vue'
 
 export function useTheme() {
-  const theme = ref(localStorage.getItem('asm-theme') || 'system')
+  const theme = ref(localStorage.getItem('phaxa-theme') || 'system')
 
   function setTheme(val) {
     theme.value = val
-    localStorage.setItem('asm-theme', val)
+    localStorage.setItem('phaxa-theme', val)
   }
 
   watchEffect(() => {

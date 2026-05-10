@@ -203,12 +203,12 @@ func (g *Generator) extractAndValidate(content string) (string, *asmtypes.Workfl
 func (g *Generator) buildSystemPrompt(requestedServers []string) string {
 	var sb strings.Builder
 
-	sb.WriteString(g.prompts.Get(PromptIDBase, `You are an expert workflow designer for the ASM (Agentic State Machine) platform.
-Produce a valid ASM workflow YAML based on the user's description.
+	sb.WriteString(g.prompts.Get(PromptIDBase, `You are an expert workflow designer for the Phaxa (Phaxa) platform.
+Produce a valid Phaxa workflow YAML based on the user's description.
 
 ## YAML Schema & Node Types
 `+"```yaml"+`
-apiVersion: asm/v1
+apiVersion: phaxa/v1
 kind: Workflow
 metadata:
   name: kebab-case-unique-name

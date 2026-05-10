@@ -1,4 +1,4 @@
-# ASM Platform — Implementation Plan
+# Phaxa — Implementation Plan
 
 > **Living document.** Update status, notes, and decisions as the project evolves.
 > Last updated: 2026-04-11 (Bug fix — initial state auto-advance)
@@ -48,7 +48,7 @@
 
 ### Completed
 - [x] Project scaffold — Go module, directory structure
-- [x] `pkg/asmtypes` — WorkflowDef, WorkflowRun, Blackboard schema, runtime types
+- [x] `pkg/phaxatypes` — WorkflowDef, WorkflowRun, Blackboard schema, runtime types
 - [x] YAML workflow loader with env var expansion and validation
 - [x] MemoryStore — full Store interface implementation for development
 - [x] PostgresStore — full Store interface backed by pgx/v5
@@ -73,7 +73,7 @@
 - [x] Temporal Go SDK added (`go.temporal.io/sdk v1.41.1`)
 - [x] `internal/temporal/params.go` — shared signal/param types
 - [x] `internal/temporal/activities.go` — UpdateRun, RecordTransition, PublishEvent, CreateHITL, ExecuteAgent
-- [x] `internal/temporal/workflow.go` — ASMWorkflow: full state machine loop as durable Temporal workflow
+- [x] `internal/temporal/workflow.go` — PhaxaWorkflow: full state machine loop as durable Temporal workflow
 - [x] `internal/temporal/client.go` — EngineClient wrapping Temporal SDK
 - [x] `internal/temporal/worker.go` — worker registration helper
 - [x] `cmd/worker/main.go` — worker binary entry point
@@ -83,10 +83,10 @@
 - [x] Server — Temporal client wired when EXECUTOR_MODE=temporal
 
 ### Architecture decisions made
-- Temporal workflow = full ASM run (not per-activity) — runs survive server restarts between states
+- Temporal workflow = full Phaxa run (not per-activity) — runs survive server restarts between states
 - WorkflowDef passed as workflow parameter (not loaded inside workflow) — avoids non-determinism on replay
 - TemporalEngineClient interface defined in orchestrator package — avoids import cycle with temporal package
-- One task queue by default (`asm-workers`) — multi-queue support planned in M4
+- One task queue by default (`phaxa-workers`) — multi-queue support planned in M4
 
 ---
 
@@ -133,8 +133,8 @@ Make LLM agents genuinely useful: they can call tools during reasoning, not just
 Allow different states to be processed by different worker pools, enabling specialist workers alongside LLM agents.
 
 ### Completed
-- [x] **`AgentDef.TaskQueue` field** — added to `pkg/asmtypes/workflow.go`; YAML key `task_queue`, defaults to empty (= global queue)
-- [x] **Per-agent queue routing in `ASMWorkflow`** — `agentOptsFor()` closure builds `workflow.ActivityOptions` with the correct `TaskQueue`; LLM worker's default `agentOpts` used when `TaskQueue` is empty; fully backward compatible
+- [x] **`AgentDef.TaskQueue` field** — added to `pkg/phaxatypes/workflow.go`; YAML key `task_queue`, defaults to empty (= global queue)
+- [x] **Per-agent queue routing in `PhaxaWorkflow`** — `agentOptsFor()` closure builds `workflow.ActivityOptions` with the correct `TaskQueue`; LLM worker's default `agentOpts` used when `TaskQueue` is empty; fully backward compatible
 - [x] **`internal/specialist` SDK** — `specialist.New(taskQueue)`, `Register(agentName, HandlerFunc)`, `Build(client.Client) worker.Worker`
 - [x] **`HandlerFunc` type** — `func(ctx context.Context, bb map[string]interface{}) (*asmtypes.AgentOutput, error)` — identical output contract to LLM agents
 - [x] **`ExecuteAgent` activity name alignment** — specialist worker uses `activity.RegisterOptions{Name: "ExecuteAgent"}` so Temporal routes correctly by (task queue, activity name)
@@ -155,7 +155,7 @@ Allow different states to be processed by different worker pools, enabling speci
 ```yaml
 agents:
   - name: invoice-validator
-    task_queue: validate-workers   # omit → routes to LLM worker on asm-workers
+    task_queue: validate-workers   # omit → routes to LLM worker on phaxa-workers
     # model not needed — handler is Go code
 
   - name: enrichment-agent
@@ -242,7 +242,7 @@ Every B2B SaaS customer is a tenant. Without this, all customers share the same 
 
 #### 5.2.1 Data model
 - [x] **`migrations/003_tenants.sql`** — `tenants` table (UUID PK, name, slug UNIQUE, created_at); `tenant_id` FK added to `workflow_definitions`, `workflow_runs`, `users`; per-tenant UNIQUE constraints on `(tenant_id, name, version)` and `(tenant_id, username)`; `super_admin` added to role CHECK constraint; default tenant seeded at `00000000-0000-0000-0000-000000000001`
-- [x] **`pkg/asmtypes/runtime.go`** — `TenantID string` added as first field of `WorkflowRun`
+- [x] **`pkg/phaxatypes/runtime.go`** — `TenantID string` added as first field of `WorkflowRun`
 - [x] **`internal/store/user.go`** — `Tenant` struct (ID, Name, Slug, CreatedAt); `TenantID` field on `User`; `TenantStore` interface (CreateTenant, GetTenant, GetTenantBySlug, ListTenants, DeleteTenant, HasAnyTenant)
 
 #### 5.2.2 Context propagation
@@ -407,7 +407,7 @@ Make the platform smarter: let an LLM draft entire workflows from plain-language
 ### M8.1 — Per-State Prompts ✅
 
 #### Completed
-- [x] **`StateDef.Instructions string`** — new optional field in `pkg/asmtypes/workflow.go`; holds a short plain-language description of what should happen in this state; shown in the designer panel and injected into the LLM system prompt
+- [x] **`StateDef.Instructions string`** — new optional field in `pkg/phaxatypes/workflow.go`; holds a short plain-language description of what should happen in this state; shown in the designer panel and injected into the LLM system prompt
 - [x] **`AgentDef.Config["prompt"]` wired** — `buildSystemPrompt()` in `internal/executor/executor.go` now checks `agent.Config["prompt"]` as a fallback when `PromptTemplate` is not set; enables inline prompts defined directly in the workflow YAML without requiring a file on disk
 - [x] **`{{.Instructions}}` in system prompt template** — state-level instructions are injected between the rules section and the final JSON format spec; the LLM knows the purpose of the current state even when using a generic shared agent
 - [x] **Designer StatePanel "Instructions" field** — textarea at the top of the state panel (above agent config); round-trips correctly through `loadDefinition` / `buildDefinition`
@@ -429,7 +429,7 @@ Make the platform smarter: let an LLM draft entire workflows from plain-language
 ### M8.4 — Script State Type ✅
 
 #### Completed
-- [x] **`StateType = "script"`** — new type constant in `pkg/asmtypes/workflow.go`
+- [x] **`StateType = "script"`** — new type constant in `pkg/phaxatypes/workflow.go`
 - [x] **`ScriptDef` struct** — `Trigger string` (expr-lang expression that evaluates to a trigger name) and `Updates map[string]string` (blackboard field → expr-lang expression); attached as `Script *ScriptDef` on `StateDef`
 - [x] **Engine: script state execution** — when `state.Type == "script"`, the engine evaluates the `ScriptDef` expressions using the same `expr-lang` evaluator already used for guards; no LLM call; output is an `AgentOutput` with computed `Trigger` and `BlackboardUpdates`
 - [x] **Designer: script state editor** — when type is set to `"script"`, the agent section is replaced with a script editor showing Trigger Expression and a key-value editor for Updates; syntax-highlighted via monospace font
@@ -529,7 +529,7 @@ Make LLM provider selection observable and manageable without touching env vars 
 - [x] **`frontend/src/components/shared/Sidebar.vue`** — gear icon NavItem linking to `/settings`
 
 #### 11.8 HITL fixes
-- [x] **Temporal trigger mismatch** — `ASMWorkflow` was mapping resolutions to `"human_approved"`/`"human_rejected"` but workflow YAML only declared `"approved"`/`"rejected"` transitions. Fixed: `trigger = sig.Resolution` (the resolution value IS the trigger, mirroring direct mode)
+- [x] **Temporal trigger mismatch** — `PhaxaWorkflow` was mapping resolutions to `"human_approved"`/`"human_rejected"` but workflow YAML only declared `"approved"`/`"rejected"` transitions. Fixed: `trigger = sig.Resolution` (the resolution value IS the trigger, mirroring direct mode)
 - [x] **`temporal_workflow_id` never persisted** — `UpdateRun` SQL did not include `temporal_workflow_id`; `GetRun` returned `""` so `SignalHITL` rejected with "run has no temporal workflow ID". Fixed: `UpdateRun` now includes `COALESCE(NULLIF($8,''), temporal_workflow_id)` — persists the ID on first call, preserves it on subsequent updates
 - [x] **HITL controls not auto-appearing** — `hitl.waiting` WebSocket event did not update `activeRun.status`. Fixed in `execution.js`: `hitl.waiting` patches `status = 'waiting'`; `hitl.resolved` patches `status = 'running'` and removes from `pendingHITL`
 - [x] **HITL errors silently swallowed** — `resolve()` in Monitor.vue had no try/catch. Fixed: errors displayed in an orange banner; `loadRun()` called on failure to restore correct state
@@ -550,7 +550,7 @@ Enhance the workflow engine with advanced orchestration primitives: parallel exe
 
 ### Completed
 - [x] **Mandatory Temporal** — `cmd/server/main.go` now enforces a successful Temporal connection at startup; `direct` mode paths removed from the engine to ensure guaranteed durability for all users.
-- [x] **`wait` State Type** — added to `pkg/asmtypes` and implemented in `internal/temporal/workflow.go`. Supports joins, conditional pauses via expr-lang, and timed waits.
+- [x] **`wait` State Type** — added to `pkg/phaxatypes` and implemented in `internal/temporal/workflow.go`. Supports joins, conditional pauses via expr-lang, and timed waits.
 - [x] **Parallel Execution (`to_nodes`)** — `Transition` struct expanded to support multiple target nodes; Temporal workflow automatically spawns parallel goroutines for each branch.
 - [x] **`EvalScript` and `EvalGuard` exported** — deterministic evaluators made available to the Temporal workflow package for inline execution.
 - [x] **Designer support** — UI updated to support `wait` node configuration and visualising parallel transitions.

@@ -1,4 +1,4 @@
-# ASM Platform
+# Phaxa
 
 **Agentic State Machine** — a workflow orchestration platform for building AI-powered business processes.
 
@@ -30,8 +30,8 @@ For detailed instructions on configuration and startup modes, see the **[Running
 The fastest way to experience the platform is using Docker Compose:
 
 ```bash
-git clone https://github.com/bauhaus28/asm-platform
-cd asm-platform
+git clone https://github.com/bauhaus28/phaxa-platform
+cd phaxa-platform
 cp .env.example .env
 # Edit .env and set your LLM API keys
 make stack
@@ -39,9 +39,15 @@ make stack
 
 Open **[http://localhost](http://localhost)** to access the platform.
 
+### Production Deployment
+For stable releases using pre-built images from the registry:
+```bash
+docker compose -f docker-compose.prod.yaml up -d
+```
+
 | URL | What |
 |---|---|
-| http://localhost | ASM frontend |
+| http://localhost | Phaxa frontend |
 | http://localhost:8088 | Temporal UI |
 
 > First startup takes ~60 seconds while Temporal initialises against Postgres.
@@ -50,7 +56,7 @@ Open **[http://localhost](http://localhost)** to access the platform.
 ---
 
 ### Quick Start (Manual Dev)
-To start infrastructure dependencies (Postgres, Redis, Temporal) in Docker while running the ASM services manually for development:
+To start infrastructure dependencies (Postgres, Redis, Temporal) in Docker while running the Phaxa services manually for development:
 
 ```bash
 make infra
@@ -66,7 +72,7 @@ make frontend  # Vite Dev    →  :5173
 Workflows are YAML manifests. Example:
 
 ```yaml
-apiVersion: asm/v1
+apiVersion: phaxa/v1
 kind: Workflow
 metadata:
   name: invoice-approval
@@ -171,7 +177,7 @@ Browser
   │  REST /api/v1
   ▼
 ┌─────────────────────────────┐
-│         Go API Server        │
+│         Phaxa API Server     │
 │  - Workflow CRUD             │
 │  - Run lifecycle             │
 │  - HITL signals              │
@@ -187,7 +193,7 @@ Browser
              ▼
 ┌─────────────────────────────┐
 │       Temporal Worker        │
-│  - ASMWorkflow               │
+│  - PhaxaWorkflow               │
 │  - ExecuteAgent activity     │
 │  - ExecuteCode activity      │
 │  - ExecuteScript activity    │

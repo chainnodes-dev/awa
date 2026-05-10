@@ -441,7 +441,7 @@ func parseAgentOutput(content string) (*asmtypes.AgentOutput, error) {
 const agentSystemPrompt = `{{if .SystemPrompt}}
 {{.SystemPrompt}}
 {{else}}
-You are an autonomous agent in an Agentic State Machine (ASM) platform.
+You are an autonomous agent in an Phaxa (ASM) platform.
 {{end}}
 
 Your current role: {{.AgentName}}

@@ -41,62 +41,71 @@
 
       <!-- Server cards -->
       <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="srv in servers" :key="srv.id || srv.name" class="card p-5 space-y-3">
+        <div v-for="srv in servers" :key="srv.id || srv.name" class="card p-5 space-y-3 relative overflow-hidden group">
+          <!-- Background decoration -->
+          <div class="absolute -right-4 -top-4 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
+            <svg width="120" height="120" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="20" height="20" rx="2"/></svg>
+          </div>
+
           <!-- Header row -->
-          <div class="flex items-start gap-3">
-            <!-- Status indicator -->
+          <div class="flex items-start gap-3 relative z-10">
             <div class="mt-0.5 shrink-0" :title="statusTitle(srv)">
-              <div v-if="healthStatus[srv.id] === undefined" class="w-2.5 h-2.5 rounded-full bg-slate-600 ring-2 ring-slate-600/30" title="Not checked"/>
+              <div v-if="healthStatus[srv.id] === undefined" class="w-2.5 h-2.5 rounded-full bg-slate-600 ring-2 ring-slate-600/30"/>
               <div v-else-if="healthStatus[srv.id] === 'checking'" class="w-2.5 h-2.5 rounded-full bg-blue-400 ring-2 ring-blue-400/30 animate-pulse"/>
-              <div v-else-if="healthStatus[srv.id] === 'online'" class="w-2.5 h-2.5 rounded-full bg-green-400 ring-2 ring-green-400/30"/>
+              <div v-else-if="healthStatus[srv.id] === 'online'" class="w-2.5 h-2.5 rounded-full bg-green-400 ring-2 ring-green-400/30 shadow-[0_0_8px_rgba(74,222,128,0.4)]"/>
               <div v-else-if="healthStatus[srv.id] === 'offline'" class="w-2.5 h-2.5 rounded-full bg-red-400 ring-2 ring-red-400/30"/>
               <div v-else class="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-400/30"/>
             </div>
 
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-0.5">
-                <span class="font-mono text-sm font-medium text-indigo-400">{{ srv.name }}</span>
-                <span v-if="healthLatency[srv.id]" class="text-[10px] text-text-muted">{{ healthLatency[srv.id] }}ms</span>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-display text-sm font-bold text-white tracking-tight uppercase">{{ srv.name }}</span>
+                <span v-if="healthLatency[srv.id]" class="text-[10px] font-mono text-green-400/70">{{ healthLatency[srv.id] }}ms</span>
               </div>
-              <p class="text-xs text-text-muted leading-relaxed">{{ srv.description || 'No capabilities discovered yet' }}</p>
+              <p class="text-xs text-gray-400 leading-relaxed line-clamp-2">{{ srv.description || 'No capabilities discovered yet' }}</p>
             </div>
 
             <!-- Actions -->
             <div class="flex gap-1 shrink-0">
-              <button @click="pingServer(srv)" :disabled="healthStatus[srv.id] === 'checking'" class="btn-ghost text-xs py-1 px-2" title="Check availability">
+              <button @click="pingServer(srv)" :disabled="healthStatus[srv.id] === 'checking'" class="btn-ghost p-1.5" title="Check availability">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                 </svg>
               </button>
               <template v-if="isAdmin">
-                <button @click="openModal(srv)" class="btn-ghost text-xs py-1 px-2">Edit</button>
-                <button @click="confirmDelete(srv)" class="btn-danger text-xs py-1 px-2">Delete</button>
+                <button @click="openModal(srv)" class="btn-ghost p-1.5 text-indigo-400 hover:text-indigo-300">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button @click="confirmDelete(srv)" class="btn-ghost p-1.5 text-red-400 hover:text-red-300">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
               </template>
             </div>
           </div>
 
           <!-- Connection details -->
-          <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-            <div v-if="srv.transport === 'stdio'" class="flex items-center gap-1.5 text-text-muted">
-              <span class="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 text-[9px] uppercase font-bold tracking-wider">Local</span>
-              <span class="font-mono">{{ srv.command }} {{ srv.args?.join(' ') }}</span>
+          <div class="flex flex-wrap gap-x-4 gap-y-2 pt-2 border-t border-white/5">
+            <div v-if="srv.transport === 'stdio'" class="flex items-center gap-1.5 text-[10px] text-gray-500">
+              <span class="px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-bold uppercase tracking-widest text-[8px]">Local</span>
+              <span class="font-mono text-gray-300">{{ srv.command }} {{ srv.args?.join(' ') }}</span>
             </div>
-            <div v-else-if="srv.url" class="flex items-center gap-1.5 text-text-muted">
-              <span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[9px] uppercase font-bold tracking-wider">Remote</span>
-              <span class="font-mono">{{ srv.url }}</span>
+            <div v-else-if="srv.url" class="flex items-center gap-1.5 text-[10px] text-gray-500">
+              <span class="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-bold uppercase tracking-widest text-[8px]">Remote</span>
+              <span class="font-mono text-gray-300">{{ srv.url }}</span>
             </div>
-            <div v-if="srv.env_var" class="flex items-center gap-1.5 text-text-muted">
-              <span class="text-text-muted uppercase text-[9px]">Env</span>
-              <span class="font-mono" v-text="'$' + srv.env_var"></span>
-            </div>
-            <div v-if="srv.created_by" class="flex items-center gap-1.5 text-text-muted ml-auto">
-              <span class="text-[9px] uppercase tracking-tighter opacity-50">By</span>
-              <span class="opacity-80">{{ srv.created_by }}</span>
+            
+            <!-- Env vars list -->
+            <div v-if="srv.env_vars && Object.keys(srv.env_vars).length" class="flex flex-wrap gap-1">
+              <div v-for="(v, k) in srv.env_vars" :key="k" class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
+                <span class="text-[8px] text-gray-500 font-mono tracking-tighter">{{ k }}</span>
+                <span class="w-1 h-1 rounded-full bg-indigo-500/50"/>
+                <span class="text-[8px] text-indigo-400 font-mono">{{ v ? '••••' : 'ENV' }}</span>
+              </div>
             </div>
           </div>
 
           <!-- Health error message -->
-          <div v-if="healthError[srv.id]" class="text-[11px] text-red-400/80 bg-red-500/5 rounded px-2.5 py-1.5 font-mono break-all">
+          <div v-if="healthError[srv.id]" class="mt-2 text-[10px] text-red-400 bg-red-500/5 rounded px-3 py-2 font-mono break-all border border-red-500/10">
             {{ healthError[srv.id] }}
           </div>
         </div>
@@ -136,17 +145,13 @@ async function fetchServers() {
 }
 
 async function pingServer(srv) {
-  if (!srv.id) {
-    healthStatus[srv.name] = 'unknown'
-    healthError[srv.name] = 'Server not in DB (static YAML entry) — cannot ping'
-    return
-  }
+  if (!srv.id) return
   healthStatus[srv.id] = 'checking'
   delete healthError[srv.id]
   delete healthLatency[srv.id]
   try {
     const { data } = await api.post('/mcp-servers/' + srv.id + '/ping')
-    healthStatus[srv.id]  = data.status  // 'online', 'offline', 'unknown', 'error'
+    healthStatus[srv.id]  = data.status
     healthLatency[srv.id] = data.latency_ms
     if (data.error) healthError[srv.id] = data.error
   } catch (e) {
@@ -172,7 +177,7 @@ function statusTitle(srv) {
 }
 
 function openModal(srv) {
-  modalServer.value = srv  // null → add, object → edit
+  modalServer.value = srv
 }
 
 async function confirmDelete(srv) {
@@ -199,7 +204,7 @@ onMounted(() => {
 </script>
 
 <script>
-import { defineComponent, h, ref } from 'vue'
+import { defineComponent, h, ref, reactive } from 'vue'
 import { api } from '@/stores/auth'
 
 // ── MCPServerModal ────────────────────────────────────────────────────────────
@@ -208,45 +213,54 @@ export const MCPServerModal = defineComponent({
   emits: ['close', 'saved'],
   setup(p, { emit }) {
     const isEdit = !!p.server?.id
+    
+    // Convert map to array for easier form management
+    const envList = ref([])
+    if (p.server?.env_vars) {
+      envList.value = Object.entries(p.server.env_vars).map(([key, val]) => ({ key, val }))
+    }
+    if (envList.value.length === 0) envList.value.push({ key: '', val: '' })
+
     const form = ref({
       name:        p.server?.name        ?? '',
-      transport:   p.server?.transport   ?? 'sse',
+      transport:   p.server?.transport   ?? 'stdio',
       url:         p.server?.url         ?? '',
       command:     p.server?.command     ?? '',
       args:        p.server?.args?.join(' ') ?? '',
-      env_var:     p.server?.env_var     ?? '',
-      env_value:   p.server?.env_value   ?? '',
       description: p.server?.description ?? '',
     })
-    const showSecret  = ref(false)
+
     const saving      = ref(false)
     const discovering = ref(false)
     const error       = ref('')
 
+    function addEnv() { envList.value.push({ key: '', val: '' }) }
+    function removeEnv(idx) { envList.value.splice(idx, 1) }
+
+    function getEnvMap() {
+      const m = {}
+      envList.value.forEach(e => { if (e.key) m[e.key] = e.val })
+      return m
+    }
+
     async function discover() {
       if (form.value.transport === 'sse' && !form.value.url) { 
-        error.value = 'Enter a URL first to discover tools'; return 
+        error.value = 'Enter a URL first'; return 
       }
       if (form.value.transport === 'stdio' && !form.value.command) {
-        error.value = 'Enter an executable command first to discover tools'; return
+        error.value = 'Enter an executable first'; return
       }
       
       discovering.value = true; error.value = ''
       try {
         const payload = {
-          transport: form.value.transport,
-          url: form.value.url,
-          command: form.value.command,
+          ...form.value,
           args: form.value.args.match(/(?:[^\s"]+|"[^"]*")+/g)?.map(s => s.replace(/^"|"$/g, '')) || [],
-          env_var: form.value.env_var,
-          env_value: form.value.env_value
+          env_vars: getEnvMap()
         }
         const { data } = await api.post('/mcp-servers/discover', payload)
-        if (data.error) {
-          error.value = data.error
-        } else {
-          form.value.description = data.description
-        }
+        if (data.error) error.value = data.error
+        else form.value.description = data.description
       } catch (e) {
         error.value = e.response?.data?.error ?? e.message
       } finally {
@@ -256,24 +270,16 @@ export const MCPServerModal = defineComponent({
 
     async function save() {
       if (!form.value.name) { error.value = 'Name is required'; return }
-      if (form.value.transport === 'sse' && !form.value.url && !form.value.env_var) { 
-        error.value = 'Provide either a URL or an env var key'; return 
-      }
-      if (form.value.transport === 'stdio' && !form.value.command) {
-        error.value = 'Executable command is required for local servers'; return
-      }
       saving.value = true; error.value = ''
       try {
-        let res
         const payload = {
           ...form.value,
-          args: form.value.args.match(/(?:[^\s"]+|"[^"]*")+/g)?.map(s => s.replace(/^"|"$/g, '')) || []
+          args: form.value.args.match(/(?:[^\s"]+|"[^"]*")+/g)?.map(s => s.replace(/^"|"$/g, '')) || [],
+          env_vars: getEnvMap()
         }
-        if (isEdit) {
-          res = await api.put('/mcp-servers/' + p.server.id, payload)
-        } else {
-          res = await api.post('/mcp-servers', payload)
-        }
+        let res
+        if (isEdit) res = await api.put('/mcp-servers/' + p.server.id, payload)
+        else res = await api.post('/mcp-servers', payload)
         emit('saved', res.data)
       } catch (e) {
         error.value = e.response?.data?.error ?? e.message
@@ -282,165 +288,126 @@ export const MCPServerModal = defineComponent({
       }
     }
 
-    const inputClass = 'input text-sm'
-    const busy = () => saving.value || discovering.value
+    const inputClass = 'input text-sm font-mono'
 
     return () => h('div', {
-      class: 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50',
+      class: 'fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] p-4',
     }, [
-      h('div', { class: 'card w-[520px] p-6 space-y-4' }, [
-        h('h3', { class: 'font-semibold text-text' }, isEdit ? 'Edit MCP Server' : 'Register MCP Server'),
-
-        h('div', { class: 'space-y-1.5' }, [
-          h('label', { class: 'text-xs text-text-muted' }, 'Name *'),
-          h('input', {
-            class: inputClass + ' font-mono',
-            value: form.value.name,
-            placeholder: 'invoice-parser',
-            onInput: e => form.value.name = e.target.value,
-          }),
-          !isEdit && h('p', { class: 'text-[10px] text-text-muted' }, 'Logical identifier used in workflow YAML agent configs.'),
+      h('div', { class: 'card w-full max-w-xl p-8 space-y-6 shadow-2xl border-white/10 max-h-[90vh] overflow-y-auto' }, [
+        h('div', { class: 'flex justify-between items-center' }, [
+          h('h3', { class: 'text-lg font-bold text-white uppercase tracking-tight' }, isEdit ? 'Configure MCP Server' : 'Register New MCP Server'),
+          h('button', { class: 'text-gray-500 hover:text-white', onClick: () => emit('close') }, '\u2715')
         ]),
 
-        // Transport Type Toggle
-        h('div', { class: 'space-y-1.5' }, [
-          h('label', { class: 'text-xs text-text-muted' }, 'Transport Type'),
-          h('div', { class: 'flex gap-2' }, [
-            ['sse', 'Remote (SSE)'], ['stdio', 'Local (Stdio)']
-          ].map(([val, label]) => h('button', {
-            class: 'flex-1 py-2 text-xs rounded-lg border transition-all ' + 
-                   (form.value.transport === val ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' : 'bg-white/3 border-border text-text-muted'),
-            onClick: () => form.value.transport = val,
-          }, label))),
-        ]),
-
-        // Conditional inputs based on transport
-        form.value.transport === 'sse' ? [
-          // URL + Discover button
+        // Basic Info
+        h('div', { class: 'grid grid-cols-2 gap-4' }, [
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-xs text-text-muted' }, 'URL'),
-            h('div', { class: 'flex gap-2' }, [
-              h('input', {
-                class: inputClass + ' font-mono flex-1',
-                value: form.value.url,
-                placeholder: 'http://localhost:8090/sse',
-                onInput: e => form.value.url = e.target.value,
-              }),
-              h('button', {
-                class: 'btn-ghost text-xs border border-border px-3 shrink-0 gap-1.5 ' + (discovering.value ? 'animate-pulse' : ''),
-                onClick: discover,
-                disabled: busy() || !form.value.url,
-              }, discovering.value ? 'Checking...' : 'Discover'),
-            ]),
-          ]),
-          h('div', { class: 'grid grid-cols-2 gap-3' }, [
-            h('div', { class: 'space-y-1.5' }, [
-              h('label', { class: 'text-xs text-text-muted' }, 'Env Var Key'),
-              h('input', {
-                class: inputClass + ' font-mono opacity-60 cursor-not-allowed',
-                value: form.value.env_var,
-                readonly: true,
-                placeholder: 'BRAVE_API_KEY',
-              }),
-            ]),
-            h('div', { class: 'space-y-1.5' }, [
-              h('div', { class: 'flex justify-between items-center' }, [
-                h('label', { class: 'text-xs text-text-muted' }, 'API KEY'),
-                h('button', {
-                  class: 'text-[10px] text-primary hover:underline cursor-pointer',
-                  type: 'button',
-                  onClick: () => showSecret.value = !showSecret.value
-                }, showSecret.value ? 'Hide' : 'Show'),
-              ]),
-              h('input', {
-                class: inputClass + ' font-mono',
-                type: showSecret.value ? 'text' : 'password',
-                value: form.value.env_value,
-                placeholder: '••••••••',
-                onInput: e => form.value.env_value = e.target.value,
-              }),
-            ]),
-          ]),
-        ] : [
-          // Stdio Command + Args
-          h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-xs text-text-muted' }, 'Executable Command'),
-            h('div', { class: 'flex gap-2' }, [
-              h('input', {
-                class: inputClass + ' font-mono flex-1',
-                value: form.value.command,
-                placeholder: 'npx',
-                onInput: e => form.value.command = e.target.value,
-              }),
-              h('button', {
-                class: 'btn-ghost text-xs border border-border px-3 shrink-0 gap-1.5 ' + (discovering.value ? 'animate-pulse' : ''),
-                onClick: discover,
-                disabled: busy() || !form.value.command,
-              }, discovering.value ? 'Checking...' : 'Discover'),
-            ]),
-          ]),
-          h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-xs text-text-muted' }, 'Arguments (space separated)'),
+            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Logical Name'),
             h('input', {
-              class: inputClass + ' font-mono',
+              class: inputClass,
+              value: form.value.name,
+              placeholder: 'e.g. slack-main',
+              onInput: e => form.value.name = e.target.value,
+            }),
+          ]),
+          h('div', { class: 'space-y-1.5' }, [
+            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Transport'),
+            h('div', { class: 'flex p-1 bg-white/5 rounded-lg border border-white/5' }, [
+              ['stdio', 'Local'], ['sse', 'Remote']
+            ].map(([val, label]) => h('button', {
+              class: 'flex-1 py-1.5 text-[10px] font-bold uppercase rounded transition-all ' + 
+                     (form.value.transport === val ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-500 hover:text-gray-300'),
+              onClick: () => form.value.transport = val,
+            }, label))),
+          ]),
+        ]),
+
+        // Transport Specifics
+        form.value.transport === 'stdio' ? [
+          h('div', { class: 'space-y-1.5' }, [
+            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Executable / Command'),
+            h('input', {
+              class: inputClass,
+              value: form.value.command,
+              placeholder: 'npx',
+              onInput: e => form.value.command = e.target.value,
+            }),
+          ]),
+          h('div', { class: 'space-y-1.5' }, [
+            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Arguments'),
+            h('input', {
+              class: inputClass,
               value: form.value.args,
-              placeholder: '-y @modelcontextprotocol/server-coingecko',
+              placeholder: '-y @modelcontextprotocol/server-slack',
               onInput: e => form.value.args = e.target.value,
             }),
           ]),
-          h('div', { class: 'grid grid-cols-2 gap-3' }, [
-            h('div', { class: 'space-y-1.5' }, [
-              h('label', { class: 'text-xs text-text-muted' }, 'Env Var Key'),
-              h('input', {
-                class: inputClass + ' font-mono opacity-60 cursor-not-allowed',
-                value: form.value.env_var,
-                readonly: true,
-                placeholder: 'BRAVE_API_KEY',
-              }),
-            ]),
-            h('div', { class: 'space-y-1.5' }, [
-              h('div', { class: 'flex justify-between items-center' }, [
-                h('label', { class: 'text-xs text-text-muted' }, 'API KEY'),
-                h('button', {
-                  class: 'text-[10px] text-primary hover:underline cursor-pointer',
-                  type: 'button',
-                  onClick: () => showSecret.value = !showSecret.value
-                }, showSecret.value ? 'Hide' : 'Show'),
-              ]),
-              h('input', {
-                class: inputClass + ' font-mono',
-                type: showSecret.value ? 'text' : 'password',
-                value: form.value.env_value,
-                placeholder: '••••••••',
-                onInput: e => form.value.env_value = e.target.value,
-              }),
-            ]),
+        ] : [
+          h('div', { class: 'space-y-1.5' }, [
+            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'SSE Endpoint URL'),
+            h('input', {
+              class: inputClass,
+              value: form.value.url,
+              placeholder: 'https://mcp.example.com/sse',
+              onInput: e => form.value.url = e.target.value,
+            }),
           ]),
-          h('p', { class: 'text-[10px] text-amber-400/70 italic' }, 'Warning: Local commands run on the host system. Ensure you trust the package.'),
         ],
 
-        // Description — read-only, populated by Discover
-        h('div', { class: 'space-y-1.5' }, [
-          h('div', { class: 'flex items-center gap-2' }, [
-            h('label', { class: 'text-xs text-text-muted' }, 'Capabilities'),
-            h('span', { class: 'text-[10px] text-text-muted' }, '(auto-populated via Discover)'),
+        // Environment Variables
+        h('div', { class: 'space-y-3' }, [
+          h('div', { class: 'flex justify-between items-center' }, [
+            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Environment Variables / Secrets'),
+            h('button', { 
+              class: 'text-[10px] font-bold text-indigo-400 hover:text-indigo-300',
+              onClick: addEnv
+            }, '+ Add Variable')
           ]),
-          form.value.description
-            ? h('div', {
-                class: 'px-3 py-2.5 rounded-lg bg-white/3 border border-border text-xs text-text-muted leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto',
-              }, form.value.description)
-            : h('div', {
-                class: 'px-3 py-2.5 rounded-lg bg-white/3 border border-border/50 text-xs text-text-muted italic',
-              }, 'No capabilities discovered yet. Enter a URL and click Discover.'),
+          h('div', { class: 'space-y-2' }, envList.value.map((e, idx) => h('div', { class: 'flex gap-2' }, [
+            h('input', {
+              class: 'input text-xs font-mono flex-1',
+              value: e.key,
+              placeholder: 'KEY',
+              onInput: v => e.key = v.target.value,
+            }),
+            h('input', {
+              class: 'input text-xs font-mono flex-1',
+              type: 'password',
+              value: e.val,
+              placeholder: 'VALUE',
+              onInput: v => e.val = v.target.value,
+            }),
+            h('button', { 
+              class: 'p-2 text-gray-600 hover:text-red-400',
+              onClick: () => removeEnv(idx)
+            }, '\u2715')
+          ])))
         ]),
 
-        error.value && h('p', { class: 'text-red-400 text-xs' }, error.value),
+        // Capabilities / Discovery
+        h('div', { class: 'space-y-1.5' }, [
+          h('div', { class: 'flex justify-between items-end' }, [
+            h('label', { class: 'text-[10px] uppercase font-bold text-gray-500 tracking-widest' }, 'Discovered Capabilities'),
+            h('button', {
+              class: 'btn-ghost text-[10px] px-3 h-7 gap-1.5 ' + (discovering.value ? 'animate-pulse' : ''),
+              onClick: discover,
+              disabled: saving.value || discovering.value,
+            }, discovering.value ? 'Syncing...' : 'Discover Tools'),
+          ]),
+          h('div', {
+            class: 'p-3 rounded-lg bg-white/3 border border-white/5 text-xs text-gray-400 leading-relaxed font-mono min-h-[60px] max-h-32 overflow-y-auto'
+          }, form.value.description || 'No tools discovered yet.')
+        ]),
 
-        h('div', { class: 'flex gap-3 justify-end' }, [
-          h('button', { class: 'btn-ghost', onClick: () => emit('close'), disabled: busy() }, 'Cancel'),
-          h('button', { class: 'btn-primary', onClick: save, disabled: busy() },
-            saving.value ? 'Saving...' : (isEdit ? 'Save Changes' : 'Register')
-          ),
+        error.value && h('div', { class: 'p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs' }, error.value),
+
+        h('div', { class: 'flex gap-3 pt-4' }, [
+          h('button', { class: 'flex-1 btn-ghost py-3', onClick: () => emit('close') }, 'Cancel'),
+          h('button', { 
+            class: 'flex-[2] btn-primary py-3 font-bold uppercase tracking-widest text-xs', 
+            onClick: save, 
+            disabled: saving.value || discovering.value 
+          }, saving.value ? 'Saving...' : 'Register Connection'),
         ]),
       ]),
     ])

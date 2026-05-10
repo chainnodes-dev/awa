@@ -1,4 +1,4 @@
-# ASM Platform — User Manual
+# Phaxa — User Manual
 
 > **Version:** post-M12 · **Last updated:** April 2026
 
@@ -39,7 +39,7 @@
 
 ## 1. Introduction
 
-The **Agentic State Machine (ASM) Platform** is a workflow orchestration system for building AI-powered business processes. You describe a process as a directed graph of states and transitions in a YAML definition. The platform runs it durably, connecting LLM agents, deterministic scripts, JavaScript code, and human approvals in a single coherent flow.
+The **Phaxa** platform is a workflow orchestration system for building AI-powered business processes. You describe a process as a directed graph of states and transitions in a YAML definition. The platform runs it durably, connecting LLM agents, deterministic scripts, JavaScript code, and human approvals in a single coherent flow.
 
 **Core philosophy:**
 
@@ -77,12 +77,12 @@ Each worker's only job is to complete its task and return a trigger. It never kn
 │          Durable workflow engine — all state is             │
 │          persisted; replays guarantee correctness           │
 └────────────────────┬────────────────────────────────────────┘
-                     │  Task Queue  (asm-workers)
+                     │  Task Queue  (phaxa-workers)
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Temporal Worker                            │
 │                                                             │
-│  ASMWorkflow (state machine loop)                           │
+│  PhaxaWorkflow (state machine loop)                           │
 │  ├── ExecuteAgent   — LLM call via configured provider      │
 │  ├── ExecuteCode    — JavaScript sandbox (goja)             │
 │  ├── ExecuteScript  — Deterministic expressions (expr-lang) │
@@ -111,7 +111,7 @@ Shared infrastructure
 
 ### Workflow Definition
 
-A workflow is a YAML manifest (`apiVersion: asm/v1, kind: Workflow`). It declares:
+A workflow is a YAML manifest (`apiVersion: phaxa/v1, kind: Workflow`). It declares:
 
 - **States** — the nodes of the graph
 - **Transitions** — directed edges labelled by trigger names
@@ -251,8 +251,8 @@ MCP (Model Context Protocol) servers expose tools that LLM agents can call durin
 4. The resolved value stored in the workflow (shown in small text below the chips) uses the `{{ env.ENV_VAR }}` template syntax, e.g. `{{ env.MCP_GLEIF_URL }}`. This means the actual URL is supplied via the environment and never hardcoded in the workflow definition.
 
 **Local (STDIO) MCP Servers:**
-ASM supports local tool servers running via `npx`, `docker`, or direct binaries. 
-1. Ensure the API server is started with `ASM_ALLOW_STDIO_MCP=true`.
+Phaxa supports local tool servers running via `npx`, `docker`, or direct binaries. 
+1. Ensure the API server is started with `PHAXA_ALLOW_STDIO_MCP=true`.
 2. In the MCP Management screen, create a new server with **Transport: stdio**.
 3. Set the **Command** (e.g., `npx`) and **Arguments** (e.g., `-y @modelcontextprotocol/server-postgres`).
 4. Local servers are managed automatically—they are started when an agent needs them and shut down when the run finishes.
@@ -279,7 +279,7 @@ Once you click **Apply** in the state panel and **Save** the workflow, the schem
 
 ### 4.8 Sentinel (Perpetual) Workflows
 
-ASM workflows are typically short-lived, but you can build **Sentinels**—perpetual agents that monitor data and react indefinitely.
+Phaxa workflows are typically short-lived, but you can build **Sentinels**—perpetual agents that monitor data and react indefinitely.
 
 **The "Pulse" Pattern:**
 1. Create a `wait` state (e.g., `IDLE_PULSE`) at the end of your workflow logic.
@@ -493,7 +493,7 @@ It shows:
 - Retry history for failed activities
 - The ability to terminate or reset a stuck run
 
-The Temporal workflow ID matches the ASM `run_id`, so you can find any run by searching for its ID.
+The Temporal workflow ID matches the Phaxa `run_id`, so you can find any run by searching for its ID.
 
 ---
 
@@ -639,7 +639,7 @@ When the operator submits this form, the values are **automatically merged into 
 A complete annotated example:
 
 ```yaml
-apiVersion: asm/v1
+apiVersion: phaxa/v1
 kind: Workflow
 
 metadata:

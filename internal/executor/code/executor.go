@@ -1,5 +1,5 @@
 // Package code executes user-written JavaScript inside a secure goja sandbox.
-// It is used by the ASM "code" state type — the equivalent of n8n's Code node.
+// It is used by the Phaxa "code" state type — the equivalent of n8n's Code node.
 //
 // Security model (v1 — fully sandboxed):
 //   - No network access (no fetch, no XMLHttpRequest)

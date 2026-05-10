@@ -1,6 +1,6 @@
-# ASM Platform — API Integration Guide
+# Phaxa — API Integration Guide
 
-This guide covers how to submit items to the platform and consume the results programmatically. It assumes the server is running and reachable at `https://your-asm-host`.
+This guide covers how to submit items to the platform and consume the results programmatically. It assumes the server is running and reachable at `https://your-phaxa-host`.
 
 ---
 
@@ -109,7 +109,7 @@ The `input` object seeds the initial blackboard. Its keys must satisfy the workf
 
 ```json
 {
-  "id": "asm-run-a48fca29-...",
+  "id": "phaxa-run-a48fca29-...",
   "workflow_name": "invoice-processing",
   "workflow_version": "1.0.0",
   "status": "running",
@@ -144,7 +144,7 @@ Authorization: Bearer eyJ...
 
 ```json
 {
-  "id": "asm-run-a48fca29-...",
+  "id": "phaxa-run-a48fca29-...",
   "status": "complete",
   "current_state": "APPROVED",
   "blackboard": {
@@ -187,7 +187,7 @@ Every state change, blackboard update, HITL event, and agent action is pushed as
 {
   "type": "state.changed",
   "data": {
-    "run_id": "asm-run-a48fca29-...",
+    "run_id": "phaxa-run-a48fca29-...",
     "from_state": "VALIDATE",
     "to_state": "APPROVE",
     "trigger": "valid",
@@ -268,7 +268,7 @@ Authorization: Bearer eyJ...
 [
   {
     "id": "hitl-req-...",
-    "run_id": "asm-run-a48fca29-...",
+    "run_id": "phaxa-run-a48fca29-...",
     "state_name": "HUMAN_REVIEW",
     "assignee": "finance-team",
     "timeout_at": "2026-04-13T09:00:00Z",
@@ -350,7 +350,7 @@ The following pseudocode shows the complete integration flow for a document proc
 ```python
 import httpx, time
 
-base = "https://your-asm-host/api/v1"
+base = "https://your-phaxa-host/api/v1"
 
 # 1. Authenticate
 r = httpx.post(f"{base}/auth/login", json={

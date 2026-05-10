@@ -51,9 +51,9 @@ Tools that align with the user's vision of converting skills into observable, hy
 
 ---
 
-## 5. Strategic Implications for ASM Platform
+## 5. Strategic Implications for Phaxa
 
 Based on the current market state, our proposed pivot to a **Skill Development and Optimization Tool** is highly relevant:
-1.  **De-mystification**: Most existing libraries (like Awesome Agent Skills) are just prompts. ASM can differentiate by "compiling" these prompts into high-performance, deterministic processes using Temporal.
-2.  **Standardization**: By supporting the `SKILL.md` or MCP standards, ASM can become a conversion layer for these existing repositories.
+1.  **De-mystification**: Most existing libraries (like Awesome Agent Skills) are just prompts. Phaxa can differentiate by "compiling" these prompts into high-performance, deterministic processes using Temporal.
+2.  **Standardization**: By supporting the `SKILL.md` or MCP standards, Phaxa can become a conversion layer for these existing repositories.
 3.  **Hybridization**: Most frameworks are either 100% LLM (LangChain) or 100% Code (n8n). ASM's ability to seamlessly mix them in a single Temporal workflow is a competitive advantage.

@@ -1,8 +1,8 @@
-# ASM Platform — Architecture & Functionality
+# Phaxa — Architecture & Functionality
 
 ## Overview
 
-The **Agentic State Machine (ASM) Platform** is a workflow orchestration system designed for processing business items (invoices, applications, orders, etc.) through a series of well-defined states. Its core philosophy is:
+The **Phaxa** platform is a workflow orchestration system designed for processing business items (invoices, applications, orders, etc.) through a series of well-defined states. Its core philosophy is:
 
 > **Keep workers stupid. Let the state machine decide.**
 
@@ -416,7 +416,7 @@ A transition connects a `from` state to one or more target states and is activat
 
 ### Parallel Execution
 
-ASM supports parallel execution via the `to_nodes` field in a transition. When a trigger matches a transition with `to_nodes`, the engine splits the run into multiple parallel branches.
+Phaxa supports parallel execution via the `to_nodes` field in a transition. When a trigger matches a transition with `to_nodes`, the engine splits the run into multiple parallel branches.
 
 ---
 

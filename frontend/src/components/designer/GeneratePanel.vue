@@ -250,7 +250,7 @@ const activeTab = ref('generate')
 // ── Pipeline state ────────────────────────────────────────────────────────────
 const pipelineSteps = [
   { label: 'Decompose',  endpoint: '/designer/pipeline/decompose',  description: 'Identify all states and add a description to every node. The canvas will show a skeleton workflow.' },
-  { label: 'Categorise', endpoint: '/designer/pipeline/categorise', description: 'Assign the correct ASM type to every node (code, script, hitl, wait, etc.). No runnable logic yet.' },
+  { label: 'Categorise', endpoint: '/designer/pipeline/categorise', description: 'Assign the correct Phaxa type to every node (code, script, hitl, wait, etc.). No runnable logic yet.' },
   { label: 'Wire',       endpoint: '/designer/pipeline/wire',       description: 'Define all transitions, guards, and the blackboard schema — the shared contract for node implementations.' },
   { label: 'Implement',  endpoint: '/designer/pipeline/implement',  description: 'Generate final code for every node in parallel using specialised prompts. Produces a runnable workflow.' },
 ]

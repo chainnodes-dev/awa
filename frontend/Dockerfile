@@ -18,7 +18,7 @@ FROM nginx:1.27-alpine
 RUN rm /etc/nginx/conf.d/default.conf
 
 # Add our config and the built assets
-COPY nginx.conf /etc/nginx/conf.d/asm.conf
+COPY nginx.conf /etc/nginx/conf.d/phaxa.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80

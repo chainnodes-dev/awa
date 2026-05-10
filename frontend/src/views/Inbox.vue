@@ -178,7 +178,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useExecutionStore } from '@/stores/execution'
-import { convertAsmSchemaToJsonSchema } from '@/utils/schema'
+import { convertPhaxaSchemaToJsonSchema } from '@/utils/schema'
 import JsonSchemaForm from '@/components/monitor/JsonSchemaForm.vue'
 import BlackboardEditor from '@/components/monitor/BlackboardEditor.vue'
 
@@ -194,7 +194,7 @@ const resolveError = ref('')
 const hitlForm = ref(null)
 
 const blackboardSchema = computed(() => {
-  return convertAsmSchemaToJsonSchema(selectedTask.value?.blackboard_schema)
+  return convertPhaxaSchemaToJsonSchema(selectedTask.value?.blackboard_schema)
 })
 
 // When selecting a task, clone its blackboard for editing

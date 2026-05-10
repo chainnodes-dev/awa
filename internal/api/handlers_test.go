@@ -26,7 +26,7 @@ func init() {
 
 // --- test fixtures ---
 
-const simpleWorkflowYAML = `apiVersion: asm/v1
+const simpleWorkflowYAML = `apiVersion: phaxa/v1
 kind: Workflow
 metadata:
   name: test-wf
@@ -82,7 +82,7 @@ func testRouter(t *testing.T) testEnv {
 		t.Fatalf("generate test token: %v", err)
 	}
 
-	mcpMgr := mcp.NewManager(s)
+	mcpMgr := mcp.NewManager(s, true)
 	handlers := NewHandlers(eng, s, jwtSvc, nil, nil, nil, nil, nil, mcpMgr, true) // nil generator, etc.
 	router := gin.New()
 	registerRoutes(router, handlers, NewHub(bus), jwtSvc, health.New())

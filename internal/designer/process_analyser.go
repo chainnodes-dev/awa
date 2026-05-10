@@ -117,7 +117,7 @@ func (g *Generator) AnalyseProcess(ctx context.Context, req ProcessAnalyseReques
 
 // SummariseProcess converts a WorkflowDef YAML into a human-readable process summary.
 func (g *Generator) SummariseProcess(ctx context.Context, req ProcessSummariseRequest) (*ProcessSummariseResult, error) {
-	system := "You are a process summarisation engine. Convert the provided ASM workflow YAML into a professional, human-readable summary that explains the business logic, roles involved, and expected outcomes."
+	system := "You are a process summarisation engine. Convert the provided Phaxa workflow YAML into a professional, human-readable summary that explains the business logic, roles involved, and expected outcomes."
 	userMsg := fmt.Sprintf("Summarise this workflow:\n\n```yaml\n%s\n```", req.WorkflowYAML)
 
 	messages := []llm.Message{
@@ -253,7 +253,7 @@ func (g *Generator) buildProcessUserMsg(req ProcessAnalyseRequest) string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("Decompose this into the most efficient ASM workflow. ")
+	sb.WriteString("Decompose this into the most efficient Phaxa workflow. ")
 	sb.WriteString("Return only the YAML.\n")
 
 	return sb.String()

@@ -12,7 +12,7 @@ import (
 
 func testDef(name, version string) *asmtypes.WorkflowDef {
 	return &asmtypes.WorkflowDef{
-		APIVersion: "asm/v1",
+		APIVersion: "phaxa/v1",
 		Kind:       "Workflow",
 		Metadata:   asmtypes.WorkflowMeta{Name: name, Version: version},
 		States: []asmtypes.StateDef{

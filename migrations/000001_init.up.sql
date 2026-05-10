@@ -1,4 +1,4 @@
--- ASM Platform - Initial Schema
+-- Phaxa Platform - Initial Schema
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 

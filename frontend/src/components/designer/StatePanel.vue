@@ -346,7 +346,7 @@
         </div>
         <div class="space-y-1">
           <label class="text-xs text-text-muted">Task Queue</label>
-          <input class="input font-mono text-xs" v-model="agentForm.task_queue" placeholder="asm-workers (default)" />
+          <input class="input font-mono text-xs" v-model="agentForm.task_queue" placeholder="phaxa-workers (default)" />
         </div>
         <div class="space-y-1">
           <label class="text-xs text-text-muted">MCP Servers</label>
