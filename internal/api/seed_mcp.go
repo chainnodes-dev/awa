@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"log/slog"
+	"os"
 
 	"github.com/asm-platform/asm/internal/designer"
 	"github.com/asm-platform/asm/internal/store"
@@ -193,11 +194,33 @@ func SeedMCPServers(s store.Store, tenantID string, registryEntries []designer.M
 			Description: e.Description,
 			CreatedBy:   "seed-registry",
 		}
-		// Assuming stdio for registry servers unless specified. 
-		// You might want to extend MCPServerEntry to support more fields.
-		srv.Transport = "stdio" 
-		srv.Command = "npx" // Default
-		srv.Args = []string{"-y", e.Name} // Default
+
+		if e.Transport != "" {
+			srv.Transport = e.Transport
+		} else if e.EnvVar != "" && (len(e.EnvVar) > 4 && e.EnvVar[len(e.EnvVar)-4:] == "_URL") {
+			srv.Transport = "sse"
+		} else {
+			srv.Transport = "stdio"
+		}
+
+		if srv.Transport == "stdio" {
+			if e.Command != "" {
+				srv.Command = e.Command
+			} else {
+				srv.Command = "npx"
+			}
+			if len(e.Args) > 0 {
+				srv.Args = e.Args
+			} else if srv.Command == "npx" {
+				srv.Args = []string{"-y", e.Name}
+			}
+		} else {
+			if e.URL != "" {
+				srv.URL = e.URL
+			} else if e.EnvVar != "" {
+				srv.URL = os.Getenv(e.EnvVar)
+			}
+		}
 
 		if err := s.CreateMCPServer(ctx, srv); err != nil {
 			slog.Warn("MCP registry seed: failed to insert entry", "name", e.Name, "error", err)

@@ -103,10 +103,10 @@
           <!-- Blackboard Tweak Section -->
           <div class="w-96 flex flex-col overflow-hidden bg-surface-1/30">
             <div class="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
-               <h3 class="text-xs font-bold text-text-muted uppercase tracking-widest">Advanced Tweaks</h3>
+               <h3 class="text-sm font-bold text-text-muted uppercase tracking-widest">Advanced Tweaks</h3>
                <button 
                  @click="showBlackboard = !showBlackboard" 
-                 class="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                 class="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
                 >
                  {{ showBlackboard ? 'Hide Context' : 'Edit Context' }}
                </button>
@@ -130,7 +130,7 @@
             </div>
             
             <div v-if="showBlackboard" class="flex-1 overflow-hidden flex flex-col p-3 pt-0">
-              <p class="text-[10px] text-text-muted mb-3 mt-3 leading-relaxed">
+              <p class="text-xs text-text-muted mb-4 mt-3 leading-relaxed">
                 Directly modify any field in the workflow's blackboard context. Be careful with manual overrides.
               </p>
               
@@ -188,7 +188,7 @@ const selectedTaskId = ref(null)
 const selectedTask = computed(() => pendingTasks.value.find(t => t.id === selectedTaskId.value))
 
 const editedBlackboard = ref({})
-const showBlackboard = ref(false)
+const showBlackboard = ref(true)
 const tweakView = ref('form')
 const resolveError = ref('')
 const hitlForm = ref(null)

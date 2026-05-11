@@ -122,14 +122,45 @@
 select option { background: var(--color-surface); color: var(--color-text); }
 
 /* Active-state glow ring colors match node type */
-.glow-initial      { box-shadow: 0 0 0 2px #22c55e, 0 0 16px 4px rgba(34,197,94,0.3); }
-.glow-intermediate { box-shadow: 0 0 0 2px var(--color-accent), 0 0 16px 4px rgba(99,102,241,0.3); }
-.glow-hitl         { box-shadow: 0 0 0 2px #f59e0b, 0 0 16px 4px rgba(245,158,11,0.3); }
+.glow-initial      { box-shadow: 0 0 0 2px #22c55e, 0 0 16px 4px rgba(34,197,94,0.3); animation: node-pulse-green 2s infinite; }
+.glow-intermediate { box-shadow: 0 0 0 2px var(--color-accent), 0 0 16px 4px rgba(99,102,241,0.3); animation: node-pulse-accent 2s infinite; }
+.glow-hitl         { box-shadow: 0 0 0 2px #f59e0b, 0 0 16px 4px rgba(245,158,11,0.3); animation: node-pulse-amber 2s infinite; }
 .glow-terminal     { box-shadow: 0 0 0 2px var(--color-text-muted), 0 0 16px 4px rgba(100,116,139,0.2); }
-.glow-wait         { box-shadow: 0 0 0 2px #818cf8, 0 0 16px 4px rgba(129,140,248,0.3); }
-.glow-script       { box-shadow: 0 0 0 2px #f59e0b, 0 0 16px 4px rgba(245,158,11,0.2); }
-.glow-code         { box-shadow: 0 0 0 2px #2dd4bf, 0 0 16px 4px rgba(45,212,191,0.3); }
-.glow-subprocess   { box-shadow: 0 0 0 2px #a78bfa, 0 0 16px 4px rgba(167,139,250,0.3); }
+.glow-wait         { box-shadow: 0 0 0 2px #818cf8, 0 0 16px 4px rgba(129,140,248,0.3); animation: node-pulse-indigo 2s infinite; }
+.glow-script       { box-shadow: 0 0 0 2px #f59e0b, 0 0 16px 4px rgba(245,158,11,0.2); animation: node-pulse-amber 2s infinite; }
+.glow-code         { box-shadow: 0 0 0 2px #2dd4bf, 0 0 16px 4px rgba(45,212,191,0.3); animation: node-pulse-teal 2s infinite; }
+.glow-subprocess   { box-shadow: 0 0 0 2px #a78bfa, 0 0 16px 4px rgba(167,139,250,0.3); animation: node-pulse-violet 2s infinite; }
+
+@keyframes node-pulse-accent {
+  0% { box-shadow: 0 0 0 0px var(--color-accent), 0 0 0px 0px rgba(99,102,241,0); }
+  50% { box-shadow: 0 0 0 2px var(--color-accent), 0 0 20px 6px rgba(99,102,241,0.4); }
+  100% { box-shadow: 0 0 0 0px var(--color-accent), 0 0 0px 0px rgba(99,102,241,0); }
+}
+@keyframes node-pulse-green {
+  0% { box-shadow: 0 0 0 0px #22c55e, 0 0 0px 0px rgba(34,197,94,0); }
+  50% { box-shadow: 0 0 0 2px #22c55e, 0 0 20px 6px rgba(34,197,94,0.4); }
+  100% { box-shadow: 0 0 0 0px #22c55e, 0 0 0px 0px rgba(34,197,94,0); }
+}
+@keyframes node-pulse-amber {
+  0% { box-shadow: 0 0 0 0px #f59e0b, 0 0 0px 0px rgba(245,158,11,0); }
+  50% { box-shadow: 0 0 0 2px #f59e0b, 0 0 20px 6px rgba(245,158,11,0.4); }
+  100% { box-shadow: 0 0 0 0px #f59e0b, 0 0 0px 0px rgba(245,158,11,0); }
+}
+@keyframes node-pulse-indigo {
+  0% { box-shadow: 0 0 0 0px #818cf8, 0 0 0px 0px rgba(129,140,248,0); }
+  50% { box-shadow: 0 0 0 2px #818cf8, 0 0 20px 6px rgba(129,140,248,0.4); }
+  100% { box-shadow: 0 0 0 0px #818cf8, 0 0 0px 0px rgba(129,140,248,0); }
+}
+@keyframes node-pulse-teal {
+  0% { box-shadow: 0 0 0 0px #2dd4bf, 0 0 0px 0px rgba(45,212,191,0); }
+  50% { box-shadow: 0 0 0 2px #2dd4bf, 0 0 20px 6px rgba(45,212,191,0.4); }
+  100% { box-shadow: 0 0 0 0px #2dd4bf, 0 0 0px 0px rgba(45,212,191,0); }
+}
+@keyframes node-pulse-violet {
+  0% { box-shadow: 0 0 0 0px #a78bfa, 0 0 0px 0px rgba(167,139,250,0); }
+  50% { box-shadow: 0 0 0 2px #a78bfa, 0 0 20px 6px rgba(167,139,250,0.4); }
+  100% { box-shadow: 0 0 0 0px #a78bfa, 0 0 0px 0px rgba(167,139,250,0); }
+}
 
 /* Vue Flow overrides */
 .vue-flow__background { background: var(--color-bg) !important; }
@@ -140,3 +171,16 @@ select option { background: var(--color-surface); color: var(--color-text); }
 .vue-flow__edge-path { stroke: var(--color-border) !important; stroke-width: 2 !important; }
 .vue-flow__edge.selected .vue-flow__edge-path { stroke: var(--color-accent) !important; }
 .vue-flow__connection-path { stroke: var(--color-accent) !important; stroke-width: 2 !important; }
+
+/* Active Edge Highlight */
+.edge-active .vue-flow__edge-path {
+  stroke: var(--color-accent) !important;
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 0 4px var(--color-accent));
+}
+.edge-active .vue-flow__edge-text {
+  fill: var(--color-accent) !important;
+  font-weight: bold !important;
+}
+
+/* Edge styles are now handled via edge properties in Monitor.vue for better layout accuracy */

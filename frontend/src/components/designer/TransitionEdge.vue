@@ -12,27 +12,42 @@
     <!-- Label background + text -->
     <g v-if="label" :transform="`translate(${labelX}, ${labelY})`">
       <rect
-        :x="-labelWidth / 2 - 6"
-        :y="-10"
-        :width="labelWidth + 12"
-        :height="20"
+        :x="-rectWidth / 2"
+        :y="rectY"
+        :width="rectWidth"
+        :height="rectHeight"
         rx="4"
         :fill="isSelected ? 'var(--color-accent)' : 'var(--color-surface-2)'"
         :stroke="strokeColor"
         stroke-width="1"
+        fill-opacity="0.8"
       />
+      
       <text
+        v-if="!hasGuard"
         text-anchor="middle"
         dominant-baseline="middle"
         :fill="isSelected ? 'white' : 'var(--color-text)'"
-        font-size="11"
+        font-size="9"
         font-family="JetBrains Mono, monospace"
       >{{ isTimeout ? '⏱ ' : '' }}{{ label }}</text>
-      <!-- Guard chip -->
-      <g v-if="data?.guard" :transform="`translate(0, 14)`">
-        <text text-anchor="middle" fill="var(--color-text-muted)" font-size="9" font-family="monospace" opacity="0.8">
-          {{ data.guard.slice(0, 28) }}{{ data.guard.length > 28 ? '…' : '' }}
-        </text>
+
+      <g v-else>
+        <text
+          text-anchor="middle"
+          :y="-2"
+          :fill="isSelected ? 'white' : 'var(--color-text)'"
+          font-size="9"
+          font-family="JetBrains Mono, monospace"
+        >{{ isTimeout ? '⏱ ' : '' }}{{ label }}</text>
+        <text
+          text-anchor="middle"
+          :y="10"
+          fill="var(--color-text-muted)"
+          font-size="8"
+          font-family="monospace"
+          opacity="0.9"
+        >{{ guardText }}</text>
       </g>
     </g>
   </g>
@@ -82,6 +97,23 @@ const path   = computed(() => edgePath.value[0])
 const labelX = computed(() => edgePath.value[1])
 const labelY = computed(() => edgePath.value[2])
 
-// Approximate label width
-const labelWidth = computed(() => (props.label?.length ?? 0) * 7)
+// Dynamic layout for label and guard
+const hasGuard = computed(() => !!props.data?.guard)
+const guardText = computed(() => {
+  const g = props.data?.guard || ''
+  return g.length > 28 ? g.slice(0, 28) + '…' : g
+})
+
+const labelWidth = computed(() => {
+  const baseLen = (props.label?.length ?? 0) + (isTimeout.value ? 2 : 0)
+  return baseLen * 6.5
+})
+const guardWidth = computed(() => guardText.value.length * 5.5)
+
+const rectWidth = computed(() => {
+  if (!hasGuard.value) return labelWidth.value + 12
+  return Math.max(labelWidth.value, guardWidth.value) + 16
+})
+const rectHeight = computed(() => hasGuard.value ? 32 : 20)
+const rectY = computed(() => hasGuard.value ? -14 : -10)
 </script>

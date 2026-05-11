@@ -108,7 +108,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					workflowErr = err
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], autoTrigger, bb, nil); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], autoTrigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}
@@ -245,7 +245,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				}
 				if len(nextStates) > 0 {
 					next := nextStates[0]
-					if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, next, trigger, bb, nil); err != nil {
+					if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, next, trigger, bb, nil); err != nil {
 						workflowErr = err
 						return
 					}
@@ -265,11 +265,14 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				}).Get(bCtx, nil)
 
 				hitlReq := &asmtypes.HITLRequest{
-					RunID:      p.RunID,
-					StateName:  state.Name,
-					Assignee:   state.Assignee,
-					CreatedAt:  workflow.Now(bCtx),
-					FormSchema: state.FormSchema,
+					RunID:            p.RunID,
+					StateName:        state.Name,
+					Assignee:         state.Assignee,
+					CreatedAt:        workflow.Now(bCtx),
+					FormSchema:       state.FormSchema,
+					Blackboard:       bb,
+					BlackboardSchema: p.Def.Blackboard.Schema,
+					WorkflowName:     p.Def.Metadata.Name,
 				}
 				waitDur := 24 * time.Hour
 				if state.Timeout != "" {
@@ -306,7 +309,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}
@@ -355,7 +358,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
 					workflowErr = err
 					return
 				}
@@ -386,7 +389,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
 					workflowErr = err
 					return
 				}
@@ -434,7 +437,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
 					workflowErr = err
 					return
 				}
@@ -483,7 +486,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}
@@ -586,7 +589,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				if len(nextStates) == 0 {
 					return
 				}
-				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 					workflowErr = err
 					return
 				}
@@ -641,7 +644,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 			if len(nextStates) == 0 {
 				return
 			}
-			if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def.Metadata.Name, p.Def.Metadata.Version, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+			if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
 				workflowErr = err
 				return
 			}
@@ -685,7 +688,7 @@ func applyTransition(def *asmtypes.WorkflowDef, fromState, trigger string, bb ma
 	return nil, fmt.Errorf("no valid transition from '%s' for trigger '%s'", fromState, trigger)
 }
 
-func persistTransition(shortOpts, ctx workflow.Context, runID, workflowName, workflowVersion, tenantID, fromState, toState, trigger string, bb map[string]interface{}, output *asmtypes.AgentOutput) error {
+func persistTransition(shortOpts, ctx workflow.Context, runID string, def *asmtypes.WorkflowDef, tenantID, fromState, toState, trigger string, bb map[string]interface{}, output *asmtypes.AgentOutput) error {
 	rec := &asmtypes.TransitionRecord{
 		RunID:              runID,
 		FromState:          fromState,
@@ -697,8 +700,8 @@ func persistTransition(shortOpts, ctx workflow.Context, runID, workflowName, wor
 	}
 	if err := workflow.ExecuteActivity(shortOpts, (*Activities).RecordTransition, RecordTransitionParams{
 		TenantID:        tenantID,
-		WorkflowName:    workflowName,
-		WorkflowVersion: workflowVersion,
+		WorkflowName:    def.Metadata.Name,
+		WorkflowVersion: def.Metadata.Version,
 		Record:          rec,
 	}).Get(ctx, nil); err != nil {
 		return err
@@ -706,15 +709,20 @@ func persistTransition(shortOpts, ctx workflow.Context, runID, workflowName, wor
 
 	// Keep workflow_runs.current_state in sync so GET /runs/{id} always reflects
 	// the live state without relying solely on WebSocket delivery.
-	// Terminal states override this immediately with their own UpdateRun call
-	// (status=complete), so using RunRunning here is always safe.
+	status := asmtypes.RunRunning
+	if target := def.StateByName(toState); target != nil {
+		if target.Type == asmtypes.StateHITL || target.Type == asmtypes.StateWait {
+			status = asmtypes.RunWaiting
+		}
+	}
+
 	if err := workflow.ExecuteActivity(shortOpts, (*Activities).UpdateRun, UpdateRunParams{
 		RunID:           runID,
 		TenantID:        tenantID,
-		WorkflowName:    workflowName,
-		WorkflowVersion: workflowVersion,
+		WorkflowName:    def.Metadata.Name,
+		WorkflowVersion: def.Metadata.Version,
 		CurrentState:    toState,
-		Status:          asmtypes.RunRunning,
+		Status:          status,
 		Blackboard:      bb,
 	}).Get(ctx, nil); err != nil {
 		return err

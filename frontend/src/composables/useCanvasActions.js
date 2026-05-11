@@ -42,11 +42,12 @@ export function useCanvasActions({ nodes, edges, agents, isDirty, selected, pend
 
   function confirmConnection({ trigger, guard }) {
     const { source, target } = pendingConnection.value
+    const isTimeout = trigger === 'timeout'
     edges.value.push({
       id: `${source}__${trigger}__${target}`,
       source, target,
       type: 'transitionEdge', label: trigger,
-      data: { guard: guard || '', isTimeout: false },
+      data: { guard: guard || '', isTimeout },
     })
     pendingConnection.value = null
     isDirty.value = true
@@ -118,10 +119,11 @@ export function useCanvasActions({ nodes, edges, agents, isDirty, selected, pend
     if (idx === -1) return
 
     const newId = `${edges.value[idx].source}__${data.label}__${edges.value[idx].target}`
+    const isTimeout = data.label === 'timeout'
     edges.value[idx] = {
       ...edges.value[idx],
       id: newId, label: data.label,
-      data: { ...edges.value[idx].data, guard: data.guard },
+      data: { ...edges.value[idx].data, guard: data.guard, isTimeout },
       selected: true,
     }
     nextTick(() => {

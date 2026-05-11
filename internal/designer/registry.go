@@ -10,13 +10,13 @@ import (
 
 // MCPServerEntry is one entry in the MCP server registry.
 type MCPServerEntry struct {
-	// Name is the logical identifier used when referencing this server in workflow configs.
-	Name string `yaml:"name" json:"name"`
-	// EnvVar is the environment variable that holds the server URL.
-	// Not exposed in the public API — for operator reference only.
-	EnvVar string `yaml:"env_var" json:"-"`
-	// Description is shown in the AI generator UI so the LLM knows what tools this server provides.
-	Description string `yaml:"description" json:"description"`
+	Name        string   `yaml:"name" json:"name"`
+	EnvVar      string   `yaml:"env_var" json:"-"`
+	Description string   `yaml:"description" json:"description"`
+	Transport   string   `yaml:"transport" json:"transport,omitempty"`
+	Command     string   `yaml:"command" json:"command,omitempty"`
+	Args        []string `yaml:"args" json:"args,omitempty"`
+	URL         string   `yaml:"url" json:"url,omitempty"`
 }
 
 // mcpRegistryFile wraps the top-level YAML structure.

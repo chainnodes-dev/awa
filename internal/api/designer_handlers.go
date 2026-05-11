@@ -157,19 +157,26 @@ func (h *Handlers) PingMCPServer(c *gin.Context) {
 		return
 	}
 
-	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodHead, srv.URL, nil)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"status": "error", "error": fmt.Sprintf("invalid URL: %v", err)})
-		return
+	if srv.Transport == "sse" {
+		if srv.URL == "" {
+			c.JSON(http.StatusOK, gin.H{"status": "offline", "error": "No URL configured for SSE transport. Please set the required environment variable."})
+			return
+		}
+
+		req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodHead, srv.URL, nil)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"status": "error", "error": fmt.Sprintf("invalid URL '%s': %v", srv.URL, err)})
+			return
+		}
+		resp, err := http.DefaultClient.Do(req)
+		latency = time.Since(start).Milliseconds()
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"status": "offline", "error": err.Error(), "latency_ms": latency})
+			return
+		}
+		resp.Body.Close()
+		c.JSON(http.StatusOK, gin.H{"status": "online", "http_status": resp.StatusCode, "latency_ms": latency})
 	}
-	resp, err := http.DefaultClient.Do(req)
-	latency = time.Since(start).Milliseconds()
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"status": "offline", "error": err.Error(), "latency_ms": latency})
-		return
-	}
-	resp.Body.Close()
-	c.JSON(http.StatusOK, gin.H{"status": "online", "http_status": resp.StatusCode, "latency_ms": latency})
 }
 
 // DiscoverMCPServer connects to an MCP server and retrieves its tool list.

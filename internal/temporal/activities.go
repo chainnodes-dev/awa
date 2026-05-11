@@ -97,7 +97,18 @@ func (a *Activities) CreateHITL(ctx context.Context, p CreateHITLParams) error {
 	if p.Request.ID == "" {
 		p.Request.ID = uuid.NewString()
 	}
-	return a.Store.CreateHITL(ctx, p.Request)
+	if err := a.Store.CreateHITL(ctx, p.Request); err != nil {
+		return err
+	}
+
+	// Notify the UI that we are waiting for human input.
+	_ = a.Bus.Publish(ctx, events.New(events.HITLWaiting, events.HITLWaitingPayload{
+		RunID:     p.Request.RunID,
+		StateName: p.Request.StateName,
+		Assignee:  p.Request.Assignee,
+	}))
+
+	return nil
 }
 
 // ExecuteCode runs a user-written JavaScript code node via the goja sandbox

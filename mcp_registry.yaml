@@ -61,13 +61,16 @@ mcp_servers:
 
   # ── Business & Data ────────────────────────────────────────────────
   - name: gleif
+    transport: sse
     env_var: MCP_GLEIF_URL
     description: "Verified legal entity lookups. Tools: gleif_search(query)."
 
   - name: exchange-rates
+    transport: sse
     env_var: MCP_EXCHANGE_URL
     description: "Currency conversion via Frankfurter. Tools: get_exchange_rate(amount, from, to)."
 
   - name: openfigi
+    transport: sse
     env_var: MCP_OPENFIGI_URL
     description: "Financial instrument lookups. Tools: figi_lookup(ticker)."

@@ -2,12 +2,7 @@
   <aside class="w-14 flex flex-col items-center py-4 gap-1 border-r border-border bg-surface-1 shrink-0">
     <!-- Logo / Home -->
     <RouterLink to="/dashboard" :title="entStore.branding?.name || 'Home'" class="mb-8 w-10 h-10 flex items-center justify-center shrink-0 cursor-pointer hover:scale-105 transition-transform overflow-hidden">
-      <img v-if="entStore.branding?.logo_url" :src="entStore.branding.logo_url" class="w-full h-full object-contain" />
-      <div v-else class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-      </div>
+      <img :src="entStore.branding?.logo_url || '/logo.png'" class="w-full h-full object-contain" />
     </RouterLink>
 
     <NavItem to="/dashboard" title="Dashboard">

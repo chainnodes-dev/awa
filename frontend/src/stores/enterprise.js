@@ -5,7 +5,7 @@ import { api } from './auth'
 export const useEnterpriseStore = defineStore('enterprise', () => {
   const status = ref(null)
   const loading = ref(false)
-  const branding = ref({ name: 'Phaxa', logo_url: '/logo.svg' })
+  const branding = ref({ name: 'Phaxa', logo_url: '/logo.png' })
   const secrets = ref({})
   const auditLogs = ref([])
   const analytics = ref({})
@@ -23,7 +23,12 @@ export const useEnterpriseStore = defineStore('enterprise', () => {
   async function fetchBranding() {
     try {
       const { data } = await api.get('/enterprise/branding')
-      branding.value = data
+      if (data.logo_url) {
+        branding.value = data
+      } else {
+        // Update name but keep default logo
+        branding.value = { ...branding.value, name: data.name || 'Phaxa' }
+      }
     } catch (e) {
       console.error('Failed to fetch branding', e)
     }

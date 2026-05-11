@@ -32,7 +32,7 @@
       </div>
 
       <!-- HITL controls (only for hitl-type states, not wait/join nodes) -->
-      <template v-if="run?.status === 'waiting' && currentStateType === 'hitl'">
+      <template v-if="currentStateType === 'hitl'">
         <button @click="resolve('approved')" class="btn bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs">✓ Approve</button>
         <button @click="resolve('rejected')" class="btn bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs">✕ Reject</button>
       </template>
@@ -120,19 +120,34 @@
         >
           <Background pattern-color="#2a2d3a" :gap="24" :size="1" />
           <Controls />
+
+          <!-- High-quality HTML Edge Labels (aligned with Designer) -->
+          <template #edge-label="{ labelX, labelY, data }">
+            <EdgeLabelRenderer>
+              <div 
+                v-if="data?.trigger"
+                :style="{
+                  position: 'absolute',
+                  transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                  pointerEvents: 'all'
+                }"
+                class="px-2 py-1 rounded border border-border bg-surface-2/80 text-[9px] font-mono font-medium text-text shadow-xl backdrop-blur-sm whitespace-nowrap text-center leading-tight"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span v-if="data.isTimeout">⏱</span>
+                  <span>{{ data.trigger }}</span>
+                </div>
+                <div v-if="data.guard" class="text-[8px] text-text-muted opacity-90 mt-0.5">
+                  {{ data.guard }}
+                </div>
+              </div>
+            </EdgeLabelRenderer>
+          </template>
         </VueFlow>
         <div v-else class="flex-1 flex items-center justify-center text-text-muted text-sm">
           Loading workflow…
         </div>
 
-        <!-- Agent thinking stream -->
-        <div v-if="thinkingText" class="border-t border-border bg-surface-1 px-4 py-2 max-h-32 overflow-y-auto">
-          <div class="flex items-center gap-2 mb-1">
-            <div class="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"/>
-            <span class="text-xs text-text-muted font-semibold">Agent reasoning</span>
-          </div>
-          <p class="text-xs font-mono text-text-muted whitespace-pre-wrap">{{ thinkingText }}</p>
-        </div>
 
         <!-- Event log -->
         <div class="h-48 border-t border-border">
@@ -187,11 +202,21 @@
         </div>
 
         <!-- Blackboard tab (Live) -->
-        <BlackboardPanel
-          v-if="activeTab === 'blackboard'"
-          :blackboard="run?.blackboard"
-          class="flex-1 overflow-hidden"
-        />
+        <div v-if="activeTab === 'blackboard'" class="flex-1 flex flex-col overflow-hidden">
+          <BlackboardPanel
+            :blackboard="run?.blackboard"
+            class="flex-1 overflow-hidden"
+          />
+
+          <!-- Agent Reasoning (Live) -->
+          <div v-if="displayReasoning" class="border-t border-border p-4 bg-surface-2 shrink-0 max-h-[40%] overflow-y-auto shadow-inner">
+            <div class="flex items-center gap-2 mb-2">
+              <div v-if="isThinking" class="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"/>
+              <h4 class="text-[10px] font-bold text-text-muted uppercase tracking-widest">Agent Reasoning</h4>
+            </div>
+            <p class="text-xs text-text leading-relaxed whitespace-pre-wrap font-sans">{{ displayReasoning }}</p>
+          </div>
+        </div>
 
         <!-- Snapshot tab (Historical) -->
         <div v-else-if="activeTab === 'snapshot' && selectedTransition" class="flex-1 flex flex-col overflow-hidden">
@@ -240,13 +265,12 @@
               <p class="text-xs text-text-muted">No additional data required. Please approve or reject above.</p>
             </div>
 
-            <!-- Blackboard Tweak (Optional) -->
-            <div class="mt-8 pt-4 border-t border-border">
+            <div class="mt-8 pt-4 border-t border-border flex-1 flex flex-col min-h-0">
               <div class="flex items-center justify-between mb-3">
-                <h4 class="text-[10px] font-bold text-text-muted uppercase tracking-widest">Advanced Tweaks</h4>
+                <h4 class="text-xs font-bold text-text-muted uppercase tracking-widest">Advanced Tweaks</h4>
                 <button 
                   @click="showBlackboardTweak = !showBlackboardTweak" 
-                  class="text-[9px] text-indigo-400 hover:text-indigo-300"
+                  class="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium"
                 >
                   {{ showBlackboardTweak ? 'Hide Context' : 'Edit Context' }}
                 </button>
@@ -268,8 +292,8 @@
                   ]"
                 > JSON </button>
               </div>
-              <div v-if="showBlackboardTweak" class="space-y-4">
-                <div v-if="tweakView === 'form' && blackboardSchema" class="max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-800">
+              <div v-if="showBlackboardTweak" class="space-y-4 flex-1 flex flex-col min-h-0">
+                <div v-if="tweakView === 'form' && blackboardSchema" class="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-800">
                   <JsonSchemaForm
                     :schema="blackboardSchema"
                     :initial-data="editedBlackboard"
@@ -279,7 +303,7 @@
                 <BlackboardEditor 
                   v-else
                   v-model="editedBlackboard"
-                  class="max-h-[300px]"
+                  class="flex-1"
                   @update:modelValue="syncFromTweakJson"
                 />
               </div>
@@ -325,7 +349,7 @@
 
                 <!-- Trigger badge + origin -->
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="inline-flex items-center gap-1 text-[10px] font-mono bg-indigo-500/15 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/25">
+                  <span class="inline-flex items-center gap-1 text-[9px] font-mono bg-indigo-500/15 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/25">
                     {{ t.trigger }}
                   </span>
                   <span class="text-[10px] text-text-muted">from</span>
@@ -404,7 +428,7 @@
 <script setup>
 import { ref, computed, onMounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { VueFlow } from '@vue-flow/core'
+import { VueFlow, EdgeLabelRenderer } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls }   from '@vue-flow/controls'
 import '@vue-flow/core/dist/style.css'
@@ -442,7 +466,7 @@ const workflowDef  = ref(null)
 const workflowYAML = ref('')
 const nodeTypes    = shallowRef({ stateNode: StateNode })
 const hitlForm     = ref(null)
-const showBlackboardTweak = ref(false)
+const showBlackboardTweak = ref(true)
 const tweakView = ref('form')
 const editedBlackboard = ref({})
 const resolveError = ref('')
@@ -492,7 +516,7 @@ const visibleTabs  = computed(() => {
     { id: 'blackboard', label: 'Blackboard' },
     { id: 'timeline',   label: 'Timeline'   },
   ]
-  if (run.value?.status === 'waiting' && currentStateType.value === 'hitl') {
+  if (currentStateType.value === 'hitl') {
     tabs.push({ id: 'task', label: 'Task' })
   }
   if (authStore.hasRole('admin')) {
@@ -516,6 +540,12 @@ watch([() => run.value?.status, () => currentStateType.value], ([status, type]) 
 watch(() => run.value?.blackboard, (bb) => {
   if (bb && run.value?.status === 'waiting') {
     editedBlackboard.value = JSON.parse(JSON.stringify(bb))
+    // Default to JSON if no schema is defined to show "full set of inputs"
+    if (!blackboardSchema.value || Object.keys(blackboardSchema.value.properties || {}).length === 0) {
+      tweakView.value = 'json'
+    } else {
+      tweakView.value = 'form'
+    }
   }
 }, { immediate: true })
 
@@ -560,12 +590,24 @@ const flowEdges = computed(() => {
     const targets = t.to_nodes ?? (t.to ? [t.to] : [])
     
     for (const target of targets) {
+      const isLast = history.value.length > 0 && 
+                     history.value[history.value.length - 1].from_state === t.from &&
+                     history.value[history.value.length - 1].to_state === target &&
+                     history.value[history.value.length - 1].trigger === t.trigger
+
+      const isTimeout = t.trigger === 'timeout'
+
       edges.push({
-        id:     `${t.from}__${t.trigger}__${target}`,
+        id:      `${t.from}__${t.trigger}__${target}`,
         source:  t.from,
         target:  target,
-        label:   t.trigger,
-        data:   { guard: t.guard },
+        animated: isLast || run.value?.status === 'running',
+        class:   isLast ? 'edge-active' : '',
+        data:    { 
+          trigger: t.trigger,
+          guard: t.guard,
+          isTimeout
+        },
       })
     }
   }
@@ -604,6 +646,47 @@ const filteredEvents = computed(() =>
 )
 
 const thinkingText = computed(() => execStore.thinkingTokens[route.params.id] ?? '')
+
+const isThinking = computed(() => !!thinkingText.value && run.value?.status === 'running')
+
+const lastReasoning = computed(() => {
+  const calls = runLLMCalls.value
+  if (!calls || calls.length === 0) return null
+  // The calls are already sorted by time (added via push in store)
+  // We want the most recent one that has a response with reasoning
+  for (let i = calls.length - 1; i >= 0; i--) {
+    if (calls[i].response?.reasoning) {
+      return calls[i].response.reasoning
+    }
+  }
+  return null
+})
+
+const displayReasoning = computed(() => {
+  if (thinkingText.value) {
+    // If it looks like a JSON response being streamed, try to extract the reasoning field
+    const trimmed = thinkingText.value.trim()
+    if (trimmed.startsWith('{')) {
+      const match = thinkingText.value.match(/"reasoning":\s*"((?:[^"\\]|\\.)*)"/)
+      if (match) {
+        // Unescape the string if it's a partial JSON match
+        try {
+          return JSON.parse(`"${match[1]}"`)
+        } catch (e) {
+          return match[1]
+        }
+      }
+      
+      // If we see the JSON structure but not the reasoning value yet
+      if (thinkingText.value.includes('"reasoning"')) return "Extracting reasoning..."
+      
+      // If it's a JSON block, don't show the raw JSON, wait for the field
+      return null
+    }
+    return thinkingText.value
+  }
+  return lastReasoning.value
+})
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 

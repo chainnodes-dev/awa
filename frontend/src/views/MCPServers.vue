@@ -83,7 +83,8 @@
           <!-- Connection details -->
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-2 border-t border-border/40">
             <div v-if="srv.transport === 'stdio'" class="flex items-center gap-1.5 text-[11px]">
-              <span class="px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-[8px]">Local</span>
+              <span v-if="srv.command === 'npx'" class="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold uppercase tracking-widest text-[8px]">NPX</span>
+              <span v-else class="px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-[8px]">Local</span>
               <span class="font-mono text-text opacity-50 truncate max-w-[120px]">{{ srv.command }}</span>
             </div>
             <div v-else-if="srv.url" class="flex items-center gap-1.5 text-[11px]">
@@ -100,8 +101,13 @@
             </div>
           </div>
 
-          <!-- Health error message -->
-          <div v-if="healthError[srv.id]" class="mt-2 text-[10px] text-red-500 bg-red-500/5 rounded px-2 py-1.5 font-mono truncate border border-red-500/10" :title="healthError[srv.id]">
+          <!-- Health error message / Setup prompt -->
+          <div v-if="healthStatus[srv.id] === 'offline' && srv.transport === 'sse' && !srv.url" class="mt-2">
+            <button @click="openModal(srv)" class="w-full py-1.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider hover:bg-indigo-500/20 transition-colors">
+              Configure Connection
+            </button>
+          </div>
+          <div v-else-if="healthError[srv.id]" class="mt-2 text-[10px] text-red-500 bg-red-500/5 rounded px-2 py-1.5 font-mono truncate border border-red-500/10" :title="healthError[srv.id]">
             {{ healthError[srv.id] }}
           </div>
         </div>
