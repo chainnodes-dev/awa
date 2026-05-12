@@ -74,12 +74,16 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			runs.POST("", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.StartRun)
 			runs.POST("/:id/trigger", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.TriggerRun)
 			runs.POST("/:id/signal", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.SignalHITL)
+			runs.POST("/:id/chat", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.SendChat)
 			runs.POST("/:id/terminate", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.TerminateRun)
 			runs.DELETE("/:id", auth.RequireRole(auth.RoleAdmin), h.DeleteRun)
 		}
 
 		// HITL management.
 		api.GET("/hitl/pending", h.GetPendingHITL)
+
+		// MCP Marketplace — source defined via MCP_MARKET_SOURCE env
+		api.GET("/mcp-market", h.GetMCPMarket)
 
 		// MCP Server Registry — readable by all authenticated users; write requires admin.
 		api.GET("/mcp-servers", h.ListMCPServers)

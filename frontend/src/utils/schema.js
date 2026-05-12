@@ -14,16 +14,7 @@ export function convertPhaxaSchemaToJsonSchema(phaxaSchema, onlyRequired = false
   for (const [key, field] of Object.entries(phaxaSchema)) {
     if (onlyRequired && !field.required) continue
 
-    // Basic mapping of Phaxa types to JSON Schema types
-    let type = field.type || 'string'
-    if (type === 'bool') type = 'boolean'
-
-    properties[key] = {
-      type,
-      title: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      default: field.default
-    }
-
+    properties[key] = convertField(field, key)
     if (field.required) {
       required.push(key)
     }
@@ -36,5 +27,40 @@ export function convertPhaxaSchemaToJsonSchema(phaxaSchema, onlyRequired = false
     properties,
     required,
     title: onlyRequired ? 'Required Inputs' : 'Blackboard Data'
+  }
+}
+
+function convertField(field, key = '') {
+  let type = field.type || 'string'
+  let items = undefined
+  let properties = undefined
+  let required = undefined
+
+  if (type === 'bool') type = 'boolean'
+  
+  if (type === 'list' || type === 'array') {
+    type = 'array'
+    if (field.items) {
+      items = convertField(field.items)
+    } else {
+      items = { type: 'string' }
+    }
+  }
+
+  if (type === 'object' && field.properties) {
+    const subSchema = convertPhaxaSchemaToJsonSchema(field.properties)
+    if (subSchema) {
+      properties = subSchema.properties
+      required = subSchema.required
+    }
+  }
+
+  return {
+    type,
+    items,
+    properties,
+    required,
+    title: field.title || (key ? key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : undefined),
+    default: field.default
   }
 }

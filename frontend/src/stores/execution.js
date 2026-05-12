@@ -12,6 +12,7 @@ export const useExecutionStore = defineStore('execution', () => {
   // runId → array of { id, stateName, agentName, method, toolName, input, output, duration, timestamp, isError }
   const llmCalls = reactive({})
   const mcpLogs = reactive({})
+  const chatMessages = reactive({}) // runId → array of { sender, message, role, timestamp }
 
   async function fetchRuns(filter = {}) {
     const params = new URLSearchParams()
@@ -48,8 +49,10 @@ export const useExecutionStore = defineStore('execution', () => {
     return data
   }
 
-  async function fetchPendingHITL() {
-    const { data } = await api.get('/hitl/pending')
+  async function fetchPendingHITL(filter = {}) {
+    const params = new URLSearchParams()
+    if (filter.assignee) params.set('assignee', filter.assignee)
+    const { data } = await api.get(`/hitl/pending?${params}`)
     pendingHITL.value = data ?? []
   }
 
@@ -60,6 +63,11 @@ export const useExecutionStore = defineStore('execution', () => {
   async function resolveHITL(runId, resolution, resolver = 'user', payload = {}) {
     await api.post(`/runs/${runId}/signal`, { resolution, resolver, payload })
     await fetchPendingHITL()
+  }
+
+  async function sendChat(runId, message) {
+    await api.post(`/runs/${runId}/chat`, { message })
+    // The agent.chat event will come back via WS and update the local state.
   }
 
   async function terminateRun(id) {
@@ -209,12 +217,23 @@ export const useExecutionStore = defineStore('execution', () => {
           activeRun.value = { ...activeRun.value, status: 'running' }
         break
       }
+
+      case 'agent.chat': {
+        if (!chatMessages[data.run_id]) chatMessages[data.run_id] = []
+        chatMessages[data.run_id].push({
+          sender:    data.sender,
+          message:   data.message,
+          role:      data.role, // 'human' | 'agent'
+          timestamp: event.timestamp,
+        })
+        break
+      }
     }
   }
 
   return {
-    runs, activeRun, transitions, eventLog, thinkingTokens, pendingHITL, llmCalls, mcpLogs,
+    runs, activeRun, transitions, eventLog, thinkingTokens, pendingHITL, llmCalls, mcpLogs, chatMessages,
     fetchRuns, fetchRun, fetchHistory, fetchPendingHITL, fetchMCPLogs,
-    deleteRun, terminateRun, sendTrigger, resolveHITL, handleEvent
+    deleteRun, terminateRun, sendTrigger, resolveHITL, sendChat, handleEvent
   }
 })

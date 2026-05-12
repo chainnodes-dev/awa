@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/asm-platform/asm/internal/auth"
+	"github.com/asm-platform/asm/internal/config"
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/health"
 	"github.com/asm-platform/asm/internal/mcp"
@@ -54,6 +55,9 @@ func (s *stubTemporalClient) SendTriggerSignal(_ context.Context, _, _ string, _
 func (s *stubTemporalClient) SendHITLSignal(_ context.Context, _ string, _ asmtypes.HITLSignal) error {
 	return nil
 }
+func (s *stubTemporalClient) SendChatSignal(_ context.Context, _, _, _ string) error {
+	return nil
+}
 func (s *stubTemporalClient) TerminateWorkflow(_ context.Context, _ string) error {
 	return nil
 }
@@ -83,7 +87,7 @@ func testRouter(t *testing.T) testEnv {
 	}
 
 	mcpMgr := mcp.NewManager(s, true)
-	handlers := NewHandlers(eng, s, jwtSvc, nil, nil, nil, nil, nil, nil, mcpMgr, true) // nil generator, etc.
+	handlers := NewHandlers(&config.Config{}, eng, s, jwtSvc, nil, nil, nil, nil, nil, nil, mcpMgr, true) // nil generator, etc.
 	router := gin.New()
 	registerRoutes(router, handlers, NewHub(bus), jwtSvc, health.New())
 

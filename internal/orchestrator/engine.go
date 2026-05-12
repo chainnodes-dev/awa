@@ -37,6 +37,7 @@ type TemporalEngineClient interface {
 	StartWorkflow(ctx context.Context, run *asmtypes.WorkflowRun, def *asmtypes.WorkflowDef) (temporalID string, err error)
 	SendTriggerSignal(ctx context.Context, temporalID, trigger string, payload map[string]interface{}) error
 	SendHITLSignal(ctx context.Context, temporalID string, sig asmtypes.HITLSignal) error
+	SendChatSignal(ctx context.Context, temporalID, message, sender string) error
 	TerminateWorkflow(ctx context.Context, temporalID string) error
 	Close()
 }
@@ -139,6 +140,24 @@ func (e *Engine) SignalHITL(ctx context.Context, sig asmtypes.HITLSignal) error 
 		return fmt.Errorf("run '%s' has no temporal workflow ID", sig.RunID)
 	}
 	return e.temporal.SendHITLSignal(ctx, run.TemporalID, sig)
+}
+
+// SendChat sends a chat message to a waiting agent in Temporal.
+func (e *Engine) SendChat(ctx context.Context, runID, message, sender string) error {
+	run, err := e.store.GetRun(ctx, runID)
+	if err != nil {
+		return fmt.Errorf("load run: %w", err)
+	}
+	if run.TemporalID == "" {
+		return fmt.Errorf("run '%s' has no temporal workflow ID", runID)
+	}
+
+	// Record the chat event in the bus so UI can show it immediately.
+	_ = e.bus.Publish(ctx, events.New(events.AgentChat, map[string]string{
+		"run_id": runID, "message": message, "sender": sender, "role": "human",
+	}))
+
+	return e.temporal.SendChatSignal(ctx, run.TemporalID, message, sender)
 }
 
 // ListRuns returns runs matching the filter.

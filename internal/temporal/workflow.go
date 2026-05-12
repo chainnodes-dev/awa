@@ -296,6 +296,48 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 						bb[k] = v
 					}
 				})
+				selector.AddReceive(workflow.GetSignalChannel(bCtx, SignalChat), func(c workflow.ReceiveChannel, _ bool) {
+					var sig ChatSignalPayload
+					c.Receive(bCtx, &sig)
+					
+					// Update blackboard with the user's message and re-run the agent to respond.
+					bb["_last_user_message"] = sig.Message
+					
+					if state.Agent != "" {
+						agentDef := p.Def.AgentByName(state.Agent)
+						if agentDef != nil {
+							agentOpts := makeAgentOpts(bCtx, agentDef.TaskQueue)
+							var output *asmtypes.AgentOutput
+							_ = workflow.ExecuteActivity(agentOpts, (*Activities).ExecuteAgent, ExecuteAgentParams{
+								RunID:           p.RunID,
+								TenantID:        p.TenantID,
+								WorkflowName:    p.Def.Metadata.Name,
+								WorkflowVersion: p.Def.Metadata.Version,
+								AgentDef:        *agentDef,
+								StateDef:        *state,
+								Blackboard:      bb,
+								Def:             p.Def,
+							}).Get(bCtx, &output)
+							
+							if output != nil {
+								for k, v := range output.BlackboardUpdates {
+									bb[k] = v
+								}
+
+								// Publish agent's response as a chat message.
+								_ = workflow.ExecuteActivity(agentOpts, (*Activities).PublishEvent, PublishEventParams{
+									EventType: events.AgentChat,
+									Data: map[string]string{
+										"run_id":  p.RunID,
+										"message": output.Content,
+										"sender":  agentDef.Name,
+										"role":    "agent",
+									},
+								})
+							}
+						}
+					}
+				})
 				selector.AddFuture(workflow.NewTimer(bCtx, waitDur), func(f workflow.Future) {
 					trigger = "timeout"
 				})
@@ -748,6 +790,7 @@ func failWorkflow(ctx, shortOpts workflow.Context, p WorkflowParams, cause error
 		WorkflowName:    p.Def.Metadata.Name,
 		WorkflowVersion: p.Def.Metadata.Version,
 		Status:          asmtypes.RunFailed,
+		FailureReason:   cause.Error(),
 		IsTerminal:      true,
 	}).Get(ctx, nil)
 	_ = workflow.ExecuteActivity(shortOpts, (*Activities).PublishEvent, PublishEventParams{

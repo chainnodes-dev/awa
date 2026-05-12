@@ -67,8 +67,10 @@ type HITLRequest struct {
 type AgentOutput struct {
 	BlackboardUpdates map[string]interface{} `json:"blackboard_updates"`
 	Trigger           string                 `json:"trigger"`
+	Content           string                 `json:"content,omitempty"` // raw model output
 	Reasoning         string                 `json:"reasoning,omitempty"`
 	Error             string                 `json:"error,omitempty"`
+	StackTrace        string                 `json:"stack_trace,omitempty"`
 }
 
 // TriggerRequest asks the engine to fire a named trigger on a run.

@@ -238,8 +238,9 @@ func (h *Handlers) DiscoverMCPServer(c *gin.Context) {
 
 	var toolsResp struct {
 		Tools []struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
+			Name        string                 `json:"name"`
+			Description string                 `json:"description"`
+			InputSchema map[string]interface{} `json:"inputSchema"`
 		} `json:"tools"`
 	}
 	_ = json.Unmarshal(toolsResult, &toolsResp)
@@ -247,7 +248,31 @@ func (h *Handlers) DiscoverMCPServer(c *gin.Context) {
 	var parts []string
 	for _, t := range toolsResp.Tools {
 		entry := t.Name
-		if t.Description != "" { entry += " \u2014 " + t.Description }
+		if t.Description != "" {
+			entry += " \u2014 " + t.Description
+		}
+		// Identify required params from schema
+		if schema, ok := t.InputSchema["properties"].(map[string]interface{}); ok {
+			var reqs []string
+			required, _ := t.InputSchema["required"].([]interface{})
+			for k := range schema {
+				isReq := false
+				for _, r := range required {
+					if r == k {
+						isReq = true
+						break
+					}
+				}
+				if isReq {
+					reqs = append(reqs, k+"*")
+				} else {
+					reqs = append(reqs, k)
+				}
+			}
+			if len(reqs) > 0 {
+				entry += fmt.Sprintf(" [%s]", strings.Join(reqs, ", "))
+			}
+		}
 		parts = append(parts, entry)
 	}
 	description := "Tools: " + strings.Join(parts, "; ")

@@ -383,9 +383,10 @@ func (g *Generator) buildSystemPrompt(requestedServers []string) string {
 
 	sb.WriteString(`## Output Format
 
-Respond with ONLY the workflow YAML, wrapped in a ` + "```yaml" + ` code block.
-Do not include any explanation before or after the code block.
-The YAML must be complete and valid according to the schema above.
+1. Respond with the updated workflow YAML wrapped in a ` + "```yaml" + ` code block.
+2. AFTER the code block, provide a brief (1-2 sentence) explanation of the changes you made and why.
+3. Do not include any text before the code block.
+4. The YAML must be complete and valid according to the schema above.
 `)
 
 	return sb.String()

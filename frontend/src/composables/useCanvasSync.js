@@ -1,7 +1,9 @@
 import { watch, nextTick } from 'vue'
 import yaml from 'js-yaml'
+import { useValidator } from './useValidator'
 
-export function useCanvasSync({ nodes, edges, meta, isDirty, view, yamlSource, yamlError, flowKey, fromLoad, loadDefinition, buildDefinition }) {
+export function useCanvasSync({ nodes, edges, meta, isDirty, view, yamlSource, yamlErrors, flowKey, fromLoad, loadDefinition, buildDefinition }) {
+  const { validate } = useValidator()
 
   // Prevents the canvas→YAML watch from firing when the canvas was updated
   // as a result of a YAML parse (would overwrite what the user typed).
@@ -32,15 +34,16 @@ export function useCanvasSync({ nodes, edges, meta, isDirty, view, yamlSource, y
     if (v === 'yaml' || v === 'split') {
       yamlSource.value = yaml.dump(buildDefinition(), { lineWidth: 120 })
     } else if (oldV === 'yaml' && v === 'canvas') {
-      try {
-        const def = yaml.load(yamlSource.value)
-        if (def) loadDefinition(def, null, false)
-        yamlError.value = ''
-      } catch (e) {
-        yamlError.value = e.message
-        alert('YAML Syntax Error: ' + e.message + '\n\nReturning to editor.')
+      const errors = validate(yamlSource.value)
+      if (errors.length > 0) {
+        yamlErrors.value = errors
+        alert('Workflow has validation errors. Please fix them before switching to Canvas.')
         view.value = 'yaml'
+        return
       }
+      const def = yaml.load(yamlSource.value)
+      if (def) loadDefinition(def, null, false)
+      yamlErrors.value = []
     }
   })
 
@@ -48,18 +51,22 @@ export function useCanvasSync({ nodes, edges, meta, isDirty, view, yamlSource, y
   function onYamlInput() {
     isDirty.value = true
     if (view.value !== 'split') return
-    yamlError.value = ''
+    yamlErrors.value = []
     clearTimeout(yamlDebounce)
     yamlDebounce = setTimeout(() => {
+      const errors = validate(yamlSource.value)
+      yamlErrors.value = errors
+      if (errors.length > 0) return
+
       try {
         const def = yaml.load(yamlSource.value)
         if (!def) return
         fromYamlUpdate = true
         loadDefinition(def, null, false)
         nextTick(() => { fromYamlUpdate = false })
-        yamlError.value = ''
       } catch (e) {
-        yamlError.value = e.message
+        // Should be caught by validate() above, but safety first
+        yamlErrors.value = [{ message: e.message }]
       }
     }, 400)
   }

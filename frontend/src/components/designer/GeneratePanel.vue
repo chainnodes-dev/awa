@@ -158,40 +158,71 @@
         <!-- Divider -->
         <div class="flex items-center gap-2 pt-1">
           <div class="flex-1 h-px bg-border/50"/>
-          <span class="text-[9px] text-text-muted uppercase tracking-widest font-bold">Refine</span>
+          <span class="text-[9px] text-text-muted uppercase tracking-widest font-bold">Designer Chat</span>
           <div class="flex-1 h-px bg-border/50"/>
         </div>
 
-        <!-- Inline refinement -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <p class="text-[10px] text-text-muted">Request a targeted change to the current workflow.</p>
-            <span v-if="history.length" class="text-[9px] text-emerald-500 font-bold uppercase tracking-tighter">History Active</span>
-          </div>
-          <textarea
-            :value="prompt"
-            @input="emit('update:prompt', $event.target.value)"
-            class="input text-[11px] h-20 resize-none font-sans leading-relaxed border-indigo-500/20 focus:border-indigo-500/50"
-            placeholder="e.g. Add an error handling branch from the validation step..."
-            @keydown.enter.meta.prevent="applyRefinement"
-          />
-          <div class="flex gap-2">
-            <button
-              @click="applyRefinement"
-              :disabled="loading || !prompt.trim()"
-              class="flex-1 btn py-1.5 gap-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all disabled:opacity-40"
+        <!-- Chat-like Refinement -->
+        <div class="flex-1 flex flex-col min-h-[300px] bg-surface-0/30 rounded-xl border border-border/50 overflow-hidden">
+          <!-- History Stream -->
+          <div 
+            ref="refineScroll"
+            class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar"
+          >
+            <div v-for="(item, i) in history" :key="i" 
+              :class="['flex flex-col gap-1', item.role === 'user' ? 'items-end' : 'items-start']"
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              <span class="text-[8px] font-bold uppercase tracking-tighter text-text-muted px-1">
+                {{ item.role === 'user' ? 'You' : 'Designer' }}
+              </span>
+              <div 
+                :class="[
+                  'max-w-[90%] px-3 py-2 rounded-xl text-[11px] leading-relaxed',
+                  item.role === 'user' 
+                    ? 'bg-indigo-600 text-white rounded-tr-none' 
+                    : 'bg-surface-2 text-text border border-border/50 rounded-tl-none'
+                ]"
+              >
+                {{ item.content }}
+              </div>
+            </div>
+            
+            <div v-if="!history.length" class="h-full flex flex-col items-center justify-center text-center opacity-20 py-12">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mb-2">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-13.5 8.38 8.38 0 0 1 3.8.9L21 3z"/>
               </svg>
-              Apply
-            </button>
-            <button
-              v-if="history.length"
-              @click="clearHistory"
-              class="px-3 py-1.5 text-[10px] text-text-muted hover:text-red-400 border border-border hover:border-red-500/30 rounded-lg transition-colors"
-              title="Clear refinement history"
-            >Clear</button>
+              <p class="text-[10px]">Ask for changes, additions, or refactorings.</p>
+            </div>
+          </div>
+
+          <!-- Input Area -->
+          <div class="p-3 bg-surface-1/50 border-t border-border/50">
+            <div class="relative">
+              <textarea
+                :value="prompt"
+                @input="emit('update:prompt', $event.target.value)"
+                @keydown.enter.meta.prevent="applyRefinement"
+                class="w-full bg-surface-0 border border-border/40 rounded-lg px-3 py-2 text-[11px] h-16 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all pr-10"
+                placeholder="e.g. Add error handling..."
+              />
+              <button 
+                @click="applyRefinement"
+                :disabled="loading || !prompt.trim()"
+                class="absolute right-2 bottom-2 p-1.5 rounded-md bg-indigo-600 text-white hover:bg-indigo-500 transition-all disabled:opacity-30"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </div>
+            <div class="flex items-center justify-between mt-2">
+              <span class="text-[8px] text-text-muted">⌘ + Enter to apply</span>
+              <button 
+                v-if="history.length"
+                @click="clearHistory"
+                class="text-[8px] text-text-muted hover:text-red-400 font-bold uppercase tracking-wider"
+              >Clear Chat</button>
+            </div>
           </div>
         </div>
 
@@ -219,6 +250,8 @@ import TraceViewer from './TraceViewer.vue'
 
 const authStore = useAuthStore()
 const llmStore = useLLMStore()
+
+const refineScroll = ref(null)
 
 const props = defineProps({
   yamlSource:              { type: String, default: '' },
@@ -343,11 +376,18 @@ async function applyRefinement() {
     emit('update:history', [
       ...props.history,
       { role: 'user',      content: props.prompt },
-      { role: 'assistant', content: 'Workflow updated.' },
+      { role: 'assistant', content: data.explanation || 'Workflow updated.' },
     ])
     emit('update:prompt', '')
     emit('update:interactions', data.interactions || [])
     emit('apply', { yamlStr: data.yaml, definition: data.definition })
+
+    // Auto-scroll chat
+    setTimeout(() => {
+      if (refineScroll.value) {
+        refineScroll.value.scrollTop = refineScroll.value.scrollHeight
+      }
+    }, 50)
 
   } catch (e) {
     refineError.value = e.response?.data?.error ?? e.message

@@ -573,13 +573,20 @@ func (s *MemoryStore) ResolveHITL(_ context.Context, runID, resolution, resolver
 	return nil
 }
 
-func (s *MemoryStore) ListPendingHITL(ctx context.Context) ([]*asmtypes.HITLRequest, error) {
-	tenantID := TenantIDFromContext(ctx)
+func (s *MemoryStore) ListHITLs(ctx context.Context, filter HITLFilter) ([]*asmtypes.HITLRequest, error) {
+	tenantID := filter.TenantID
+	if tenantID == "" {
+		tenantID = TenantIDFromContext(ctx)
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []*asmtypes.HITLRequest
 	for _, r := range s.hitl {
-		if r.Resolved {
+		if filter.Resolved != nil && r.Resolved != *filter.Resolved {
+			continue
+		}
+		if filter.Assignee != "" && r.Assignee != filter.Assignee {
 			continue
 		}
 		// Filter by tenant if set: check the owning run's tenant_id.

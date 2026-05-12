@@ -1,6 +1,6 @@
 # Phaxa — User Manual
 
-> **Version:** post-M12 · **Last updated:** April 2026
+> **Version:** post-M17 · **Last updated:** May 2026
 
 ---
 
@@ -27,7 +27,8 @@
    - [Event Log](#71-event-log)
    - [Blackboard Inspector](#72-blackboard-inspector)
    - [LLM Debug Panel](#73-llm-debug-panel)
-   - [Temporal UI](#74-temporal-ui)
+   - [Deep Observability (Stack Traces)](#74-deep-observability-stack-traces)
+   - [Temporal UI](#75-temporal-ui)
 8. [State Type Reference](#8-state-type-reference)
    - [Script Node](#81-script-node)
    - [Code Node](#82-code-node)
@@ -434,7 +435,13 @@ Uses the 6-field robfig/cron format: `seconds minutes hours day-of-month month d
 
 Open the **Monitor** view by clicking a run in the Runs list, or clicking **Monitor** after starting a run.
 
-The Monitor has three tabs: **Timeline**, **Blackboard**, and **Trace**.
+The **Runs list** (Dashboard) provides high-level observability through visual status indicators:
+- **Pulsing Blue Dot**: The run is actively executing (`running`).
+- **Pulsing Amber Dot**: The run is paused and waiting for human input or an event (`waiting`).
+- **Green Dot**: The run completed successfully (`complete`).
+- **Red Dot**: The run failed (`failed`).
+
+The Monitor has four main areas: **Timeline**, **Blackboard**, **Trace**, and **Debug**.
 
 ---
 
@@ -483,7 +490,17 @@ This panel is the primary tool for diagnosing unexpected agent behaviour — you
 
 ---
 
-### 7.4 Temporal UI
+### 7.4 Deep Observability (Stack Traces)
+
+For developers using **Code Nodes**, Phaxa provides deep observability into execution failures. When a JavaScript node throws an error (e.g., a type error or a manual `throw`), the platform captures the full **JavaScript Stack Trace**.
+
+- **Display**: The failure reason in the Monitor header will show the primary error message.
+- **Detailed Trace**: Hover over or click the failure banner to see the full file and line number where the error occurred within your code block.
+- **Durability**: Like all event data, these traces are persisted in the database and visible even after the worker that executed the code has finished.
+
+---
+
+### 7.5 Temporal UI
 
 For deep execution inspection, the **Temporal UI** is available at `http://localhost:8088`.
 
@@ -584,6 +601,13 @@ A code node runs user-written JavaScript in a sandboxed VM for cases that requir
 ### 8.3 HITL State
 
 The HITL (Human-in-the-Loop) state pauses execution and waits for an external signal (usually from a human operator). By providing a `form_schema`, you can generate a structured UI for data entry.
+
+**Task Inbox & "My Tasks"**
+The Task Inbox allows operators to manage pending work across the entire tenant:
+- **"All Tasks"**: Shows every unresolved HITL request in the tenant.
+- **"My Tasks"**: Filters the list to show only tasks assigned to the current user (based on the `assignee` field in the state definition matching the user's username).
+
+Operators can claim tasks by resolving them, which advances the workflow and clears the item from the inbox.
 
 **Component Mapping:**
 

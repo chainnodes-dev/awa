@@ -1,0 +1,208 @@
+[
+  {
+    "id": "brave-search",
+    "name": "Brave Search",
+    "description": "Web search and local results via Brave's Search API.",
+    "icon": "https://brave.com/static-assets/images/brave-logo-sans-text.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+    "envVars": ["BRAVE_API_KEY"],
+    "category": "Search"
+  },
+  {
+    "id": "github",
+    "name": "GitHub",
+    "description": "Interact with repositories, issues, and pull requests.",
+    "icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "envVars": ["GITHUB_PERSONAL_ACCESS_TOKEN"],
+    "category": "Development"
+  },
+  {
+    "id": "notion",
+    "name": "Notion",
+    "description": "Access and manage Notion pages, databases, and blocks.",
+    "icon": "https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-notion"],
+    "envVars": ["NOTION_API_KEY"],
+    "category": "Productivity"
+  },
+  {
+    "id": "sap-hana",
+    "name": "SAP HANA",
+    "description": "Query and manage SAP HANA / HANA Cloud databases.",
+    "icon": "https://www.sap.com/dam/application/shared/logos/sap-logo-svg.svg",
+    "command": "npx",
+    "args": ["-y", "hana-mcp-server"],
+    "envVars": ["HANA_HOST", "HANA_USER", "HANA_PASSWORD"],
+    "category": "Enterprise"
+  },
+  {
+    "id": "sap-fiori",
+    "name": "SAP Fiori / UI5",
+    "description": "Tooling for developing and modifying SAP Fiori applications.",
+    "icon": "https://www.sap.com/dam/application/shared/logos/sap-logo-svg.svg",
+    "command": "npx",
+    "args": ["-y", "@sap-ux/fiori-mcp-server"],
+    "category": "Enterprise"
+  },
+  {
+    "id": "gmail",
+    "name": "Gmail",
+    "description": "Read, search, and send emails via the Gmail API.",
+    "icon": "https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-google-mail"],
+    "envVars": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+    "category": "Communication"
+  },
+  {
+    "id": "hubspot",
+    "name": "HubSpot",
+    "description": "Manage CRM contacts, companies, and deals.",
+    "icon": "https://upload.wikimedia.org/wikipedia/commons/3/3f/HubSpot_Logo.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-hubspot"],
+    "envVars": ["HUBSPOT_ACCESS_TOKEN"],
+    "category": "CRM"
+  },
+  {
+    "id": "stripe",
+    "name": "Stripe",
+    "description": "Interact with Stripe payments, customers, and invoices.",
+    "icon": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-stripe"],
+    "envVars": ["STRIPE_API_KEY"],
+    "category": "Finance"
+  },
+  {
+    "id": "google-sheets",
+    "name": "Google Sheets",
+    "description": "Read and write data to Google Sheets.",
+    "icon": "https://upload.wikimedia.org/wikipedia/commons/3/30/Google_Sheets_logo_%282014-2020%29.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-google-sheets"],
+    "envVars": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+    "category": "Productivity"
+  },
+  {
+    "id": "postgres",
+    "name": "Postgres",
+    "description": "Read and write data to PostgreSQL databases.",
+    "icon": "https://upload.wikimedia.org/wikipedia/commons/2/29/Postgresql_elephant.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-postgres"],
+    "envVars": ["POSTGRES_URL"],
+    "category": "Database"
+  },
+  {
+    "id": "mysql",
+    "name": "MySQL",
+    "description": "Execute queries and manage MySQL databases.",
+    "icon": "https://www.mysql.com/common/logos/logo-mysql-170x115.png",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-mysql"],
+    "envVars": ["MYSQL_HOST", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE"],
+    "category": "Database"
+  },
+  {
+    "id": "redis",
+    "name": "Redis",
+    "description": "Interact with Redis key-value stores.",
+    "icon": "https://upload.wikimedia.org/wikipedia/en/6/6b/Redis_Logo.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-redis"],
+    "envVars": ["REDIS_URL"],
+    "category": "Database"
+  },
+  {
+    "id": "slack",
+    "name": "Slack",
+    "description": "Send messages and interact with Slack channels.",
+    "icon": "https://upload.wikimedia.org/wikipedia/commons/d/d5/Slack_icon_2019.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-slack"],
+    "envVars": ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"],
+    "category": "Communication"
+  },
+  {
+    "id": "discord",
+    "name": "Discord",
+    "description": "Manage channels and send messages to Discord.",
+    "icon": "https://assets-global.website-files.com/6257ade0c7432f3707c24f29/636e0a6a49f12775f0ad3455_full_logo_blurple_RGB.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-discord"],
+    "envVars": ["DISCORD_BOT_TOKEN"],
+    "category": "Communication"
+  },
+  {
+    "id": "linear",
+    "name": "Linear",
+    "description": "Manage issues and projects in Linear.",
+    "icon": "https://linear.app/static/images/logo.png",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-linear"],
+    "envVars": ["LINEAR_API_KEY"],
+    "category": "Productivity"
+  },
+  {
+    "id": "airtable",
+    "name": "Airtable",
+    "description": "Read and write data to Airtable bases.",
+    "icon": "https://upload.wikimedia.org/wikipedia/commons/4/4b/Airtable_Logo.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-airtable"],
+    "envVars": ["AIRTABLE_API_KEY"],
+    "category": "Productivity"
+  },
+  {
+    "id": "puppeteer",
+    "name": "Puppeteer",
+    "description": "Browser automation, web scraping, and screenshots.",
+    "icon": "https://user-images.githubusercontent.com/10370191/44003636-33c064e6-9e22-11e8-9588-51f046942488.png",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+    "category": "Utilities"
+  },
+  {
+    "id": "fetch",
+    "name": "Fetch",
+    "description": "Download web content and convert it to Markdown.",
+    "icon": "🌐",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-fetch"],
+    "category": "Utilities"
+  },
+  {
+    "id": "sentry",
+    "name": "Sentry",
+    "description": "Retrieve error logs and issues from Sentry.",
+    "icon": "https://sentry-brand.storage.googleapis.com/sentry-glyph-black.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-sentry"],
+    "envVars": ["SENTRY_AUTH_TOKEN", "SENTRY_ORG"],
+    "category": "Development"
+  },
+  {
+    "id": "deepl",
+    "name": "DeepL",
+    "description": "High-quality machine translation via DeepL API.",
+    "icon": "https://www.deepl.com/img/logo/DeepL_Logo_darkBlue_v2.svg",
+    "command": "npx",
+    "args": ["-y", "mcp-server-deepl"],
+    "envVars": ["DEEPL_AUTH_KEY"],
+    "category": "Utilities"
+  },
+  {
+    "id": "wikipedia",
+    "name": "Wikipedia",
+    "description": "Search and retrieve summaries from Wikipedia.",
+    "icon": "https://upload.wikimedia.org/wikipedia/en/8/80/Wikipedia-logo-v2.svg",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-wikipedia"],
+    "category": "Knowledge"
+  }
+]

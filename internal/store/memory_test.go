@@ -360,22 +360,29 @@ func TestMemoryStore_ResolveHITL_NotFound(t *testing.T) {
 	}
 }
 
-func TestMemoryStore_ListPendingHITL(t *testing.T) {
+func TestMemoryStore_ListHITLs(t *testing.T) {
 	s := NewMemoryStore()
 	ctx := context.Background()
 
 	_ = s.CreateHITL(ctx, &asmtypes.HITLRequest{RunID: "r1", StateName: "approve", CreatedAt: time.Now()})
-	_ = s.CreateHITL(ctx, &asmtypes.HITLRequest{RunID: "r2", StateName: "approve", CreatedAt: time.Now()})
+	_ = s.CreateHITL(ctx, &asmtypes.HITLRequest{RunID: "r2", StateName: "approve", Assignee: "alice", CreatedAt: time.Now()})
 	_ = s.ResolveHITL(ctx, "r2", "approved", "alice")
 
-	pending, err := s.ListPendingHITL(ctx)
+	resolved := false
+	pending, err := s.ListHITLs(ctx, HITLFilter{Resolved: &resolved})
 	if err != nil {
-		t.Fatalf("ListPendingHITL: %v", err)
+		t.Fatalf("ListHITLs: %v", err)
 	}
 	if len(pending) != 1 {
 		t.Errorf("expected 1 pending HITL, got %d", len(pending))
 	}
 	if pending[0].RunID != "r1" {
 		t.Errorf("expected pending run r1, got %q", pending[0].RunID)
+	}
+
+	// Filter by assignee
+	alicePending, _ := s.ListHITLs(ctx, HITLFilter{Assignee: "alice", Resolved: &resolved})
+	if len(alicePending) != 0 {
+		t.Errorf("expected 0 pending for alice, got %d", len(alicePending))
 	}
 }

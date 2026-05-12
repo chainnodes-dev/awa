@@ -85,6 +85,14 @@ func (e *EngineClient) SendHITLSignal(ctx context.Context, temporalID string, si
 	})
 }
 
+// SendChatSignal sends a chat message to a waiting agent in Temporal.
+func (e *EngineClient) SendChatSignal(ctx context.Context, temporalID, message, sender string) error {
+	return e.client.SignalWorkflow(ctx, temporalID, "", SignalChat, ChatSignalPayload{
+		Message: message,
+		Sender:  sender,
+	})
+}
+
 // TerminateWorkflow immediately stops a running Temporal workflow.
 func (e *EngineClient) TerminateWorkflow(ctx context.Context, temporalID string) error {
 	return e.client.TerminateWorkflow(ctx, temporalID, "", "User terminated workflow")

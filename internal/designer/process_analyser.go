@@ -33,6 +33,7 @@ type ProcessAnalyseRequest struct {
 // ProcessAnalyseResult holds the generated workflow.
 type ProcessAnalyseResult struct {
 	YAML         string                `json:"yaml"`
+	Explanation  string                `json:"explanation,omitempty"`
 	Definition   *asmtypes.WorkflowDef `json:"definition"`
 	Interactions []llm.Message         `json:"interactions"`
 }
@@ -108,11 +109,32 @@ func (g *Generator) AnalyseProcess(ctx context.Context, req ProcessAnalyseReques
 		}, fmt.Errorf("generated workflow is invalid: %w", err)
 	}
 
+	explanation := extractExplanation(resp.Content)
+
 	return &ProcessAnalyseResult{
 		YAML:         yamlStr,
+		Explanation:  explanation,
 		Definition:   def,
 		Interactions: interaction,
 	}, nil
+}
+
+// extractExplanation pulls any text found after the last code block (the YAML).
+func extractExplanation(content string) string {
+	lastIdx := strings.LastIndex(content, "```")
+	if lastIdx == -1 {
+		return ""
+	}
+	// Skip the closing ```
+	tail := strings.TrimSpace(content[lastIdx+3:])
+	if tail == "" {
+		// Try to find text BEFORE the first code block if nothing after.
+		firstIdx := strings.Index(content, "```")
+		if firstIdx > 0 {
+			return strings.TrimSpace(content[:firstIdx])
+		}
+	}
+	return tail
 }
 
 // SummariseProcess converts a WorkflowDef YAML into a human-readable process summary.

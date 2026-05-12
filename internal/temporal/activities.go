@@ -42,6 +42,7 @@ func (a *Activities) UpdateRun(ctx context.Context, p UpdateRunParams) error {
 	run.CurrentState = p.CurrentState
 	run.Status = p.Status
 	run.Blackboard = p.Blackboard
+	run.FailureReason = p.FailureReason
 	run.UpdatedAt = time.Now()
 	if p.IsTerminal {
 		now := time.Now()

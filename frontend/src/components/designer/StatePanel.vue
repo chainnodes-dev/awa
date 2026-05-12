@@ -349,7 +349,23 @@
           <input class="input font-mono text-xs" v-model="agentForm.task_queue" placeholder="phaxa-workers (default)" />
         </div>
         <div class="space-y-1">
-          <label class="text-xs text-text-muted">MCP Servers</label>
+          <div class="flex items-center justify-between">
+            <label class="text-xs text-text-muted">MCP Servers</label>
+            <div class="group relative">
+               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-text-muted cursor-help">
+                 <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+               </svg>
+               <div class="absolute right-0 bottom-full mb-2 w-48 p-2 rounded bg-surface-2 border border-border text-[9px] text-text-muted leading-relaxed hidden group-hover:block z-50 shadow-2xl">
+                 <p class="font-bold mb-1 text-accent uppercase">Port Hints (Local):</p>
+                 <ul class="space-y-0.5 font-mono">
+                   <li>GLEIF: 8081</li>
+                   <li>Frankfurter: 8082</li>
+                   <li>OpenFIGI: 8083</li>
+                 </ul>
+                 <p class="mt-1 opacity-70 italic">Example: http://localhost:8081</p>
+               </div>
+            </div>
+          </div>
           <MCPServerPicker v-model="agentForm.mcp_servers" />
         </div>
       </div>

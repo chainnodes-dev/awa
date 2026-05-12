@@ -19,6 +19,7 @@ const (
 	AgentToolCall     = "agent.tool_call"
 	AgentPrompt       = "agent.prompt"       // full request sent to the LLM (debug)
 	AgentResponse     = "agent.response"     // full response received from the LLM (debug)
+	AgentChat         = "agent.chat"         // interactive message between agent and human
 	HITLWaiting       = "hitl.waiting"
 	HITLResolved      = "hitl.resolved"
 	WorkflowEvent     = "workflow.event" // named event emitted by an emit_event state

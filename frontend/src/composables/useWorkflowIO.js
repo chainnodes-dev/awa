@@ -1,7 +1,9 @@
 import { nextTick } from 'vue'
 import yaml from 'js-yaml'
+import { useValidator } from './useValidator'
 
-export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, isDirty, yamlSource, yamlError, saving, flowKey, showRunModal, view, wfStore, router }) {
+export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, isDirty, yamlSource, yamlErrors, saving, flowKey, showRunModal, view, wfStore, router }) {
+  const { validate } = useValidator()
 
   // Plain flag — not reactive; checked synchronously in watch(meta) inside useCanvasSync.
   const fromLoad = { value: false }
@@ -236,8 +238,14 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
   }
 
   async function importYAML() {
-    yamlError.value = ''
+    yamlErrors.value = []
     try {
+      const errors = validate(yamlSource.value)
+      if (errors.length > 0) {
+        yamlErrors.value = errors
+        alert(`Failed to import YAML: ${errors.length} validation errors found.`)
+        return false
+      }
       const def = yaml.load(yamlSource.value)
       if (!def) throw new Error('YAML is empty or invalid.')
       loadDefinition(def, null, false)
@@ -247,7 +255,7 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
       isDirty.value = true
       return true
     } catch (e) {
-      yamlError.value = e.message
+      yamlErrors.value = [{ message: e.message }]
       alert('Failed to import YAML: ' + e.message)
       return false
     }

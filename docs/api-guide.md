@@ -258,9 +258,15 @@ Some workflows pause at `hitl` states pending a human decision. The run status b
 ### List Pending HITL Requests
 
 ```http
-GET /api/v1/hitl/pending
+GET /api/v1/hitl/pending?assignee=finance-team
 Authorization: Bearer eyJ...
 ```
+
+**Query parameters**
+
+| Parameter | Description |
+|-----------|-------------|
+| `assignee` | Filter by assignee string (user ID or team name) |
 
 **Response**
 

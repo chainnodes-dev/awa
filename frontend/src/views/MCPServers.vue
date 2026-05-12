@@ -312,6 +312,7 @@ export const MCPServerModal = defineComponent({
               class: inputClass,
               value: form.value.name,
               placeholder: 'e.g. slack-main',
+              autocomplete: 'off',
               onInput: e => form.value.name = e.target.value,
             }),
           ]),
@@ -335,6 +336,7 @@ export const MCPServerModal = defineComponent({
               class: inputClass,
               value: form.value.command,
               placeholder: 'npx',
+              autocomplete: 'off',
               onInput: e => form.value.command = e.target.value,
             }),
           ]),
@@ -344,6 +346,7 @@ export const MCPServerModal = defineComponent({
               class: inputClass,
               value: form.value.args,
               placeholder: '-y @modelcontextprotocol/server-slack',
+              autocomplete: 'off',
               onInput: e => form.value.args = e.target.value,
             }),
           ]),
@@ -354,6 +357,7 @@ export const MCPServerModal = defineComponent({
               class: inputClass,
               value: form.value.url,
               placeholder: 'https://mcp.example.com/sse',
+              autocomplete: 'off',
               onInput: e => form.value.url = e.target.value,
             }),
           ]),
@@ -380,6 +384,7 @@ export const MCPServerModal = defineComponent({
               type: 'password',
               value: e.val,
               placeholder: 'VALUE',
+              autocomplete: 'new-password',
               onInput: v => e.val = v.target.value,
             }),
             h('button', { 
@@ -400,8 +405,8 @@ export const MCPServerModal = defineComponent({
             }, discovering.value ? 'Syncing...' : 'Discover Tools'),
           ]),
           h('div', {
-            class: 'p-3 rounded-lg bg-surface-2 border border-border text-xs text-text-muted leading-relaxed font-mono min-h-[60px] max-h-32 overflow-y-auto'
-          }, form.value.description || 'No tools discovered yet.')
+            class: 'p-4 rounded-lg bg-surface-2 border border-border text-xs text-text-muted leading-relaxed font-mono min-h-[60px] max-h-48 overflow-y-auto whitespace-pre-wrap'
+          }, form.value.description ? form.value.description.replace(/; /g, '\n') : 'No tools discovered yet.')
         ]),
 
         error.value && h('div', { class: 'p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs' }, error.value),

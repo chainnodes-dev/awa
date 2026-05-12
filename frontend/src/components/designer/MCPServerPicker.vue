@@ -19,8 +19,8 @@
         :class="[
           'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-medium transition-colors',
           isSelected(srv)
-            ? 'bg-indigo-500/20 border-indigo-500/60 text-indigo-300'
-            : 'bg-surface-0 border-border text-text-muted hover:border-indigo-500/40 hover:text-text',
+            ? 'bg-accent/20 border-accent/40 text-accent'
+            : 'bg-surface-0 border-border text-text-muted hover:border-accent/40 hover:text-text',
         ]"
         @click="toggle(srv)"
       >

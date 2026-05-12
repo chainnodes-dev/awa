@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/asm-platform/asm/internal/auth"
+	"github.com/asm-platform/asm/internal/config"
 	"github.com/asm-platform/asm/internal/designer"
 	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/executor/llm"
@@ -40,6 +41,7 @@ type Handlers struct {
 	mcpManager      *mcp.Manager
 	mcpEntries      []designer.MCPServerEntry
 	allowStdioMCP   bool
+	cfg             *config.Config
 }
 
 func (h *Handlers) ReloadLicenseKeys(ctx context.Context) error {
@@ -68,8 +70,9 @@ func (h *Handlers) ReloadLicenseKeys(ctx context.Context) error {
 	return nil
 }
 
-func NewHandlers(engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer, mcpMgr *mcp.Manager, allowStdio bool) *Handlers {
+func NewHandlers(cfg *config.Config, engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer, mcpMgr *mcp.Manager, allowStdio bool) *Handlers {
 	return &Handlers{
+		cfg:             cfg,
 		engine:          engine,
 		store:           s,
 		jwtSvc:          jwtSvc,
@@ -284,7 +287,6 @@ func (h *Handlers) StartRun(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, run)
 }
-
 func (h *Handlers) TriggerRun(c *gin.Context) {
 	var req asmtypes.TriggerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -294,6 +296,29 @@ func (h *Handlers) TriggerRun(c *gin.Context) {
 	req.RunID = c.Param("id")
 
 	if err := h.engine.Trigger(c.Request.Context(), req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handlers) SendChat(c *gin.Context) {
+	var body struct {
+		Message string `json:"message" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	runID := c.Param("id")
+	claims := auth.ClaimsFromContext(c.Request.Context())
+	sender := "anonymous"
+	if claims != nil {
+		sender = claims.Subject
+	}
+
+	if err := h.engine.SendChat(c.Request.Context(), runID, body.Message, sender); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -316,7 +341,12 @@ func (h *Handlers) SignalHITL(c *gin.Context) {
 }
 
 func (h *Handlers) GetPendingHITL(c *gin.Context) {
-	requests, err := h.store.ListPendingHITL(c.Request.Context())
+	resolved := false
+	filter := store.HITLFilter{
+		Assignee: c.Query("assignee"),
+		Resolved: &resolved,
+	}
+	requests, err := h.store.ListHITLs(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

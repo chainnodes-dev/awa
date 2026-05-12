@@ -88,6 +88,10 @@
     background-color: rgba(239, 68, 68, 0.2);
   }
 
+  .btn-danger-solid {
+    @apply btn text-white bg-red-600 hover:bg-red-500 active:scale-95;
+  }
+
   .card {
     @apply rounded-xl shadow-sm border transition-all;
     background-color: var(--color-surface);

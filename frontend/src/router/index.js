@@ -49,6 +49,12 @@ const routes = [
     meta: { title: 'Monitor' }
   },
   {
+    path: '/mcp-market',
+    name: 'MCPMarket',
+    component: () => import('@/views/MCPMarket.vue'),
+    meta: { title: 'MCP Marketplace' }
+  },
+  {
     path: '/mcp-servers',
     name: 'MCPServers',
     component: () => import('@/views/MCPServers.vue'),

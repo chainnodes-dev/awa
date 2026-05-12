@@ -18,25 +18,25 @@ Phaxa is for **Agentic Orchestration** (The goal is X, the Agent figures out how
 
 ## 2. Roadmap: The "Better than n8n" Phase
 
-### Milestone 14: The MCP Marketplace ⬜
-- [ ] **MCP Discovery UI**: A gallery to browse community MCP servers.
-- [ ] **One-Click Install**: Auto-registration of `npx`-based servers via UI.
-- [ ] **Capability Search**: Find the right tool for the job automatically.
+### Milestone 14: The MCP Marketplace ✅
+- [x] **MCP Discovery UI**: A gallery to browse community MCP servers.
+- [x] **One-Click Install**: Auto-registration of `npx`-based servers via UI.
+- [x] **Capability Search**: Find the right tool for the job automatically.
 
-### Milestone 15: Deep Observability ⬜
-- [ ] **Thought Trace**: Display LLM chain-of-thought in the Monitor.
-- [ ] **Blackboard Time Travel**: Slider to see state diffs at any point in history.
-- [ ] **[UX.4] JS Stack Traces**: Surface code node errors with full traces.
+### Milestone 15: Deep Observability ✅
+- [x] **Thought Trace**: Display LLM chain-of-thought in the Monitor.
+- [x] **Blackboard Time Travel**: Slider to see state diffs at any point in history.
+- [x] **[UX.4] JS Stack Traces**: Surface code node errors with full traces.
 
-### Milestone 16: Social Inbox (Collaborative HITL) ⬜
-- [ ] **Agent-Human Chat**: Interactive messaging inside the Inbox.
-- [ ] **Contextual Hand-off**: Human sees "thoughts" before taking over.
-- [ ] **[Debt] Assignee Filtering**: Security and multi-user task management.
+### Milestone 16: Social Inbox (Collaborative HITL) ✅
+- [x] **Agent-Human Chat**: Interactive messaging inside the Inbox.
+- [x] **Contextual Hand-off**: Human sees "thoughts" before taking over.
+- [x] **[Debt] Assignee Filtering**: Security and multi-user task management.
 
-### Milestone 17: Proactive Designer ⬜
-- [ ] **Incremental Generation**: Natural language editing of existing graphs.
-- [ ] **[UX.1] Schema Validation**: Real-time feedback in the YAML editor.
-- [ ] **[UX.2] Live Type Hints**: Port mapping hints from the skill registry.
+### Milestone 17: Proactive Designer ✅
+- [x] **Incremental Generation**: Natural language editing of existing graphs (Designer Chat).
+- [x] **[UX.1] Schema Validation**: Real-time feedback in the YAML editor.
+- [x] **[UX.2] Port Mapping Hints**: Visual guidance for common MCP local services.
 
 ---
 
@@ -44,10 +44,10 @@ Phaxa is for **Agentic Orchestration** (The goal is X, the Agent figures out how
 
 | Feature | Status | Priority |
 |---|---|---|
-| Designer Keyboard Shortcuts (Save, Undo, Del) | ⬜ | High |
-| `skill_call` timeout & failure_trigger | ⬜ | Medium |
-| `skill_ref` versioning (`@v1`) | ⬜ | Medium |
-| Tenant deletion safety | ⬜ | Low |
+| Designer Keyboard Shortcuts (Save, Undo, Del) | ✅ | High |
+| `skill_call` timeout & failure_trigger | ✅ | Medium |
+| `skill_ref` versioning (`@v1`) | ✅ | Medium |
+| Tenant deletion safety | ✅ | Low |
 
 ---
 

@@ -168,15 +168,19 @@ states:
 
 ---
 
-#### `hitl`
+### Deep Observability
 
-Human-in-the-loop. The run pauses at this state and waits for a human to make a decision before it can continue.
+The platform provides granular visibility into every execution step. For automated logic (LLM, Script, Code), the engine captures:
+- **LLM Monologue** — the internal reasoning used by the agent to reach a decision.
+- **JavaScript Stack Traces** — full error traces for `code` nodes, allowing precise debugging of logic errors.
+- **MCP Call Logs** — detailed audit of all tool calls made to external Model Context Protocol servers.
 
-When a run enters a `hitl` state:
-1. The run's status changes to `waiting`.
-2. A HITL request is recorded in the database with the current blackboard snapshot.
-3. The engine blocks on a signal channel — no CPU is consumed while waiting.
-4. When a human resolves the request via `POST /api/v1/runs/{id}/signal`, the engine wakes up, records the resolution, and fires the provided trigger.
+### Multi-User Task Management (HITL)
+
+Human-in-the-loop states support advanced task management for collaborative environments:
+- **Assignees** — tasks can be assigned to specific users or teams via the `assignee` field.
+- **Filtered Inbox** — the Task Inbox allows users to switch between "All Tasks" and "My Tasks" for efficient processing.
+- **Form Schemas** — customizable JSON Form Schemas ensure humans provide data in the exact format required by downstream automated steps.
 
 HITL states are designed to integrate with notification systems (email, Slack, ticketing) through the event bus — the `hitl.created` event carries all the context a notification service needs.
 

@@ -782,23 +782,41 @@ func (s *PostgresStore) ResolveHITL(ctx context.Context, runID, resolution, reso
 	return err
 }
 
-func (s *PostgresStore) ListPendingHITL(ctx context.Context) ([]*asmtypes.HITLRequest, error) {
-	tenantID := TenantIDFromContext(ctx)
+func (s *PostgresStore) ListHITLs(ctx context.Context, filter HITLFilter) ([]*asmtypes.HITLRequest, error) {
+	tenantID := filter.TenantID
+	if tenantID == "" {
+		tenantID = TenantIDFromContext(ctx)
+	}
+
 	query := `
 		SELECT hr.id, hr.run_id, hr.state_name, coalesce(hr.assignee,''), hr.timeout_at, hr.metadata, hr.form_schema, hr.created_at,
 		       wr.workflow_name, wr.blackboard,
 		       w.definition->'blackboard'->'schema'
 		FROM hitl_requests hr
 		JOIN workflow_runs wr ON wr.id = hr.run_id
-		JOIN workflow_definitions w ON w.name = wr.workflow_name AND w.version = wr.workflow_version`
+		JOIN workflow_definitions w ON w.name = wr.workflow_name AND w.version = wr.workflow_version
+		WHERE TRUE`
 	var args []interface{}
+	i := 1
+
 	if tenantID != "" {
-		query += ` WHERE hr.resolved=FALSE AND wr.tenant_id=$1`
+		query += fmt.Sprintf(" AND wr.tenant_id=$%d", i)
 		args = append(args, tenantID)
-	} else {
-		query += ` WHERE hr.resolved=FALSE`
+		i++
 	}
-	query += ` ORDER BY hr.created_at ASC`
+	if filter.Assignee != "" {
+		query += fmt.Sprintf(" AND hr.assignee=$%d", i)
+		args = append(args, filter.Assignee)
+		i++
+	}
+	if filter.Resolved != nil {
+		query += fmt.Sprintf(" AND hr.resolved=$%d", i)
+		args = append(args, *filter.Resolved)
+		i++
+	}
+
+	query += " ORDER BY hr.created_at DESC"
+
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -807,21 +825,22 @@ func (s *PostgresStore) ListPendingHITL(ctx context.Context) ([]*asmtypes.HITLRe
 
 	var out []*asmtypes.HITLRequest
 	for rows.Next() {
-		var r asmtypes.HITLRequest
+		var req asmtypes.HITLRequest
 		var meta, fs, bb, bbs []byte
-		err := rows.Scan(&r.ID, &r.RunID, &r.StateName, &r.Assignee, &r.TimeoutAt, &meta, &fs, &r.CreatedAt,
-			&r.WorkflowName, &bb, &bbs)
+		err := rows.Scan(&req.ID, &req.RunID, &req.StateName, &req.Assignee, &req.TimeoutAt, &meta, &fs, &req.CreatedAt,
+			&req.WorkflowName, &bb, &bbs)
 		if err != nil {
 			return nil, err
 		}
-		_ = json.Unmarshal(meta, &r.Metadata)
-		_ = json.Unmarshal(fs, &r.FormSchema)
-		_ = json.Unmarshal(bb, &r.Blackboard)
-		_ = json.Unmarshal(bbs, &r.BlackboardSchema)
-		out = append(out, &r)
+		_ = json.Unmarshal(meta, &req.Metadata)
+		_ = json.Unmarshal(fs, &req.FormSchema)
+		_ = json.Unmarshal(bb, &req.Blackboard)
+		_ = json.Unmarshal(bbs, &req.BlackboardSchema)
+		out = append(out, &req)
 	}
 	return out, nil
 }
+
 
 // -- UserStore --
 

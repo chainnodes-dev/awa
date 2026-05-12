@@ -125,7 +125,13 @@
                 <td class="px-4 py-2.5 text-text">{{ run.workflow_name }}</td>
                 <td class="px-4 py-2.5 font-mono text-xs text-indigo-400">{{ run.current_state }}</td>
                 <td class="px-4 py-2.5">
-                  <span :class="`status-${run.status}`">{{ run.status }}</span>
+                  <div class="flex items-center gap-2">
+                    <div v-if="run.status === 'running'" class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50"/>
+                    <div v-else-if="run.status === 'waiting'" class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-sm shadow-amber-500/50"/>
+                    <div v-else-if="run.status === 'failed'" class="w-1.5 h-1.5 rounded-full bg-red-500 shadow-sm shadow-red-500/50"/>
+                    <div v-else class="w-1.5 h-1.5 rounded-full bg-slate-500 opacity-30"/>
+                    <span :class="`status-${run.status} text-[10px] font-bold uppercase tracking-wider`">{{ run.status }}</span>
+                  </div>
                 </td>
                 <td class="px-4 py-2.5 text-xs text-text-muted">{{ relativeTime(run.started_at) }}</td>
                 <td class="px-4 py-2.5 text-right flex gap-1 justify-end">

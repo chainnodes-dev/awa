@@ -212,6 +212,7 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 				Trigger:   output.Trigger,
 				Reasoning: output.Reasoning,
 			}))
+			output.Content = resp.Content
 			result(nil)
 			return output, nil
 		}
@@ -450,6 +451,12 @@ Current state: {{.StateName}}
 {{if .Instructions}}
 State instructions (TACTICAL TASK):
 {{.Instructions}}
+{{end}}
+
+{{if .Blackboard._last_user_message}}
+ACTIVE CHAT MESSAGE from human operator:
+"{{.Blackboard._last_user_message}}"
+Please respond to this message directly in your reasoning or as part of your blackboard updates if appropriate.
 {{end}}
 
 {{if .Rules}}

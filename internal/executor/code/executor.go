@@ -132,6 +132,12 @@ func Execute(code string, bb map[string]interface{}, validTriggers []string, tim
 				}
 				return nil, fmt.Errorf("code: interrupted: %s", msg)
 			}
+		} else if je, ok := runErr.(*goja.Exception); ok {
+			stack := ""
+			if obj := je.Value().ToObject(vm); obj != nil {
+				stack = obj.Get("stack").String()
+			}
+			return nil, fmt.Errorf("code: %v\n\nStack Trace:\n%s", je.Value(), stack)
 		} else {
 			return nil, fmt.Errorf("code: %w", runErr)
 		}

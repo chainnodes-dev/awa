@@ -107,8 +107,11 @@
             spellcheck="false"
             placeholder="Paste or type your workflow YAML here…"
           />
-          <div v-if="yamlError" class="px-4 py-2 bg-red-500/10 border-t border-red-500/30 text-red-400 text-xs font-mono">
-            {{ yamlError }}
+          <div v-if="yamlErrors.length" class="px-4 py-2 bg-red-500/10 border-t border-red-500/30 text-red-400 text-xs font-mono space-y-1">
+            <div v-for="(err, i) in yamlErrors" :key="i" class="flex gap-2">
+              <span class="opacity-50 font-bold shrink-0">[{{ err.line || '!' }}]</span>
+              <span>{{ err.message }}</span>
+            </div>
           </div>
           <div class="px-4 py-2 border-t border-border flex gap-3">
             <button @click="handleImportYAML" class="btn-primary text-xs">Import to Canvas</button>
@@ -150,8 +153,8 @@
               <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
             </svg>
             <span class="text-xs text-text-muted font-medium flex-1">YAML — live mirror</span>
-            <span v-if="yamlError" class="text-[10px] text-red-400 truncate max-w-[160px]" :title="yamlError">
-              ⚠ {{ yamlError }}
+            <span v-if="yamlErrors.length" class="text-[10px] text-red-400 truncate max-w-[160px]" :title="yamlErrors[0].message">
+              ⚠ {{ yamlErrors.length }} error{{ yamlErrors.length > 1 ? 's' : '' }}
             </span>
           </div>
           <textarea
@@ -233,6 +236,7 @@
                 <BlackboardSchemaEditor
                   :schema="bbSchema"
                   @change="isDirty = true"
+                  @open-popout="onOpenSchemaPopout"
                 />
               </div>
 
@@ -313,11 +317,20 @@
       @close="showRunModal = false"
       @started="(run) => router.push(`/monitor/${run.id}`)"
     />
+    <!-- Schema Pop-out Modal -->
+    <SchemaEditorModal
+      v-if="showSchemaModal"
+      :name="activeSchemaName"
+      :schema="activeSchemaRef"
+      @close="showSchemaModal = false"
+      @change="isDirty = true"
+      @open-popout="onOpenSchemaPopout"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick, shallowRef } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick, shallowRef } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background }  from '@vue-flow/background'
@@ -340,6 +353,7 @@ import AddStateModal          from '@/components/designer/AddStateModal.vue'
 import GeneratePanel          from '@/components/designer/GeneratePanel.vue'
 import CodeEditorModal       from '@/components/designer/CodeEditorModal.vue'
 import BBFieldModal         from '@/components/designer/BBFieldModal.vue'
+import SchemaEditorModal    from '@/components/designer/SchemaEditorModal.vue'
 
 import { useWorkflowStore } from '@/stores/workflows'
 import { useWorkflowIO }    from '@/composables/useWorkflowIO'
@@ -368,7 +382,7 @@ const versions = ref([])
 const view              = ref('canvas')
 const rightTab          = ref('properties')
 const yamlSource        = ref('')
-const yamlError         = ref('')
+const yamlErrors        = ref([])
 const saving            = ref(false)
 const isDirty           = ref(false)
 const showRunModal      = ref(false)
@@ -379,6 +393,31 @@ const showDescriptionModal  = ref(false)
 const flowKey              = ref(0)
 const showTimeoutEdges  = ref(true)
 const showBBModal       = ref(false)
+
+// -- Schema Pop-out state --
+const showSchemaModal = ref(false)
+const activeSchemaRef = ref(null)
+const activeSchemaName = ref('')
+
+function onOpenSchemaPopout({ name, field }) {
+  activeSchemaName.value = name
+  // For 'object' we edit 'properties', for 'list' we edit 'items.properties' (if it's an object)
+  if (field.type === 'object') {
+    if (!field.properties) field.properties = {}
+    activeSchemaRef.value = field.properties
+  } else if (field.type === 'list') {
+    if (!field.items) field.items = { type: 'string' }
+    if (field.items.type === 'object') {
+      if (!field.items.properties) field.items.properties = {}
+      activeSchemaRef.value = field.items.properties
+    } else {
+      // If it's a simple list, we don't have sub-properties to edit in a modal yet
+      // but the editor handles simple types inline.
+      return
+    }
+  }
+  showSchemaModal.value = true
+}
 
 // -- Generation Tab State (lifted for persistence) --
 const generatePrompt       = ref('')
@@ -397,9 +436,9 @@ const workflowName = computed(() => meta.name || '')
 const {
   fromLoad, loadDefinition, buildDefinition,
   saveWorkflow, switchVersion, onRunClick, onAIApply: _onAIApply, importYAML,
-} = useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, isDirty, yamlSource, yamlError, saving, flowKey, showRunModal, view, wfStore, router })
+} = useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, isDirty, yamlSource, yamlErrors, saving, flowKey, showRunModal, view, wfStore, router })
 
-const { onYamlInput } = useCanvasSync({ nodes, edges, meta, isDirty, view, yamlSource, yamlError, flowKey, fromLoad, loadDefinition, buildDefinition })
+const { onYamlInput } = useCanvasSync({ nodes, edges, meta, isDirty, view, yamlSource, yamlErrors, flowKey, fromLoad, loadDefinition, buildDefinition })
 
 const {
   applyLayout,
@@ -408,7 +447,100 @@ const {
   getAgent,
   updateNode, updateEdge, deleteSelected,
   addState, onAddState,
+  addBBField, removeBBField,
 } = useCanvasActions({ nodes, edges, agents, isDirty, selected, pendingConnection, showAddState, bbSchema, fitView, layout })
+
+// ── Keyboard Shortcuts & Undo/Redo ───────────────────────────────────────────
+
+const history = ref([])
+const historyIndex = ref(-1)
+let isRestoring = false
+
+function takeSnapshot() {
+  if (isRestoring) return
+  // Clean forward history
+  if (historyIndex.value < history.value.length - 1) {
+    history.value = history.value.slice(0, historyIndex.value + 1)
+  }
+  // Max 50 steps
+  if (history.value.length >= 50) history.value.shift()
+  
+  history.value.push(JSON.stringify({
+    nodes: nodes.value,
+    edges: edges.value,
+    meta:  meta,
+    bb:    bbSchema,
+    agents: agents.value
+  }))
+  historyIndex.value = history.value.length - 1
+}
+
+function undo() {
+  if (historyIndex.value <= 0) return
+  historyIndex.value--
+  restoreSnapshot(history.value[historyIndex.value])
+}
+
+function redo() {
+  if (historyIndex.value >= history.value.length - 1) return
+  historyIndex.value++
+  restoreSnapshot(history.value[historyIndex.value])
+}
+
+function restoreSnapshot(snapshotJson) {
+  isRestoring = true
+  const data = JSON.parse(snapshotJson)
+  nodes.value = data.nodes
+  edges.value = data.edges
+  Object.assign(meta, data.meta)
+  Object.assign(bbSchema, data.bb)
+  agents.value = data.agents
+  isDirty.value = true
+  nextTick(() => isRestoring = false)
+}
+
+// Watch for changes to trigger snapshots (debounced slightly or triggered by isDirty)
+watch(isDirty, (newVal) => {
+  if (newVal && !isRestoring) takeSnapshot()
+})
+
+function handleKeydown(e) {
+  const isTyping = ['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable
+  
+  // Save: Cmd+S / Ctrl+S
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault()
+    saveWorkflow()
+  }
+  
+  // Undo: Cmd+Z
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') {
+    if (isTyping) return
+    e.preventDefault()
+    undo()
+  }
+  
+  // Redo: Cmd+Shift+Z or Cmd+Y
+  if ((e.metaKey || e.ctrlKey) && ( (e.shiftKey && e.key === 'z') || e.key === 'y')) {
+    if (isTyping) return
+    e.preventDefault()
+    redo()
+  }
+
+  // Delete: Backspace/Del
+  if ((e.key === 'Backspace' || e.key === 'Delete') && !isTyping) {
+    if (selected.value) {
+      e.preventDefault()
+      deleteSelected()
+    }
+  }
+
+  // Layout: 'a'
+  if (e.key === 'a' && !isTyping) {
+    e.preventDefault()
+    applyLayout()
+  }
+}
 
 async function onAIApply(payload) {
   _onAIApply(payload)
@@ -467,7 +599,22 @@ onMounted(async () => {
       alert(`Could not load workflow "${name}@${version}". It may have been saved with an older version format. Try deleting and re-creating it.`)
     }
   }
+  
+  // Initialize history with initial state
+  takeSnapshot()
+
+  window.addEventListener('keydown', handleKeydown)
 })
+
+import { onUnmounted } from 'vue'
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
+
+watch(() => nodes.value, () => {
+  // Vue Flow doesn't always trigger isDirty on internal mutations, so we nudge it
+  if (!isRestoring) isDirty.value = true
+}, { deep: true })
 
 </script>
 

@@ -72,7 +72,7 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 
 	mcpMgr := mcp.NewManager(s, cfg.AllowStdioMCP)
 	allowStdio := cfg.AllowStdioMCP // Assume this exists in config
-	handlers := NewHandlers(engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr, allowStdio)
+	handlers := NewHandlers(cfg, engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr, allowStdio)
 
 	router := gin.New()
 	router.Use(gin.Recovery())

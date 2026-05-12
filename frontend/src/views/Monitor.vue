@@ -11,7 +11,7 @@
       <div class="w-px h-4 bg-border"/>
 
       <span class="text-sm font-medium text-text">{{ run?.workflow_name ?? 'Monitor' }}</span>
-      <span v-if="run" class="text-xs font-mono text-text-muted">{{ run.id.slice(0, 8) }}</span>
+      <span v-if="run?.id" class="text-xs font-mono text-text-muted">{{ run.id.slice(0, 8) }}</span>
       <span v-if="run" :class="`status-${run.status} ml-1`">{{ run.status }}</span>
 
       <div class="flex-1"/>
@@ -65,14 +65,22 @@
 
     <!-- Failure reason banner -->
     <div v-if="run?.status === 'failed' && run?.failure_reason"
-         class="mx-4 mt-3 mb-1 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono shrink-0 flex items-center justify-between">
-      <div class="flex-1">
-        <span class="font-semibold">Run failed:</span> {{ run.failure_reason }}
+         class="mx-4 mt-3 mb-1 px-4 py-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 shrink-0 flex items-start justify-between gap-4">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span class="text-xs font-bold uppercase tracking-wider">Run Failed</span>
+        </div>
+        <div class="text-[11px] font-mono whitespace-pre-wrap break-all leading-relaxed opacity-90 max-h-48 overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-red-500/30">
+          {{ run.failure_reason }}
+        </div>
       </div>
       <button 
         v-if="workflowYAML"
         @click="showDebugModal = true" 
-        class="btn bg-violet-600 hover:bg-violet-500 text-white text-[10px] px-3 py-1.5 ml-4 shadow-lg shadow-violet-600/20 gap-1.5 uppercase font-bold tracking-wider"
+        class="btn bg-violet-600 hover:bg-violet-500 text-white text-[10px] px-3 py-1.5 shrink-0 shadow-lg shadow-violet-600/20 gap-1.5 uppercase font-bold tracking-wider"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
@@ -107,45 +115,81 @@
       <div class="flex-1 flex flex-col overflow-hidden">
 
         <!-- State machine canvas (read-only) -->
-        <VueFlow
-          v-if="flowNodes.length"
-          :nodes="flowNodes"
-          :edges="flowEdges"
-          :node-types="nodeTypes"
-          :nodes-draggable="false"
-          :nodes-connectable="false"
-          :elements-selectable="false"
-          fit-view-on-init
-          class="bg-surface-0 flex-1"
-        >
-          <Background pattern-color="#2a2d3a" :gap="24" :size="1" />
-          <Controls />
+        <div class="relative flex-1 overflow-hidden">
+          <VueFlow
+            v-if="flowNodes.length"
+            :nodes="flowNodes"
+            :edges="flowEdges"
+            :node-types="nodeTypes"
+            :nodes-draggable="false"
+            :nodes-connectable="false"
+            :elements-selectable="false"
+            fit-view-on-init
+            class="bg-surface-0"
+          >
+            <Background pattern-color="#2a2d3a" :gap="24" :size="1" />
+            <Controls />
 
-          <!-- High-quality HTML Edge Labels (aligned with Designer) -->
-          <template #edge-label="{ labelX, labelY, data }">
-            <EdgeLabelRenderer>
-              <div 
-                v-if="data?.trigger"
-                :style="{
-                  position: 'absolute',
-                  transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-                  pointerEvents: 'all'
-                }"
-                class="px-2 py-1 rounded border border-border bg-surface-2/80 text-[9px] font-mono font-medium text-text shadow-xl backdrop-blur-sm whitespace-nowrap text-center leading-tight"
-              >
-                <div class="flex items-center justify-center gap-1">
-                  <span v-if="data.isTimeout">⏱</span>
-                  <span>{{ data.trigger }}</span>
+            <!-- High-quality HTML Edge Labels -->
+            <template #edge-label="{ labelX, labelY, data }">
+              <EdgeLabelRenderer>
+                <div 
+                  v-if="data?.trigger"
+                  :style="{
+                    position: 'absolute',
+                    transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                    pointerEvents: 'all'
+                  }"
+                  class="px-2 py-1 rounded border border-border bg-surface-2/80 text-[9px] font-mono font-medium text-text shadow-xl backdrop-blur-sm whitespace-nowrap text-center leading-tight"
+                >
+                  <div class="flex items-center justify-center gap-1">
+                    <span v-if="data.isTimeout">⏱</span>
+                    <span>{{ data.trigger }}</span>
+                  </div>
+                  <div v-if="data.guard" class="text-[8px] text-text-muted opacity-90 mt-0.5">
+                    {{ data.guard }}
+                  </div>
                 </div>
-                <div v-if="data.guard" class="text-[8px] text-text-muted opacity-90 mt-0.5">
-                  {{ data.guard }}
-                </div>
+              </EdgeLabelRenderer>
+            </template>
+          </VueFlow>
+          <div v-else class="h-full flex items-center justify-center text-text-muted text-sm">
+            Loading workflow…
+          </div>
+
+          <!-- Time Travel Scrubber -->
+          <div v-if="history.length" class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 px-5 py-3 rounded-2xl bg-surface-1/80 border border-border/50 backdrop-blur-xl shadow-2xl min-w-[400px]">
+            <button 
+              @click="isLive = !isLive"
+              :class="[
+                'flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border',
+                isLive ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-surface-2 text-text-muted border-border hover:text-text'
+              ]"
+            >
+              <div v-if="isLive" class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"/>
+              {{ isLive ? 'Live' : 'Travel' }}
+            </button>
+
+            <div class="flex-1 flex flex-col gap-1.5">
+              <div class="flex justify-between text-[9px] font-mono text-text-muted uppercase tracking-tighter">
+                <span>Start</span>
+                <span class="text-accent">{{ isLive ? 'Current' : 'Step ' + (scrubIndex + 1) }}</span>
+                <span>End</span>
               </div>
-            </EdgeLabelRenderer>
-          </template>
-        </VueFlow>
-        <div v-else class="flex-1 flex items-center justify-center text-text-muted text-sm">
-          Loading workflow…
+              <input 
+                type="range" 
+                min="0" 
+                :max="history.length" 
+                v-model.number="scrubIndex"
+                @input="isLive = false"
+                class="w-full h-1.5 bg-surface-2 rounded-lg appearance-none cursor-pointer accent-accent"
+              />
+            </div>
+
+            <div class="text-[10px] font-mono text-text-muted bg-surface-2 px-2 py-1 rounded-md border border-border">
+              {{ formatDuration(scrubDuration) }}
+            </div>
+          </div>
         </div>
 
 
@@ -201,21 +245,47 @@
           </button>
         </div>
 
-        <!-- Blackboard tab (Live) -->
+        <!-- Blackboard tab -->
         <div v-if="activeTab === 'blackboard'" class="flex-1 flex flex-col overflow-hidden">
           <BlackboardPanel
-            :blackboard="run?.blackboard"
+            :blackboard="displayBlackboard"
+            :previous-blackboard="displayPreviousBlackboard"
             class="flex-1 overflow-hidden"
           />
 
-          <!-- Agent Reasoning (Live) -->
+          <!-- Thought Trace (Live) -->
           <div v-if="displayReasoning" class="border-t border-border p-4 bg-surface-2 shrink-0 max-h-[40%] overflow-y-auto shadow-inner">
             <div class="flex items-center gap-2 mb-2">
               <div v-if="isThinking" class="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"/>
-              <h4 class="text-[10px] font-bold text-text-muted uppercase tracking-widest">Agent Reasoning</h4>
+              <h4 class="text-[10px] font-bold text-text-muted uppercase tracking-widest">Thought Trace</h4>
             </div>
             <p class="text-xs text-text leading-relaxed whitespace-pre-wrap font-sans">{{ displayReasoning }}</p>
           </div>
+        </div>
+
+        <!-- Thoughts tab -->
+        <div v-else-if="activeTab === 'thoughts'" class="flex-1 flex flex-col overflow-hidden p-4 space-y-4">
+           <div v-if="displayReasoning" class="space-y-2">
+             <div class="flex items-center gap-2">
+                <div v-if="isThinking" class="w-2 h-2 rounded-full bg-violet-500 animate-pulse"/>
+                <h3 class="text-xs font-bold text-text uppercase tracking-wider">Active Monologue</h3>
+             </div>
+             <div class="p-4 rounded-xl bg-violet-500/5 border border-violet-500/10 text-sm text-text leading-relaxed whitespace-pre-wrap italic opacity-90 shadow-inner">
+               "{{ displayReasoning }}"
+             </div>
+           </div>
+           
+           <div class="space-y-3">
+             <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest border-b border-border pb-1">Historical Context</h3>
+             <div class="space-y-4">
+               <div v-for="(t, idx) in displayHistory.slice().reverse()" :key="idx" class="relative pl-4 border-l border-border/50">
+                 <div v-if="t.agent_output?.reasoning" class="space-y-1">
+                   <div class="text-[10px] font-mono text-accent">{{ t.to_state }}</div>
+                   <p class="text-xs text-text-muted leading-snug">{{ t.agent_output.reasoning }}</p>
+                 </div>
+               </div>
+             </div>
+           </div>
         </div>
 
         <!-- Snapshot tab (Historical) -->
@@ -310,9 +380,9 @@
             </div>
           </div>
           
-          <div class="p-4 border-t border-border bg-surface-1 flex gap-2">
-            <button @click="resolve('rejected')" class="flex-1 btn-danger justify-center">Reject</button>
-            <button @click="resolve('approved')" class="flex-1 btn-primary justify-center">Approve</button>
+          <div class="p-4 border-t border-border bg-surface-1/50 flex gap-3">
+            <button @click="resolve('rejected')" class="flex-1 btn-danger-solid justify-center py-2.5">Reject</button>
+            <button @click="resolve('approved')" class="flex-1 btn-primary justify-center py-2.5">Approve</button>
           </div>
         </div>
 
@@ -426,7 +496,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, shallowRef, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { VueFlow, EdgeLabelRenderer } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -472,19 +542,58 @@ const editedBlackboard = ref({})
 const resolveError = ref('')
 const selectedTransition = ref(null)
 
+const scrubIndex = ref(0)
+const isLive     = ref(true)
+const showDebugTabs = ref(false)
+
 const run          = computed(() => execStore.activeRun)
 const history      = computed(() => execStore.transitions)
 const runLLMCalls  = computed(() => execStore.llmCalls[route.params.id] ?? [])
 const runMCPLogs   = computed(() => execStore.mcpLogs[route.params.id]  ?? [])
 
+// Time Travel Logic
+const displayHistory = computed(() => {
+  if (isLive.value || scrubIndex.value >= history.value.length) return history.value
+  return history.value.slice(0, scrubIndex.value + 1)
+})
+
+const displayBlackboard = computed(() => {
+  if (isLive.value || scrubIndex.value >= history.value.length) return run.value?.blackboard ?? {}
+  return history.value[scrubIndex.value]?.blackboard_snapshot ?? {}
+})
+
+const displayPreviousBlackboard = computed(() => {
+  const currentIdx = isLive.value || scrubIndex.value >= history.value.length ? history.value.length - 1 : scrubIndex.value
+  if (currentIdx <= 0) return null
+  return history.value[currentIdx - 1]?.blackboard_snapshot ?? {}
+})
+
+const displayCurrentState = computed(() => {
+  if (isLive.value || scrubIndex.value >= history.value.length) return run.value?.current_state
+  return history.value[scrubIndex.value]?.to_state
+})
+
+const scrubDuration = computed(() => {
+  if (!history.value.length) return 0
+  if (isLive.value || scrubIndex.value >= history.value.length) {
+    return Date.now() - new Date(history.value[0].timestamp)
+  }
+  return new Date(history.value[scrubIndex.value].timestamp) - new Date(history.value[0].timestamp)
+})
+
+// Auto-advance scrubber
+watch(() => history.value.length, (newLen) => {
+  if (isLive.value) scrubIndex.value = newLen
+})
+
 const currentStateType = computed(() => {
-  if (!workflowDef.value || !run.value?.current_state) return null
-  return workflowDef.value.states?.find(s => s.name === run.value.current_state)?.type ?? null
+  if (!workflowDef.value || !displayCurrentState.value) return null
+  return workflowDef.value.states?.find(s => s.name === displayCurrentState.value)?.type ?? null
 })
 
 const currentStateDef = computed(() => {
-  if (!workflowDef.value || !run.value?.current_state) return null
-  return workflowDef.value.states?.find(s => s.name === run.value.current_state)
+  if (!workflowDef.value || !displayCurrentState.value) return null
+  return workflowDef.value.states?.find(s => s.name === displayCurrentState.value)
 })
 
 const canTerminate = computed(() => {
@@ -514,12 +623,13 @@ const rerunInitialData = computed(() => {
 const visibleTabs  = computed(() => {
   const tabs = [
     { id: 'blackboard', label: 'Blackboard' },
+    { id: 'thoughts',   label: 'Thoughts'   },
     { id: 'timeline',   label: 'Timeline'   },
   ]
   if (currentStateType.value === 'hitl') {
     tabs.push({ id: 'task', label: 'Task' })
   }
-  if (authStore.hasRole('admin')) {
+  if (authStore.hasRole('admin') && showDebugTabs.value) {
     tabs.push({ id: 'debug', label: 'LLM Debug' })
     tabs.push({ id: 'mcp',   label: 'MCP Debug' })
   }
@@ -537,8 +647,8 @@ watch([() => run.value?.status, () => currentStateType.value], ([status, type]) 
 }, { immediate: true })
 
 // Capture blackboard when HITL is active
-watch(() => run.value?.blackboard, (bb) => {
-  if (bb && run.value?.status === 'waiting') {
+watch([() => run.value?.blackboard, () => run.value?.status], ([bb, status]) => {
+  if (bb && status === 'waiting') {
     editedBlackboard.value = JSON.parse(JSON.stringify(bb))
     // Default to JSON if no schema is defined to show "full set of inputs"
     if (!blackboardSchema.value || Object.keys(blackboardSchema.value.properties || {}).length === 0) {
@@ -547,7 +657,7 @@ watch(() => run.value?.blackboard, (bb) => {
       tweakView.value = 'form'
     }
   }
-}, { immediate: true })
+}, { immediate: true, deep: true })
 
 function syncFromTweakForm(data) {
   if (JSON.stringify(editedBlackboard.value) !== JSON.stringify(data)) {
@@ -576,7 +686,29 @@ async function loadRun() {
   }
 }
 
-onMounted(loadRun)
+function handleKeydown(e) {
+  // Option+Shift+D to toggle debug tabs
+  if (e.altKey && e.shiftKey && e.code === 'KeyD') {
+    e.preventDefault()
+    showDebugTabs.value = !showDebugTabs.value
+  }
+  // Option+Shift+A to toggle AI Debug modal (if run failed)
+  if (e.altKey && e.shiftKey && e.code === 'KeyA') {
+    if (run.value?.status === 'failed' && workflowYAML.value) {
+      e.preventDefault()
+      showDebugModal.value = !showDebugModal.value
+    }
+  }
+}
+
+onMounted(() => {
+  loadRun()
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 
 // ── Vue Flow graph ────────────────────────────────────────────────────────────
 
@@ -590,10 +722,10 @@ const flowEdges = computed(() => {
     const targets = t.to_nodes ?? (t.to ? [t.to] : [])
     
     for (const target of targets) {
-      const isLast = history.value.length > 0 && 
-                     history.value[history.value.length - 1].from_state === t.from &&
-                     history.value[history.value.length - 1].to_state === target &&
-                     history.value[history.value.length - 1].trigger === t.trigger
+      const isLast = displayHistory.value.length > 0 && 
+                     displayHistory.value[displayHistory.value.length - 1].from_state === t.from &&
+                     displayHistory.value[displayHistory.value.length - 1].to_state === target &&
+                     displayHistory.value[displayHistory.value.length - 1].trigger === t.trigger
 
       const isTimeout = t.trigger === 'timeout'
 
@@ -601,7 +733,7 @@ const flowEdges = computed(() => {
         id:      `${t.from}__${t.trigger}__${target}`,
         source:  t.from,
         target:  target,
-        animated: isLast || run.value?.status === 'running',
+        animated: isLast || (isLive.value && run.value?.status === 'running'),
         class:   isLast ? 'edge-active' : '',
         data:    { 
           trigger: t.trigger,
@@ -617,7 +749,7 @@ const flowEdges = computed(() => {
 const flowNodes = computed(() => {
   if (!workflowDef.value) return []
   const states       = workflowDef.value.states ?? []
-  const currentState = run.value?.current_state
+  const currentState = displayCurrentState.value
 
   const rawNodes = states.map(s => ({
     id:       s.name,
@@ -650,6 +782,10 @@ const thinkingText = computed(() => execStore.thinkingTokens[route.params.id] ??
 const isThinking = computed(() => !!thinkingText.value && run.value?.status === 'running')
 
 const lastReasoning = computed(() => {
+  if (!isLive.value && scrubIndex.value < history.value.length) {
+    return history.value[scrubIndex.value]?.agent_output?.reasoning
+  }
+
   const calls = runLLMCalls.value
   if (!calls || calls.length === 0) return null
   // The calls are already sorted by time (added via push in store)

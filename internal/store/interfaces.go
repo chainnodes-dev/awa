@@ -72,12 +72,19 @@ type RunStore interface {
 	GetRunStats(ctx context.Context) (map[string]int, error)
 }
 
+// HITLFilter controls which HITL requests are returned.
+type HITLFilter struct {
+	TenantID string
+	Assignee string
+	Resolved *bool // nil = any, true = only resolved, false = only pending
+}
+
 // HITLStore manages human-in-the-loop requests.
 type HITLStore interface {
 	CreateHITL(ctx context.Context, req *asmtypes.HITLRequest) error
 	GetHITL(ctx context.Context, runID string) (*asmtypes.HITLRequest, error)
 	ResolveHITL(ctx context.Context, runID, resolution, resolver string) error
-	ListPendingHITL(ctx context.Context) ([]*asmtypes.HITLRequest, error)
+	ListHITLs(ctx context.Context, filter HITLFilter) ([]*asmtypes.HITLRequest, error)
 }
 
 // SystemSettingsStore manages platform-wide configuration.

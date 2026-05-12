@@ -9,6 +9,7 @@ import (
 const (
 	SignalTrigger        = "trigger"
 	SignalHITLResolution = "hitl_resolution"
+	SignalChat           = "chat"
 )
 
 // WorkflowParams is the single input argument to ASMWorkflow.
@@ -25,6 +26,12 @@ type WorkflowParams struct {
 type TriggerSignalPayload struct {
 	Trigger string
 	Payload map[string]interface{}
+}
+
+// ChatSignalPayload is sent by a human to talk to an agent during HITL.
+type ChatSignalPayload struct {
+	Message string
+	Sender  string
 }
 
 // HITLResolutionPayload is the body of the "hitl_resolution" signal sent by Engine.SignalHITL.
@@ -44,6 +51,7 @@ type UpdateRunParams struct {
 	CurrentState    string
 	Status          asmtypes.RunStatus
 	Blackboard      map[string]interface{}
+	FailureReason   string
 	IsTerminal      bool // set CompletedAt when true
 }
 

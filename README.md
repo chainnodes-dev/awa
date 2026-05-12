@@ -19,6 +19,18 @@ Define your process as a state machine in YAML. Assign LLM agents, deterministic
 - **MCP tool servers** — agents call external tools via the Model Context Protocol
 - **RBAC auth** — admin / operator / viewer roles, JWT + refresh tokens
 - **Multi-tenancy** — isolated tenant contexts with super_admin management
+- **Collaborative Social Inbox** — integrated human-agent chat with assignee-based task filtering
+
+---
+
+## 🚀 New in Phaxa: The "Better than n8n" Roadmap
+
+Surpassing traditional automation with deep agentic features:
+- **Deep Observability**: Capture full JavaScript stack traces for code nodes and view LLM chain-of-thought (monologue) in real-time.
+- **MCP Marketplace**: Discover and install Model Context Protocol (MCP) servers with one click via a visual gallery.
+- **Blackboard Time Travel**: Use the slider in the Monitor to see exactly how the data (blackboard) changed at every step.
+- **Port Mapping Hints**: Visual guidance in the Designer for common local services like GLEIF, Frankfurter, and OpenFIGI.
+- **Tenant Delete Safety**: Production-ready data integrity with cascading deletes for multi-tenant cleanup.
 
 ---
 
@@ -146,6 +158,8 @@ agents:
 | `script` | Deterministic expr-lang expressions; zero latency |
 | `hitl` | Pauses and waits for a human signal via the API or UI |
 | `wait` | Pauses until a condition expression on the blackboard becomes true |
+| `subprocess` | Invokes another workflow as a durable child process |
+| `emit_event` | Fires a named event to wake up other waiting runs |
 
 ### Code node sandbox
 
