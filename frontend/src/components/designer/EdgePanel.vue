@@ -9,7 +9,7 @@
     </p>
     <div class="space-y-1">
       <label class="text-xs text-text-muted">Trigger</label>
-      <input class="input font-mono" v-model="form.label" />
+      <TriggerCombobox v-model="form.label" :options="options" />
     </div>
     <div class="space-y-1">
       <label class="text-xs text-text-muted">Guard</label>
@@ -22,7 +22,12 @@
 
 <script setup>
 import { reactive } from 'vue'
-const props = defineProps({ edge: Object })
+import TriggerCombobox from './TriggerCombobox.vue'
+
+const props = defineProps({
+  edge:    Object,
+  options: { type: Array, default: () => [] }
+})
 defineEmits(['update', 'delete'])
 const form = reactive({ ...props.edge })
 </script>

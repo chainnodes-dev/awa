@@ -204,5 +204,23 @@
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-wikipedia"],
     "category": "Knowledge"
+  },
+  {
+    "id": "yahoo-finance",
+    "name": "Yahoo Finance",
+    "description": "Real-time stock prices, analyst ratings, and historical market data.",
+    "icon": "https://s.yimg.com/rz/p/yahoo_finance_en-US_h_p_finance_v2.png",
+    "command": "npx",
+    "args": ["-y", "-p", "yahoo-finance-mcp-server", "yahoo-finance-mcp"],
+    "category": "Finance"
+  },
+  {
+    "id": "sec-edgar",
+    "name": "SEC EDGAR",
+    "description": "Access official SEC filings (10-K, 10-Q) for public companies.",
+    "icon": "https://www.sec.gov/themes/custom/sec/logo.svg",
+    "command": "npx",
+    "args": ["-y", "mcp-edgar"],
+    "category": "Finance"
   }
 ]

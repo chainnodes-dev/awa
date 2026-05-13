@@ -134,7 +134,7 @@ func makeTask(providerName string) orchestrator.AgentTask {
 		},
 		StateDef: asmtypes.StateDef{
 			Name: "TEST_STATE",
-			Type: asmtypes.StateIntermediate,
+			Type: asmtypes.StatePrompt,
 		},
 		Blackboard: map[string]interface{}{"invoice_id": "INV-001"},
 		Def:        &asmtypes.WorkflowDef{},

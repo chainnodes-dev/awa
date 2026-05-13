@@ -42,7 +42,7 @@ type BlackboardDef struct {
 }
 
 type FieldDef struct {
-	Type     string      `yaml:"type"               json:"type"` // string | number | bool | object
+	Type     string      `yaml:"type"               json:"type"` // string | number | bool | object | file
 	Required bool        `yaml:"required,omitempty" json:"required"`
 	IsOutput bool        `yaml:"is_output,omitempty" json:"is_output"`
 	Default  interface{} `yaml:"default,omitempty"  json:"default,omitempty"`
@@ -66,7 +66,7 @@ type StateType string
 
 const (
 	StateInitial      StateType = "initial"
-	StateIntermediate StateType = "intermediate"
+	StatePrompt       StateType = "prompt"
 	StateHITL         StateType = "hitl"      // Human-in-the-loop pause
 	StateTerminal     StateType = "terminal"
 	StateScript       StateType = "script"     // Deterministic expr-lang evaluation; no LLM

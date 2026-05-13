@@ -16,7 +16,7 @@
         <option value="initial">initial</option>
         <option value="terminal">terminal</option>
         <optgroup label="──────────────"></optgroup>
-        <option value="intermediate">intermediate</option>
+        <option value="prompt">prompt</option>
         <option value="script">script</option>
         <option value="code">code</option>
         <optgroup label="──────────────"></optgroup>
@@ -152,7 +152,7 @@
             :agents="agents"
             placeholder="agent_name (required for automation)"
           />
-          <p v-if="(form.type === 'initial' || form.type === 'intermediate') && !form.agent" class="text-[10px] text-amber-500 font-medium">
+          <p v-if="(form.type === 'initial' || form.type === 'prompt') && !form.agent" class="text-[10px] text-amber-500 font-medium">
             ⚠ Agent required for automated reasoning.
           </p>
         </div>
@@ -489,14 +489,14 @@ function mappingsToArray(obj) {
   return Object.entries(obj).map(([name, bbField]) => ({ name, bbField }))
 }
 
-// Supported state types: initial, terminal, intermediate, script, code, hitl, wait, subprocess
-const STATE_TYPES = ['initial', 'terminal', 'intermediate', 'script', 'code', 'hitl', 'wait', 'subprocess']
+// Supported state types: initial, terminal, prompt, script, code, hitl, wait, subprocess
+const STATE_TYPES = ['initial', 'terminal', 'prompt', 'script', 'code', 'hitl', 'wait', 'subprocess']
 
 // ── Reactive State ──────────────────────────────────────────────────────────
 
 const form = reactive({
   name:           props.node.name         ?? '',
-  type:           props.node.type         ?? 'intermediate',
+  type:           props.node.type         ?? 'prompt',
   instructions:   props.node.instructions ?? '',
   agent:          props.node.agent        ?? '',
   condition:      props.node.condition    ?? '',

@@ -191,6 +191,7 @@
             <PendingConnectionPanel
               v-if="pendingConnection"
               :connection="pendingConnection"
+              :options="availableTriggers"
               @confirm="confirmConnection"
               @cancel="cancelConnection"
             />
@@ -274,6 +275,7 @@
               v-else-if="selected?.type === 'edge'"
               :key="'edge-' + selected.id"
               :edge="selected.data"
+              :options="availableTriggers"
               @update="updateEdge"
               @delete="deleteSelected"
             />
@@ -429,6 +431,33 @@ const generatePipelineWarning = ref('')
 
 const nodeTypes = shallowRef({ stateNode: StateNode })
 const edgeTypes = shallowRef({ transitionEdge: TransitionEdge })
+
+const availableTriggers = computed(() => {
+  let sourceId = null
+  if (pendingConnection.value) {
+    sourceId = pendingConnection.value.source
+  } else if (selected.value?.type === 'edge') {
+    sourceId = selected.value.data.from
+  }
+  if (!sourceId) return []
+
+  const triggers = new Set()
+  edges.value.forEach(e => {
+    if (e.source === sourceId && e.label) triggers.add(e.label)
+  })
+  const node = nodes.value.find(n => n.id === sourceId)
+  if (node?.data) {
+    const data = node.data
+    if (data.type === 'subprocess' && data.subprocess) {
+      if (data.subprocess.completion_trigger) triggers.add(data.subprocess.completion_trigger)
+      if (data.subprocess.failure_trigger) triggers.add(data.subprocess.failure_trigger)
+    }
+    if (data.on_timeout) triggers.add(data.on_timeout)
+    if (data.type === 'wait' || data.timeout) triggers.add('timeout')
+  }
+  return Array.from(triggers).sort()
+})
+
 const workflowName = computed(() => meta.name || '')
 
 // ── Composables ──────────────────────────────────────────────────────────────

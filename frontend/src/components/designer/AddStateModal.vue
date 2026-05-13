@@ -7,7 +7,7 @@
         <option value="initial">initial</option>
         <option value="terminal">terminal</option>
         <optgroup label="──────────────"></optgroup>
-        <option value="intermediate">intermediate</option>
+        <option value="prompt">prompt</option>
         <option value="script">script</option>
         <option value="code">code</option>
         <optgroup label="──────────────"></optgroup>
@@ -28,7 +28,7 @@
 import { ref } from 'vue'
 const emit = defineEmits(['close', 'add'])
 const name = ref('')
-const type = ref('intermediate')
+const type = ref('prompt')
 function onAdd() {
   if (!name.value) return
   emit('add', { name: name.value, type: type.value })

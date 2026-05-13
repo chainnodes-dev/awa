@@ -98,7 +98,7 @@ A "process" is a workflow that may be reusable. Your job is to:
    - Use **subprocess** FIRST when a reusable sub-process in the catalog (see below) already
      implements the required capability. This is always preferred over reimplementing
      the same logic inline.
-   - Use **intermediate** (LLM agent) ONLY when genuine reasoning, judgment, or language
+   - Use **prompt** (LLM agent) ONLY when genuine reasoning, judgment, or language
      understanding is required that cannot be expressed deterministically and no
      reusable process covers it.
    - Use **code** (JavaScript) when the step requires computation, transformation, loops,
@@ -130,7 +130,7 @@ At this stage, do NOT worry about node types or detailed logic. Focus on the log
 
 ## Output Format
 
-Return a valid Phaxa Workflow YAML where EVERY state has ` + "`type: intermediate`" + `.
+Return a valid Phaxa Workflow YAML where EVERY state has ` + "`type: prompt`" + `.
 
 ` + "```yaml" + `
 apiVersion: asm.bauhaus28.com/v1
@@ -140,10 +140,10 @@ metadata:
   version: "1.0.0"
 states:
   - name: STEP_1
-    type: intermediate
+    type: prompt
     instructions: "Concise description of what happens here"
   - name: STEP_2
-    type: intermediate
+    type: prompt
     instructions: "Concise description of what happens here"
 ` + "```" + `
 
@@ -151,7 +151,7 @@ states:
 
 - Use uppercase snake_case for state names (e.g., VALIDATE_INVOICE)
 - Keep state names concise but descriptive
-- Every state must have 'type: intermediate' for now
+- Every state must have 'type: prompt' for now
 - Include a 'metadata' block with 'name' and 'version'
 - Output the complete YAML block
 `
@@ -160,7 +160,7 @@ states:
 func DefaultCategorisePrompt() string {
 	return `You are classifying workflow states into the correct Phaxa node types.
 
-Given a skeleton workflow YAML (all states typed as 'intermediate') and the original process description,
+Given a skeleton workflow YAML (all states typed as 'prompt') and the original process description,
 assign the correct Phaxa type to every state.
 
 ## Available types and when to use them
@@ -169,7 +169,7 @@ assign the correct Phaxa type to every state.
 |------|----------|
 | initial | Single entry point of the workflow |
 | terminal | End states (success, failure, cancelled, etc.) |
-| intermediate | Genuine LLM reasoning/decision-making that is non-deterministic |
+| prompt | Genuine LLM reasoning/decision-making that is non-deterministic |
 | code | Deterministic computation — math, string manipulation, data transformation (JavaScript) |
 | script | Simple one-line deterministic logic — conditions or mappings (expr-lang) |
 | hitl | A human must take an action or approve something |
@@ -179,13 +179,13 @@ assign the correct Phaxa type to every state.
 
 ## Classification rules
 
-1. **Prioritize MCP Servers**: If a step requires external data retrieval or an external action (e.g., looking up a company in GLEIF, checking a stock price, sending an email) and a matching tool is available in the **MCP Servers** list, categorize that state as 'intermediate' so an agent can handle the tool interaction.
-2. Prefer 'code' over 'intermediate' for internal deterministic computation — math, string manipulation, data transformation.
+1. **Prioritize MCP Servers**: If a step requires external data retrieval or an external action (e.g., looking up a company in GLEIF, checking a stock price, sending an email) and a matching tool is available in the **MCP Servers** list, categorize that state as 'prompt' so an agent can handle the tool interaction.
+2. Prefer 'code' over 'prompt' for internal deterministic computation — math, string manipulation, data transformation.
 3. Prefer 'script' over 'code' for logic that fits in a single expr-lang expression.
-4. Use 'intermediate' only when the step genuinely requires LLM reasoning or an MCP tool call.
+4. Use 'prompt' only when the step genuinely requires LLM reasoning or an MCP tool call.
 5. 'initial' and 'terminal' should stay as determined by the structure.
 
-## Placeholder implementations for non-intermediate types
+## Placeholder implementations for non-prompt types
 
 For any type that requires a code body, inject a minimal placeholder so the YAML stays loadable:
 
@@ -246,9 +246,13 @@ transitions:
     guard: "amount > 100" # Use quotes for expressions
 ` + "```" + `
 
-- Use meaningful trigger names (e.g. 'approved', 'rejected', 'error', 'timeout_occurred')
+- **Standardized Triggers**: Use consistent trigger names across the workflow for similar actions:
+  - **Approvals/Human**: ` + "`" + `approved` + "`" + `, ` + "`" + `rejected` + "`" + `, ` + "`" + `needs_review` + "`" + `
+  - **Linear Flow**: ` + "`" + `done` + "`" + `, ` + "`" + `next` + "`" + `, ` + "`" + `error` + "`" + `, ` + "`" + `cancel` + "`" + `
+  - **Timeouts**: Always use ` + "`" + `timeout` + "`" + `
+- **Uniqueness**: Every transition leaving a specific state MUST have a unique trigger name. NEVER use the same trigger name for multiple outgoing transitions from the same state.
 - **HITL Nodes**: MUST have both 'approved' and 'rejected' triggers unless specified otherwise.
-- **Timeouts**: For any state requiring a time limit, set 'timeout: "<duration>"' (e.g. "1h") and 'on_timeout: timeout_occurred' on the state. Add a matching transition from that state with 'trigger: timeout_occurred'.
+- **Timeouts**: For any state requiring a time limit, set 'timeout: "<duration>"' (e.g. "1h") and 'on_timeout: timeout' on the state. Add a matching transition from that state with 'trigger: timeout'.
 - Add guards (expr-lang conditions) where conditional branching is needed
 - Add parallel fan-out with 'to_nodes' where steps can run concurrently
 - Ensure every non-terminal state has at least one outgoing transition
@@ -310,7 +314,7 @@ Your task is to fill in the final implementation details for every node.
 
 6. **Agents block**: Ensure all agents have appropriate entries. 
    - Set 'model: ""' to designate the use of the platform default.
-   - **MCP Servers**: For any agent requiring external tools, add the logical name of the required MCP server to its 'mcp_servers' list (e.g., ` + "`mcp_servers: [\"gleif-server\"]`" + `).
+   - **MCP Servers**: For any agent requiring external tools, add the logical name of the required MCP server to its 'mcp_servers' list (e.g., ` + "`" + `mcp_servers: ["gleif-server"]` + "`" + `).
    - Use the "Available MCP Servers" list provided in the system context to find the correct names.
 
 ## Node Structure Requirements
@@ -381,7 +385,7 @@ Your goal is to:
 - **Node Specifics**: 
   - For 'script' nodes: check the syntax of the expr-lang expression.
   - For 'code' nodes: fix the JavaScript logic.
-  - For 'intermediate' nodes: refine the instructions or the MCP server config.
+  - For 'prompt' nodes: refine the instructions or the MCP server config.
 - **Preserve Intent**: Do not change the overall goal of the workflow unless the error makes it impossible.
 - **Schema Compliance**: The fixed YAML must adhere to the Phaxa schema (apiVersion: phaxa/v1).
 

@@ -166,6 +166,15 @@ func (p *OpenAIProvider) convertMessage(m Message) map[string]interface{} {
 			}
 		}
 		msg := map[string]interface{}{"role": "assistant", "content": text}
+		
+		// Preserve DeepSeek reasoning_content if present in any block.
+		for _, b := range blocks {
+			if b.Reasoning != "" {
+				msg["reasoning_content"] = b.Reasoning
+				break
+			}
+		}
+
 		if len(toolCalls) > 0 {
 			msg["tool_calls"] = toolCalls
 		}
@@ -241,6 +250,10 @@ func (p *OpenAIProvider) parseResponse(data map[string]interface{}) (*Completion
 
 	if content, ok := msg["content"].(string); ok {
 		resp.Content = content
+	}
+
+	if reasoning, ok := msg["reasoning_content"].(string); ok {
+		resp.Reasoning = reasoning
 	}
 
 	if toolCalls, ok := msg["tool_calls"].([]interface{}); ok {

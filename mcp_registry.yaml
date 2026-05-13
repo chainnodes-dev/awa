@@ -74,3 +74,17 @@ mcp_servers:
     transport: sse
     env_var: MCP_OPENFIGI_URL
     description: "Financial instrument lookups. Tools: figi_lookup(ticker)."
+
+  - name: yahoo-finance
+    description: "Real-time market data, stock prices, and analyst ratings. Tools: get_stock_price(ticker), get_analyst_ratings(ticker)."
+
+  - name: sec-edgar
+    description: "Official SEC filings database. Tools: search_filings(ticker, form_type), get_latest_10k(ticker)."
+
+  # ── Environment & Energy ──────────────────────────────────────────
+  - name: weather
+    env_var: OPENWEATHERMAP_API_KEY
+    description: "Global weather data and forecasts. Tools: get_forecast(lat, lon)."
+
+  - name: solar-wind-prognosis
+    description: "Specialized forecasts for PV (sun intensity) and wind turbines. Tools: get_solar_yield(lat, lon), get_wind_prognosis(lat, lon)."

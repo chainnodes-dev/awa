@@ -52,7 +52,7 @@ type ProcessSummariseResult struct {
 
 // AnalyseProcess decomposes a process description into a WorkflowDef YAML.
 // It classifies each step as:
-//   - intermediate (LLM reasoning required)
+//   - prompt (LLM reasoning required)
 //   - code         (programmatic transformation)
 //   - script       (simple deterministic expression)
 //   - hitl         (requires human input)

@@ -39,6 +39,7 @@ type ContentBlock struct {
 	Name      string      `json:"name,omitempty"`
 	Input     interface{} `json:"input,omitempty"`
 	Output    interface{} `json:"content,omitempty"` // tool_result content
+	Reasoning string      `json:"reasoning,omitempty"` // DeepSeek: thought content
 }
 
 type Tool struct {
@@ -49,6 +50,7 @@ type Tool struct {
 
 type CompletionResponse struct {
 	Content    string      `json:"content"`
+	Reasoning  string      `json:"reasoning,omitempty"` // DeepSeek reasoning_content
 	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`
 	StopReason string      `json:"stop_reason"`
 	Usage      *TokenUsage `json:"usage,omitempty"`

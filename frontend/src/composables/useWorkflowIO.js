@@ -134,7 +134,7 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
       blackboard: { schema: { ...bbSchema } },
       states: nodes.value.map(n => ({
         name:         n.id,
-        type:         n.data.type         ?? 'intermediate',
+        type:         n.data.type         ?? 'prompt',
         instructions: n.data.instructions || undefined,
         agent:        n.data.agent        || undefined,
         script:       n.data.script       || undefined,
@@ -169,7 +169,7 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
 
     if (!skipChecks) {
       const unassigned = nodes.value.filter(n =>
-        (n.data.type === 'initial' || n.data.type === 'intermediate') && !n.data.agent
+        (n.data.type === 'initial' || n.data.type === 'prompt') && !n.data.agent
       )
       if (unassigned.length > 0) {
         const names = unassigned.map(n => n.id).join(', ')

@@ -32,7 +32,7 @@ states:
     to_nodes: ["market_check"]
 
   - name: market_check
-    type: intermediate
+    type: prompt
     agent: sentinel_analyst
     instructions: |
       Perform a market pulse check on BTC and ETH.

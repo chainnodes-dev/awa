@@ -37,6 +37,7 @@ function convertField(field, key = '') {
   let required = undefined
 
   if (type === 'bool') type = 'boolean'
+  if (type === 'file') type = 'file' // Keep as 'file' for our custom SchemaField handler
   
   if (type === 'list' || type === 'array') {
     type = 'array'

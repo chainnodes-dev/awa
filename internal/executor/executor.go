@@ -35,13 +35,15 @@ type Executor struct {
 }
 
 func NewExecutor(registry *llm.Registry, bus events.Bus, s store.Store, defaultProvider string) *Executor {
-	return &Executor{
+	e := &Executor{
 		llmRegistry: registry,
 		bus:         bus,
 		store:       s,
 		defaultProv: defaultProvider,
 		globalTools: tools.NewRegistry(),
 	}
+	e.RegisterTool(&tools.ReadUploadedFileTool{})
+	return e
 }
 
 // RegisterTool adds a tool to the global registry, making it available to all agents.
@@ -352,8 +354,12 @@ func (e *Executor) executeTool(ctx context.Context, reg *tools.Registry, name st
 // array used when appending the assistant turn to the conversation history.
 func buildAssistantBlocks(resp *llm.CompletionResponse) []llm.ContentBlock {
 	var blocks []llm.ContentBlock
-	if resp.Content != "" {
-		blocks = append(blocks, llm.ContentBlock{Type: "text", Text: resp.Content})
+	if resp.Content != "" || resp.Reasoning != "" {
+		blocks = append(blocks, llm.ContentBlock{
+			Type:      "text",
+			Text:      resp.Content,
+			Reasoning: resp.Reasoning,
+		})
 	}
 	for _, tc := range resp.ToolCalls {
 		blocks = append(blocks, llm.ContentBlock{
@@ -467,6 +473,7 @@ Business rules you MUST enforce:
 
 {{if .Blackboard}}
 You have access to tools. Use them as needed to complete your task, then produce your final response.
+If the blackboard contains fields with a "file_id", these represent uploaded documents. You can use the "read_file" tool to inspect their contents (extract text from PDFs, CSVs, etc.).
 {{end}}
 
 {{if .ValidTriggers}}

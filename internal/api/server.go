@@ -75,6 +75,7 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 	handlers := NewHandlers(cfg, engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr, allowStdio)
 
 	router := gin.New()
+	router.MaxMultipartMemory = 64 << 20 // 64 MiB
 	router.Use(gin.Recovery())
 	router.Use(auth.RequestID())
 	router.Use(MetricsMiddleware())

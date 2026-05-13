@@ -3,7 +3,7 @@
     :class="[
       'state-node relative flex flex-col gap-1 px-3 py-2.5 rounded-xl border-2 min-w-[140px] cursor-default select-none transition-shadow duration-300',
       nodeStyle,
-      isActive && `glow-${data.type ?? 'intermediate'}`,
+      isActive && `glow-${data.type ?? 'prompt'}`,
     ]"
     @mouseenter="hovered = true"
     @mouseleave="hovered = false"
@@ -85,7 +85,7 @@ const props = defineProps({
 
 const TYPE_STYLES = {
   initial:      'border-green-500/60 bg-green-500/10',
-  intermediate: 'border-indigo-500/60 bg-indigo-500/10',
+  prompt: 'border-indigo-500/60 bg-indigo-500/10',
   hitl:         'border-amber-500/40 bg-amber-500/10',
   terminal:     'border-border bg-surface-2',
   subprocess:   'border-violet-500/60 bg-violet-500/10',
@@ -97,7 +97,7 @@ const TYPE_STYLES = {
 const TYPE_DOTS = {
   initial:      'bg-indigo-400',
   terminal:     'bg-indigo-400',
-  intermediate: 'bg-indigo-500',
+  prompt: 'bg-indigo-500',
   script:       'bg-amber-400',
   code:         'bg-teal-400',
   subprocess:   'bg-violet-400',
@@ -106,19 +106,19 @@ const TYPE_DOTS = {
   emit_event:   'bg-blue-400',
 }
 const TYPE_COLORS = {
-  initial: '#818cf8', terminal: '#818cf8', intermediate: '#6366f1',
+  initial: '#818cf8', terminal: '#818cf8', prompt: '#6366f1',
   script: '#f59e0b', code: '#2dd4bf', subprocess: '#a78bfa',
   hitl: '#f59e0b', wait: '#94a3b8', emit_event: '#60a5fa',
 }
 
 const nodeStyle = computed(() => {
-  const base = TYPE_STYLES[props.data.type] ?? TYPE_STYLES.intermediate
+  const base = TYPE_STYLES[props.data.type] ?? TYPE_STYLES.prompt
   return props.selected
     ? base + ' ring-1 ring-accent/60 shadow-lg shadow-accent/20'
     : base
 })
-const dotColor = computed(() => TYPE_DOTS[props.data.type] ?? TYPE_DOTS.intermediate)
-const typeColor = computed(() => TYPE_COLORS[props.data.type] ?? TYPE_COLORS.intermediate)
+const dotColor = computed(() => TYPE_DOTS[props.data.type] ?? TYPE_DOTS.prompt)
+const typeColor = computed(() => TYPE_COLORS[props.data.type] ?? TYPE_COLORS.prompt)
 
 // Show top 3 blackboard fields when active
 const bbPreview = computed(() =>

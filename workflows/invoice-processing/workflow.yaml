@@ -40,7 +40,7 @@ states:
       y: 50
 
   - name: VALIDATING
-    type: intermediate
+    type: prompt
     agent: qa_validator_agent
     timeout: 30m
     on_timeout: timeout
@@ -58,7 +58,7 @@ states:
       y: 350
 
   - name: PROCESSING
-    type: intermediate
+    type: prompt
     agent: erp_agent
     position:
       x: 400

@@ -319,7 +319,7 @@ states:
     assignee: "team-name"
     instructions: "Description of the human task."
     form_schema: { type: object, properties: { lei: { type: string } } } # Optional UI schema
-# ... other states: wait, skill_call, terminal, intermediate ...
+# ... other states: wait, terminal, prompt ...
 
 # GLOBAL block: transitions must be outside the states list
 transitions:
@@ -346,7 +346,7 @@ agents:
 ## Core Rules
 1. **Integrity**: Exactly one 'initial' and at least one 'terminal' state.
 2. **Global Transitions**: Transitions MUST be in the top-level 'transitions:' block. NEVER place a 'transitions' list inside a state.
-3. **Efficiency**: Be concise. Avoid redundant intermediate states. Consolidate logic into scripts/code where possible. 
+3. **Efficiency**: Be concise. Avoid redundant prompt states. Consolidate logic into scripts/code where possible. 
 4. **Code Nodes**: The 'code' block MUST be an object with BOTH 'language' (always 'javascript') and 'code' fields. Example: ` + "`" + `code: { language: javascript, code: "bb.total = bb.amount * 1.19; return {trigger: 'done'};" }` + "`" + ` . NEVER use a plain string.
 5. **Expressions**: NEVER use literal placeholders like "expr". Provide valid expr-lang logic.
 6. **Instructions**: Start each 'instructions' field with a concise 1-sentence node description for the human designer, followed by the specific task and available triggers for the agent.

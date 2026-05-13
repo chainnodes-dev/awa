@@ -174,6 +174,14 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			system.POST("/keys", h.UpdateSystemKeys)
 			system.POST("/keys/generate", h.GenerateSystemKeys)
 		}
+		
+	}
+
+	// File uploads — accepts JWT or API key.
+	uploads := r.Group("/api/v1/uploads", RequireAuthOrAPIKey(jwtSvc, h.store))
+	{
+		uploads.POST("", h.UploadFile)
+		uploads.GET("/:id/:filename", h.GetUploadedFile)
 	}
 
 	// External process invocation — accepts JWT OR API key (no role restriction beyond auth).

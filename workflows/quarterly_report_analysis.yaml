@@ -1,0 +1,37 @@
+apiVersion: phaxa/v1
+kind: Workflow
+metadata:
+  name: quarterly-report-processor
+  version: "1"
+  description: "Analyzes a quarterly report PDF, extracts key financials, and prepares them for Google Sheets storage."
+  process_description: "Upload a report, extract data via LLM, and output a structured JSON for spreadsheet insertion."
+blackboard:
+  schema:
+    report:
+      type: file
+      required: true
+      title: "Quarterly Report (PDF)"
+    financials:
+      type: object
+      is_output: true
+      properties:
+        revenue: { type: string }
+        net_income: { type: string }
+        growth_yoy: { type: string }
+        key_risks: { type: list, items: { type: string } }
+states:
+  - name: ANALYZE_REPORT
+    type: prompt
+    agent: analyst
+    instructions: "Read the uploaded 'report'. Extract Revenue, Net Income, and YoY Growth. List the top 3 risks mentioned."
+  - name: DONE
+    type: terminal
+transitions:
+  - from: ANALYZE_REPORT
+    to: DONE
+    trigger: done
+agents:
+  - name: analyst
+    rules:
+      - "Always provide specific numbers with currency symbols."
+      - "If a value is not found, use 'N/A'."

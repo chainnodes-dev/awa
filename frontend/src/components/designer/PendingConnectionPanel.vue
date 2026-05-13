@@ -13,7 +13,7 @@
     </div>
     <div class="space-y-1">
       <label class="text-xs text-text-muted">Trigger name *</label>
-      <input class="input font-mono" v-model="trigger" placeholder="e.g. validation_passed" @keydown.enter="onConfirm" />
+      <TriggerCombobox v-model="trigger" :options="options" placeholder="e.g. validation_passed" />
     </div>
     <div class="space-y-1">
       <label class="text-xs text-text-muted">Guard expression</label>
@@ -29,7 +29,12 @@
 
 <script setup>
 import { ref } from 'vue'
-const props = defineProps({ connection: Object })
+import TriggerCombobox from './TriggerCombobox.vue'
+
+const props = defineProps({
+  connection: Object,
+  options:    { type: Array, default: () => [] }
+})
 const emit  = defineEmits(['confirm', 'cancel'])
 const trigger = ref('')
 const guard   = ref('')

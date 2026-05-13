@@ -22,6 +22,7 @@
           <option>bool</option>
           <option>object</option>
           <option>list</option>
+          <option>file</option>
         </select>
         <button class="text-text-muted hover:text-red-400 text-xs px-1" @click="removeField(name)">✕</button>
       </div>

@@ -72,7 +72,7 @@ type scriptJobResult struct {
 // ── Step 1: Decompose ────────────────────────────────────────────────────────
 
 // DecomposeWorkflow identifies the states/nodes of a process from a plain-language
-// description.  All states are typed as 'intermediate' so the canvas can render
+// description.  All states are typed as 'prompt' so the canvas can render
 // them immediately.  No transitions, code, or expressions are generated yet.
 func (g *Generator) DecomposeWorkflow(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
 	system := g.prompts.Get(PromptIDDecompose, DefaultDecomposePrompt())
@@ -97,7 +97,7 @@ func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*
 	system += pipelineOutputFormat()
 
 	userMsg := fmt.Sprintf(
-		"Process description:\n\n%s\n\nSkeleton workflow YAML (all nodes currently typed as 'intermediate'):\n\n```yaml\n%s\n```",
+		"Process description:\n\n%s\n\nSkeleton workflow YAML (all nodes currently typed as 'prompt'):\n\n```yaml\n%s\n```",
 		req.ProcessDescription, req.CurrentYAML,
 	)
 	return g.runPipelineStep(ctx, req, system, userMsg, true)
@@ -132,7 +132,7 @@ func (g *Generator) WireWorkflow(ctx context.Context, req PipelineRequest) (*Pip
 //  2. Fan out parallel Codegen() calls for code nodes and Scaffold() calls for
 //     script nodes (both have dedicated specialised prompts).
 //  3. Patch the generated code back into the YAML.
-//  4. Run one final LLM pass to implement intermediate, hitl, wait, and
+//  4. Run one final LLM pass to implement prompt, hitl, wait, and
 //     emit_event nodes and produce a complete, runnable workflow.
 func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
 	if req.CurrentYAML == "" {

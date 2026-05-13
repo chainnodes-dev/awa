@@ -105,7 +105,7 @@ states:
       trigger: '"intake_complete"'
 
   - name: VALIDATING
-    type: intermediate
+    type: prompt
     agent: invoice-processor
     timeout: 2m
     on_timeout: validation_failed
@@ -130,7 +130,7 @@ states:
         Fire trigger "validation_failed".
 
   - name: ENRICHING
-    type: intermediate
+    type: prompt
     agent: invoice-processor
     timeout: 2m
     on_timeout: enrichment_done
@@ -229,7 +229,7 @@ states:
     script: { trigger: '"start"' }
 
   - name: THREAT_INTEL
-    type: intermediate
+    type: prompt
     agent: security-analyst
     instructions: |
       Analyse the source_ip using available threat intelligence.
@@ -238,7 +238,7 @@ states:
       Otherwise, set severity: 'LOW' and trigger: 'intel_ready'.
 
   - name: REMEDIATION_SCAN
-    type: intermediate
+    type: prompt
     agent: security-analyst
     instructions: |
       Based on threat_intel_report, define a remediation plan.
@@ -299,14 +299,14 @@ states:
       Trigger 'analysis_done'.
 
   - name: ROUTING
-    type: intermediate
+    type: prompt
     script:
       trigger: "urgency == 'CRITICAL' ? 'priority' : 'standard'"
       updates:
         assigned_team: "urgency == 'CRITICAL' ? 'Senior_Support' : 'General_Support'"
 
   - name: AUTO_REPLY
-    type: intermediate
+    type: prompt
     agent: router-bot
     instructions: "Draft a polite automated reply acknowledging the standard ticket."
 
