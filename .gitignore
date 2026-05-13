@@ -10,6 +10,8 @@ bin/
 /specialist-worker
 /specialist-worker-template
 .cache/
+.go-cache/
+.go-modcache/
 
 # Frontend
 frontend/node_modules/
@@ -23,7 +25,7 @@ temporal-config/*.lock
 .DS_Store
 
 # Claude Code local config
-.claude/settings.local.json
+.claude/
 
 # Python
 __pycache__/
@@ -32,3 +34,7 @@ __pycache__/
 venv/
 .venv/
 env/
+
+# internal documentation
+docs/internal/
+
