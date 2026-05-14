@@ -138,16 +138,6 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			apiKeys.DELETE("/:id", h.RevokeAPIKey)
 		}
 
-		// Tenant management — admin and super_admin.
-		tenants := api.Group("/tenants", auth.RequireRole(auth.RoleAdmin, auth.RoleSuperAdmin))
-		{
-			tenants.POST("", h.CreateTenant)
-			tenants.GET("", h.ListTenants)
-			tenants.GET("/:id", h.GetTenant)
-			tenants.DELETE("/:id", h.DeleteTenant)
-			tenants.POST("/:id/license/generate", h.GenerateLicenseToken)
-		}
-
 		// Enterprise Licensing & Branding
 		ent := api.Group("/enterprise")
 		{
@@ -167,12 +157,12 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 				entAdmin.PUT("/oidc", h.SetIDPConfig)
 			}
 		}
-		// System Settings — super_admin only.
-		system := api.Group("/system", auth.RequireRole(auth.RoleSuperAdmin))
+
+		// Admin & Telemetry — admin and super_admin.
+		admin := api.Group("/admin", auth.RequireRole(auth.RoleAdmin, auth.RoleSuperAdmin))
 		{
-			system.GET("/keys", h.GetSystemKeys)
-			system.POST("/keys", h.UpdateSystemKeys)
-			system.POST("/keys/generate", h.GenerateSystemKeys)
+			admin.GET("/telemetry", h.GetTelemetryStatus)
+			admin.POST("/telemetry/toggle", h.ToggleTelemetry)
 		}
 		
 	}

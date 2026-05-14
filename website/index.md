@@ -1,29 +1,24 @@
 ---
 layout: home
 
+# We disable the default hero so we can use our custom HomeHero component
 hero:
   name: "Phaxa"
-  text: "Deep-Chain Reasoning Engine"
-  tagline: "Enterprise-grade orchestration for autonomous agentic workflows."
-  image:
-    src: /logo.svg
-    alt: Phaxa Logo
-  actions:
-    - theme: brand
-      text: Get Started
-      link: /guide/getting-started
-    - theme: alt
-      text: Architecture
-      link: /guide/architecture
+  text: ""
+  tagline: ""
 
 features:
-  - title: "Agentic Orchestration"
-    details: "Deterministic execution of non-deterministic agents using Temporal.io."
-  - title: "Model Context Protocol"
-    details: "Plug-and-play integration with 100+ MCP tools (Google, GitHub, Slack, etc.)."
-  - title: "Human-in-the-Loop"
-    details: "Built-in HITL nodes for validation, expert judgment, and manual data entry."
+  - title: "AI-Native Synthesis"
+    details: "Agentic blueprinting for business logic. Describe your requirements in plain English and Phaxa automatically scaffolds high-fidelity state machines."
+  - title: "Durable State Machines"
+    details: "Beyond simple DAGs. Phaxa handles loops, multi-day pauses, and deep retries with surgical precision. Zero-loss execution for critical logic."
+  - title: "MCP Tool-Space"
+    details: "Native Model Context Protocol support. Your agents can securely browse docs, query SQL, or push to GitHub using the latest AI standards."
 ---
+
+<HomeHero />
+
+<div class="features-divider"></div>
 
 ## Why Phaxa?
 
@@ -32,3 +27,40 @@ Phaxa is designed for corporate environments where "black box" agents aren't eno
 ::: tip PRO TIP
 Use our **AI Generator** in the dashboard to scaffold your first workflow by simply describing your business process in plain English.
 :::
+
+<ContactForm />
+
+<style>
+.features-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--vp-c-brand), transparent);
+  margin: 64px 0;
+  opacity: 0.3;
+}
+
+:deep(.VPFeatures) {
+  padding: 0 24px;
+}
+
+:deep(.VPFeature) {
+  background: var(--vp-c-bg-soft);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 24px;
+  transition: all 0.3s ease;
+  padding: 32px;
+}
+
+:deep(.VPFeature h2) {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--vp-c-text-1);
+}
+
+:deep(.VPFeature:hover) {
+  border-color: var(--vp-c-brand);
+  background: var(--vp-c-bg-mute);
+  transform: translateY(-4px);
+}
+</style>

@@ -1,9 +1,9 @@
 .PHONY: dev infra stop server worker frontend migrate tidy build docker-build stack stack-down k8s-apply k8s-delete k8s-status specialist
 
-# Start infrastructure (postgres, redis, temporal)
-infra:
-	docker-compose up -d postgres redis temporal temporal-ui
-	@echo "Waiting for services..." && sleep 3
+# Start infrastructure only (for development)
+dev-infra:
+	docker compose -f docker-compose.dev.yaml up -d postgres redis temporal temporal-ui
+	@echo "Infrastructure is ready. You can now start the server, worker, and frontend manually."
 
 # Stop all infrastructure
 stop:
@@ -51,6 +51,7 @@ build:
 	go build -o bin/server ./cmd/server
 	go build -o bin/worker ./cmd/worker
 	go build -o bin/specialist-worker ./cmd/specialist-worker
+	go build -o bin/license-gen ./cmd/license-gen
 
 # Build Docker images for all three binaries
 docker-build:
@@ -61,16 +62,28 @@ docker-build:
 
 # Start full stack (infra + app + frontend) via docker compose.
 # This is the recommended way to run for demos / other machines.
+# Quick start (Docker — Full Stack):
+#   cp .env.example .env
+#   # Set ANTHROPIC_API_KEY (or OPENAI_API_KEY) and ADMIN_PASSWORD below, then:
+#   docker compose up -d
+#   # Open http://localhost:5174
+#
+# Quick start (Local — Developer Mode):
+#   make dev-infra
+#   # In separate terminals:
+#   make server
+#   make worker
+#   make frontend
+#   # Open http://localhost:5173
 stack:
-	docker compose up --build -d
+	docker compose -f docker-compose.yaml up --build -d
 	@echo ""
-	@echo "  Phaxa Platform is starting."
-	@echo "  Frontend  →  http://localhost:$${FRONTEND_PORT:-80}"
+	@echo "  Phaxa Platform is starting (Full Stack)."
+	@echo "  Frontend  →  http://localhost:5174"
 	@echo "  Temporal  →  http://localhost:8088"
 	@echo ""
-	@echo "  Tip: docker compose logs -f"
 
-# Stop full stack
+# Stop all Phaxa-related containers
 stack-down:
 	docker compose down
 

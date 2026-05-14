@@ -27,8 +27,6 @@ type LicenseClaims struct {
 	IssuedAt     int64    `json:"iat"`
 	ExpiresAt    int64    `json:"exp"`
 	Features     []string `json:"features,omitempty"`
-	MaxRuns      int      `json:"max_runs,omitempty"`
-	MaxWorkflows int      `json:"max_workflows,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -93,9 +91,7 @@ func generateToken(tier Tier, tenant string, privPath string) {
 		TenantID:     tenant,
 		IssuedAt:     time.Now().Unix(),
 		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Unix(),
-		Features:     []string{"all"},
-		MaxWorkflows: 1000,
-		MaxRuns:      100000,
+		Features:     []string{"sso", "branding", "secrets", "audit_logs", "analytics"},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)

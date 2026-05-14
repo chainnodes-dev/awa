@@ -3,32 +3,51 @@ package api
 import (
 	"net/http"
 
+	"github.com/asm-platform/asm/internal/designer"
 	"github.com/gin-gonic/gin"
 )
 
 // GetPrompts returns the current system prompts (overrides + defaults).
 // GET /api/v1/designer/prompts
 func (h *Handlers) GetPrompts(c *gin.Context) {
-	if h.generator == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI designer not configured"})
-		return
-	}
-	
-	// For now, we return a flat list of known keys.
-	// In the future we could scan the PromptManager.
 	prompts := make(map[string]string)
 	
-	// Retrieve current values (either overrides or empty)
-	prompts["workflow_generator_base"] = h.generator.GetPrompt("workflow_generator_base")
-	prompts["skill_analyser_preamble"] = h.generator.GetPrompt("skill_analyser_preamble")
-	prompts["workflow_refinement_addendum"] = h.generator.GetPrompt("workflow_refinement_addendum")
-	
-	// Pipeline steps
-	prompts["workflow_decompose"] = h.generator.GetPrompt("workflow_decompose")
-	prompts["workflow_categorise"] = h.generator.GetPrompt("workflow_categorise")
-	prompts["workflow_wire"] = h.generator.GetPrompt("workflow_wire")
-	prompts["workflow_implement_finish"] = h.generator.GetPrompt("workflow_implement_finish")
-	prompts["workflow_debugger"] = h.generator.GetPrompt("workflow_debugger")
+	keys := []string{
+		"workflow_generation",
+		"workflow_scaffold",
+		"workflow_scaffold_mcp",
+		"workflow_codegen",
+		"workflow_analyse",
+		"workflow_summarise",
+		"workflow_categorise",
+		"workflow_wire",
+		"workflow_implement_finish",
+		"workflow_debugger",
+	}
+
+	// Internal mapping from frontend keys to designer constants
+	mapping := map[string]string{
+		"workflow_generation":       designer.PromptIDBase,
+		"workflow_scaffold":         designer.PromptIDSkill,
+		"workflow_analyse":          designer.PromptIDDecompose,
+		"workflow_categorise":       designer.PromptIDCategorise,
+		"workflow_wire":             designer.PromptIDWire,
+		"workflow_implement_finish": designer.PromptIDImplFinish,
+		"workflow_debugger":         designer.PromptIDDebug,
+	}
+
+	for _, k := range keys {
+		internalID := k
+		if mapped, ok := mapping[k]; ok {
+			internalID = mapped
+		}
+
+		if h.generator != nil {
+			prompts[k] = h.generator.GetPrompt(internalID)
+		} else {
+			prompts[k] = designer.GetDefaultPrompt(internalID)
+		}
+	}
 
 	c.JSON(http.StatusOK, prompts)
 }

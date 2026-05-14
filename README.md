@@ -2,6 +2,8 @@
 
 **Agentic State Machine** — a workflow orchestration platform for building AI-powered business processes.
 
+[![Discord](https://img.shields.io/discord/1234567890?label=Discord&logo=discord&color=5865F2)](https://discord.gg/phaxa)
+
 Define your process as a state machine in YAML. Assign LLM agents, deterministic scripts, or JavaScript code nodes to each state. The platform runs it durably via Temporal, streams live events to the browser, and keeps every routing decision in the workflow definition — not in the workers.
 
 > **Keep workers stupid. Let the state machine decide.**
@@ -13,43 +15,31 @@ Define your process as a state machine in YAML. Assign LLM agents, deterministic
 - **Visual workflow designer** — drag-and-drop canvas to build state machines, define transitions and guards, assign agents
 - **Multiple state types** — LLM agent, JavaScript code node, deterministic script, human-in-the-loop (HITL), wait (event-driven), parallel fan-out
 - **AI-assisted authoring** — describe a process in plain English, decompose it into an optimized workflow, or generate code node JavaScript with one click
-- **Live monitoring** — real-time event log, blackboard inspector, LLM Trace panel showing every prompt and response (available to all users)
+- **Live monitoring** — real-time event log, blackboard inspector, LLM Trace panel showing every prompt and response
 - **Mandatory durability** — every run is a Temporal workflow, surviving server and worker restarts by default
 - **Multi-provider LLM** — Anthropic, OpenAI, Grok, DeepSeek, Gemini, Ollama (local); configurable per agent
 - **MCP tool servers** — agents call external tools via the Model Context Protocol
 - **RBAC auth** — admin / operator / viewer roles, JWT + refresh tokens
-- **Multi-tenancy** — isolated tenant contexts with super_admin management
 - **Collaborative Social Inbox** — integrated human-agent chat with assignee-based task filtering
 
 ---
 
-## 🚀 New in Phaxa: The "Better than n8n" Roadmap
-
-Surpassing traditional automation with deep agentic features:
-- **Deep Observability**: Capture full JavaScript stack traces for code nodes and view LLM chain-of-thought (monologue) in real-time.
-- **MCP Marketplace**: Discover and install Model Context Protocol (MCP) servers with one click via a visual gallery.
-- **Blackboard Time Travel**: Use the slider in the Monitor to see exactly how the data (blackboard) changed at every step.
-- **Port Mapping Hints**: Visual guidance in the Designer for common local services like GLEIF, Frankfurter, and OpenFIGI.
-- **Tenant Delete Safety**: Production-ready data integrity with cascading deletes for multi-tenant cleanup.
-
----
-
-## Getting Started
-
-For detailed instructions on configuration and startup modes, see the **[Running Guide](docs/RUNNING.md)**.
-
-### Quick Start (Full Stack)
-The fastest way to experience the platform is using Docker Compose:
+The fastest way to deploy the full stack (API, Worker, Frontend, Temporal, Postgres, Redis) is using Docker Compose. No configuration or `.env` files are required for the initial launch:
 
 ```bash
-git clone https://github.com/bauhaus28/phaxa-platform
-cd phaxa-platform
-cp .env.example .env
-# Edit .env and set your LLM API keys
-make stack
+git clone https://github.com/bauhaus28/asm-platform
+cd asm-platform
+docker compose up -d
 ```
 
-Open **[http://localhost](http://localhost)** to access the platform.
+Open **[http://localhost:5174](http://localhost:5174)** to access the platform.
+
+### 🛡 Initial Setup
+On your first visit, Phaxa will automatically detect that the platform is uninitialized and guide you through the **Super Admin Setup**. 
+1. Create your primary administrator account.
+2. Go to **Settings** to configure your LLM providers (Anthropic, OpenAI, etc.).
+3. You're ready to build!
+
 
 ### Production Deployment
 For stable releases using pre-built images from the registry:
@@ -71,10 +61,10 @@ docker compose -f docker-compose.prod.yaml up -d
 To start infrastructure dependencies (Postgres, Redis, Temporal) in Docker while running the Phaxa services manually for development:
 
 ```bash
-make infra
-make server    # API Server  →  :8080
-make worker    # Temporal Worker
-make frontend  # Vite Dev    →  :5173
+make dev-infra  # Starts DB, Cache, and Temporal
+make server     # API Server  →  :8080
+make worker     # Temporal Worker
+make frontend   # Vite Dev    →  :5173
 ```
 
 ---
@@ -266,6 +256,7 @@ Key variables:
 | `ADMIN_PASSWORD` | Seeded admin password (required) | — |
 | `JWT_SECRET` | JWT signing secret — **change in production** | dev default |
 | `FRONTEND_PORT` | Host port for the Nginx frontend container | `80` |
+| `ENABLE_TELEMETRY` | Opt-in anonymous install beacon (sends OS/Arch on startup) | `false` |
 
 ---
 
@@ -303,4 +294,4 @@ This copies the template in `cmd/specialist-worker-template/` and gives you a ty
 
 ## License
 
-Polyform Noncommercial 1.0.0 (Free for private use, prohibited for commercial use).
+Polyform Perimeter 1.0.0 (Free for private and commercial internal use, prohibited for competing products or re-hosting).

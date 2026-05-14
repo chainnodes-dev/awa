@@ -160,7 +160,7 @@ func EnsureDefaultTenant(ctx context.Context, s store.Store) (*store.Tenant, err
 	t := &store.Tenant{
 		ID:   store.DefaultTenantID,
 		Name: "Phaxa",
-		Slug: "phaxa",
+		Slug: "default",
 	}
 	if err := s.CreateTenant(ctx, t); err != nil {
 		// If it already exists (e.g. race condition), just return it.

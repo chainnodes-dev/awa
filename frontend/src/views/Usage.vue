@@ -18,31 +18,25 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
             <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
           </svg>
-          <h2 class="text-sm font-bold text-text uppercase tracking-wider">Subscription Limits</h2>
+          <h2 class="text-sm font-bold text-text uppercase tracking-wider">System Usage</h2>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div class="card p-5 space-y-3">
             <div class="flex justify-between items-baseline">
               <span class="text-xs font-semibold text-text-muted">Workflow Definitions</span>
-              <span class="text-xs font-mono text-text">
-                {{ entStore.status?.current_workflows ?? 0 }} / {{ entStore.status?.max_workflows || '∞' }}
+              <span class="text-xl font-mono font-semibold text-text">
+                {{ entStore.status?.current_workflows ?? 0 }}
               </span>
-            </div>
-            <div class="h-1.5 w-full bg-black/20 rounded-full overflow-hidden">
-              <div class="h-full bg-indigo-500 transition-all duration-500" :style="{ width: usagePercent(entStore.status?.current_workflows, entStore.status?.max_workflows) + '%' }"/>
             </div>
           </div>
 
-          <div class="card p-5 space-y-3">
+          <div class="card p-5 flex flex-col justify-center">
             <div class="flex justify-between items-baseline">
-              <span class="text-xs font-semibold text-text-muted">Monthly Runs</span>
-              <span class="text-xs font-mono text-text">
-                {{ entStore.status?.current_runs ?? 0 }} / {{ entStore.status?.max_runs || '∞' }}
+              <span class="text-xs font-semibold text-text-muted">Total Runs (last 30d)</span>
+              <span class="text-xl font-mono font-semibold text-text">
+                {{ entStore.status?.current_runs ?? 0 }}
               </span>
-            </div>
-            <div class="h-1.5 w-full bg-black/20 rounded-full overflow-hidden">
-              <div class="h-full bg-emerald-500 transition-all duration-500" :style="{ width: usagePercent(entStore.status?.current_runs, entStore.status?.max_runs) + '%' }"/>
             </div>
           </div>
         </div>
@@ -149,10 +143,7 @@ async function saveLicense() {
   }
 }
 
-function usagePercent(curr, max) {
-  if (!max) return 0
-  return Math.min(100, Math.round((curr / max) * 100))
-}
+
 
 function tierBadgeClass(tier) {
   if (tier === 'enterprise') return 'badge bg-purple-500/20 text-purple-400'

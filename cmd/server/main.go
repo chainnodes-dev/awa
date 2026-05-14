@@ -23,6 +23,7 @@ import (
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/scheduler"
 	"github.com/asm-platform/asm/internal/store"
+	"github.com/asm-platform/asm/internal/telemetry"
 	temporalpkg "github.com/asm-platform/asm/internal/temporal"
 )
 
@@ -36,6 +37,7 @@ func main() {
 
 	cfg := config.Load()
 	logger.Init(cfg.LogLevel)
+	
 
 	// -- Health checker (populated as deps are wired) --
 	checker := health.New()
@@ -91,6 +93,11 @@ func main() {
 		s = store.NewMemoryStore()
 	}
 	defer s.Close()
+
+	// -- Telemetry --
+	if cfg.EnableTelemetry {
+		telemetry.Start(s)
+	}
 
 	// -- Ensure Default Tenant exists --
 	defaultTenant, err := api.EnsureDefaultTenant(ctx, s)

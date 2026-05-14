@@ -2,13 +2,20 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: "Phaxa",
-  description: "Enterprise Agentic Workflow Platform",
+  description: "Enterprise-grade Autonomous Agent Platform",
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/assets/logos/favicon.svg' }],
+    ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
+    ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
+    ['link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800;900&display=swap' }]
+  ],
   themeConfig: {
-    logo: '/logo.svg',
+    logo: '/assets/logos/logo-card.svg',
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/getting-started' },
-      { text: 'API', link: '/reference/api' },
+      { text: 'Comparison', link: '/comparison' },
+      { text: 'Pricing', link: '/pricing' },
       { text: 'Dashboard', link: 'http://localhost:5173' }
     ],
     sidebar: [
@@ -17,30 +24,35 @@ export default defineConfig({
         items: [
           { text: 'Getting Started', link: '/guide/getting-started' },
           { text: 'Architecture', link: '/guide/architecture' },
+          { text: 'Phaxa vs. Competitors', link: '/comparison' },
+          { text: 'Pricing & Features', link: '/pricing' },
+          { text: 'State Nodes', link: '/guide/nodes' },
+          { text: 'Transitions', link: '/guide/transitions' },
+          { text: 'UI Documentation', link: '/guide/ui' },
         ]
       },
       {
-        text: 'Core Concepts',
+        text: 'Advanced',
         items: [
-          { text: 'Workflow DSL', link: '/guide/workflows' },
           { text: 'MCP Integration', link: '/guide/mcp' },
-          { text: 'Human-in-the-Loop', link: '/guide/hitl' },
+          { text: 'Workflow DSL', link: '/guide/workflows' },
         ]
       },
       {
         text: 'API Reference',
         items: [
-          { text: 'Overview', link: '/reference/api' },
-          { text: 'YAML Schema', link: '/reference/yaml-schema' },
+          { text: 'Overview', link: '/guide/api' },
+          { text: 'YAML Schema', link: '/guide/yaml-schema' },
         ]
       }
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/phaxa-ai' }
+      { icon: 'github', link: 'https://github.com/bauhaus28/asm-platform' },
+      { icon: 'discord', link: 'https://discord.gg/phaxa' }
     ],
     footer: {
-      message: 'Released under the Enterprise License.',
-      copyright: 'Copyright © 2024-present Phaxa AI'
+      message: 'Released under the Enterprise License. Chain Nodes S.R.L. | Str. Brizei nr. 8, Cluj-Napoca, Romania | CUI: 39890133 | Reg: J12/4187/2018',
+      copyright: 'Copyright © 2024-present Chain Nodes S.R.L.'
     }
   }
 })

@@ -168,7 +168,7 @@ Click any state node to open the **State Panel** on the right. The **Type** drop
 |---|---|---|
 | `initial` | Green dot | Entry point — exactly one per workflow |
 | `terminal` | Grey dot | End point — run completes here |
-| `intermediate` | Indigo dot | LLM agent reasons and fires a trigger |
+| `prompt` | Indigo dot | LLM agent reasons and fires a trigger |
 | `code` | Teal `</>` | User-written JavaScript runs in a sandbox |
 | `script` | Amber dot | Deterministic expr-lang expressions; zero latency |
 | `hitl` | Amber person | Pauses and waits for a human signal |
@@ -224,7 +224,7 @@ The schema is used for:
 
 ### 4.5 Agent Configuration
 
-When a state's type is `intermediate` (or `initial`), expand the **Agent Config** section in the State Panel:
+When a state's type is `prompt` (or `initial`), expand the **Agent Config** section in the State Panel:
 
 | Field | Purpose |
 |---|---|
@@ -348,7 +348,7 @@ The generator is given:
 
 Once an LLM agent is working correctly you may want to replace it with a deterministic, zero-latency script for performance and cost reasons. The **Convert to Script** feature automates this.
 
-1. Select an intermediate state that has an agent assigned
+1. Select a prompt state that has an agent assigned
 2. Scroll to the **Convert to Script** section at the bottom of the Agent Config panel
 3. Click **Generate Script**
 4. The AI analyses the state's instructions and transitions and produces:

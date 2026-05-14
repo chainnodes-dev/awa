@@ -129,11 +129,6 @@ func (h *Handlers) CreateWorkflow(c *gin.Context) {
 		return
 	}
 
-	if err := h.checkCreateWorkflowLimit(c); err != nil {
-		c.JSON(http.StatusPaymentRequired, gin.H{"error": err.Error()})
-		return
-	}
-
 	if err := h.store.SaveDefinition(c.Request.Context(), def, yamlSource); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -274,12 +269,6 @@ func (h *Handlers) StartRun(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	if err := h.checkRunLimit(c); err != nil {
-		c.JSON(http.StatusPaymentRequired, gin.H{"error": err.Error()})
-		return
-	}
-
 	run, err := h.engine.StartRun(c.Request.Context(), body.WorkflowName, body.WorkflowVersion, body.Input)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -375,57 +364,21 @@ func (h *Handlers) getLicenseClaims(ctx context.Context) (*enterprise.LicenseCla
 		return nil, err
 	}
 	if tenant.LicenseToken == "" {
-		return &enterprise.LicenseClaims{Tier: enterprise.TierFree, MaxWorkflows: 5, MaxRuns: 100}, nil
+		return &enterprise.LicenseClaims{Tier: enterprise.TierFree}, nil
 	}
 	claims, err := h.licenseVerifier.Verify(tenant.LicenseToken)
-	if err == nil && claims.Tier == enterprise.TierCommunity {
-		// Community tier has very high limits but isn't "enterprise"
-		if claims.MaxWorkflows == 0 { claims.MaxWorkflows = 1000 }
-		if claims.MaxRuns == 0 { claims.MaxRuns = 100000 }
-	}
 	return claims, err
 }
 
-func (h *Handlers) checkCreateWorkflowLimit(c *gin.Context) error {
-	claims, err := h.getLicenseClaims(c.Request.Context())
+func (h *Handlers) RequireFeature(ctx context.Context, feature string) error {
+	claims, err := h.getLicenseClaims(ctx)
 	if err != nil {
 		return err
 	}
-	if claims.MaxWorkflows == 0 { // Unlimited
-		return nil
-	}
-
-	count, err := h.store.CountDefinitions(c.Request.Context())
-	if err != nil {
-		return err
-	}
-	if count >= claims.MaxWorkflows {
-		return fmt.Errorf("tier limit reached: maximum %d workflows allowed for your tier", claims.MaxWorkflows)
+	if !claims.HasFeature(feature) {
+		return fmt.Errorf("%w: %s requires a higher license tier", enterprise.ErrFeatureNotEnabled, feature)
 	}
 	return nil
 }
 
-func (h *Handlers) checkRunLimit(c *gin.Context) error {
-	claims, err := h.getLicenseClaims(c.Request.Context())
-	if err != nil {
-		return err
-	}
-	if claims.MaxRuns == 0 { // Unlimited
-		return nil
-	}
 
-	now := time.Now()
-	beginningOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	filter := store.RunFilter{
-		TenantID:    store.TenantIDFromContext(c.Request.Context()),
-		StartedFrom: &beginningOfMonth,
-	}
-	count, err := h.store.CountRuns(c.Request.Context(), filter)
-	if err != nil {
-		return err
-	}
-	if count >= claims.MaxRuns {
-		return fmt.Errorf("tier limit reached: maximum %d runs per month allowed for your tier", claims.MaxRuns)
-	}
-	return nil
-}

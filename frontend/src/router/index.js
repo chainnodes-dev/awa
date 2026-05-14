@@ -73,22 +73,10 @@ const routes = [
     meta: { title: 'Users', role: 'admin' }
   },
   {
-    path: '/tenants',
-    name: 'Tenants',
-    component: () => import('@/views/Tenants.vue'),
-    meta: { title: 'Tenants', role: 'super_admin' }
-  },
-  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/Usage.vue'),
     meta: { title: 'Usage & Reporting', role: 'admin' }
-  },
-  {
-    path: '/system',
-    name: 'SystemSettings',
-    component: () => import('@/views/SystemSettings.vue'),
-    meta: { title: 'System Settings', role: 'super_admin' }
   }
 ]
 

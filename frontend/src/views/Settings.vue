@@ -207,6 +207,35 @@
         </section>
 
 
+        <!-- Infrastructure & Security (Admin only) -->
+        <section v-if="isAdmin" class="space-y-4">
+           <div class="flex items-center gap-2 px-1">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-purple-400">
+               <rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M2 12h2"/><path d="M20 12h2"/>
+             </svg>
+             <h2 class="text-sm font-bold text-text uppercase tracking-wider">Infrastructure</h2>
+           </div>
+
+           <!-- Telemetry -->
+           <div class="card p-5 flex items-start justify-between">
+              <div class="space-y-1">
+                <h3 class="text-xs font-bold text-text">Anonymized Telemetry</h3>
+                <p class="text-[11px] text-text-muted max-w-sm">
+                  Share platform-wide usage metrics (runs, nodes, active LLMs) with Phaxa HQ to help us prioritize features.
+                </p>
+              </div>
+              <button 
+                @click="toggleTelemetry"
+                :class="[
+                  'w-10 h-5 rounded-full relative transition-colors duration-200 outline-none',
+                  telemetryEnabled ? 'bg-emerald-500' : 'bg-surface-3'
+                ]"
+              >
+                <span :class="['absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform', telemetryEnabled ? 'translate-x-5' : 'translate-x-0']"></span>
+              </button>
+           </div>
+        </section>
+
         <!-- System Prompts -->
         <section class="card p-5 space-y-4">
           <div class="flex items-center gap-2 mb-2">
@@ -496,18 +525,52 @@ async function savePrompt(id) {
 }
 
 onMounted(async () => {
-  if (isAdmin.value) {
-    await entStore.fetchBranding()
-    Object.assign(brandingForm, entStore.branding)
-    await entStore.fetchSecrets()
-    secretsForm.value = Object.entries(entStore.secrets).map(([k, v]) => ({ name: k, value: '' /* hidden */ }))
-    await entStore.fetchAuditLogs()
-    await entStore.fetchStatus()
-    await llmStore.fetchAll()
+  if (!isAdmin.value) return
+
+  // Load core settings
+  try {
+    await Promise.allSettled([
+      llmStore.fetchAll(),
+      fetchPrompts()
+    ])
     syncFormsFromStore()
-    await fetchPrompts()
+  } catch (e) { console.error('Failed to load core settings', e) }
+
+  // Load Enterprise/SuperAdmin settings (may fail if not licensed)
+  try {
+    await Promise.allSettled([
+      entStore.fetchBranding().then(() => Object.assign(brandingForm, entStore.branding)),
+      entStore.fetchSecrets().then(() => {
+        secretsForm.value = Object.entries(entStore.secrets).map(([k, v]) => ({ name: k, value: '' }))
+      }),
+      entStore.fetchAuditLogs(),
+      entStore.fetchStatus()
+    ])
+  } catch (e) { console.error('Failed to load enterprise settings', e) }
+
+  if (authStore.hasRole('super_admin')) {
+    try {
+      await fetchTelemetry()
+    } catch (e) { console.error('Failed to fetch telemetry', e) }
   }
 })
+
+const telemetryEnabled = ref(false)
+
+async function fetchTelemetry() {
+  try {
+    const { data } = await api.get('/admin/telemetry')
+    telemetryEnabled.value = data.enabled
+  } catch (e) { console.error('Failed to fetch telemetry', e) }
+}
+
+async function toggleTelemetry() {
+  const next = !telemetryEnabled.value
+  try {
+    await api.post('/admin/telemetry', { enabled: next })
+    telemetryEnabled.value = next
+  } catch (e) { alert('Failed to toggle telemetry') }
+}
 
 function formatDateTime(ts) {
   if (!ts) return '-'

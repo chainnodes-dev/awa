@@ -44,4 +44,4 @@ states:
 | `terminal` | The end state of a workflow. |
 
 ## Expressions
-Phaxa uses the `expr` engine. You can access the blackboard data using `{{ blackboard.key }}` in prompts or `blackboard.key` directly in scripts.
+Phaxa uses the `expr` engine. You can access the blackboard data using `&#123;&#123; blackboard.key &#125;&#125;` in prompts or `blackboard.key` directly in scripts.

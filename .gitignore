@@ -12,6 +12,8 @@ bin/
 .cache/
 .go-cache/
 .go-modcache/
+scratch/
+
 
 # Frontend
 frontend/node_modules/
@@ -38,3 +40,18 @@ env/
 # internal documentation
 docs/internal/
 
+#upload-folder
+data/uploads
+
+# Website (VitePress)
+website/node_modules/
+website/.vitepress/dist/
+website/.vitepress/cache/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log

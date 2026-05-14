@@ -119,12 +119,8 @@
 
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
-              <label class="text-[10px] font-bold uppercase tracking-widest text-text-muted">Max Workflows</label>
-              <input v-model.number="licenseForm.max_workflows" type="number" class="input" />
-            </div>
-            <div class="space-y-2">
-              <label class="text-[10px] font-bold uppercase tracking-widest text-text-muted">Max Runs / Month</label>
-              <input v-model.number="licenseForm.max_runs" type="number" class="input" />
+              <label class="text-[10px] font-bold uppercase tracking-widest text-text-muted">Features (comma separated)</label>
+              <input v-model="licenseForm.featuresInput" type="text" placeholder="e.g. sso, branding" class="input" />
             </div>
           </div>
 
@@ -180,9 +176,7 @@ const newTenant = reactive({
 const licenseForm = reactive({
   tier: 'community',
   expires_in_days: 365,
-  max_workflows: 1000,
-  max_runs: 100000,
-  features: ['all']
+  featuresInput: 'sso,branding,secrets,audit_logs,analytics'
 })
 
 onMounted(() => {
@@ -199,7 +193,12 @@ async function generateLicense() {
   generating.value = true
   licenseError.value = null
   try {
-    const result = await tenantStore.generateLicense(selectedTenant.value.id, { ...licenseForm })
+    const payload = {
+      tier: licenseForm.tier,
+      expires_in_days: licenseForm.expires_in_days,
+      features: licenseForm.featuresInput.split(',').map(s => s.trim()).filter(Boolean)
+    }
+    const result = await tenantStore.generateLicense(selectedTenant.value.id, payload)
     generatedToken.value = result.token
   } catch (e) {
     licenseError.value = e.response?.data?.error ?? e.message

@@ -21,6 +21,18 @@ const (
 
 	// MonthlyLookback is the standard window for run quota enforcement.
 	MonthlyLookback = 30 * 24 * time.Hour
+
+	// ChainNodesPublicKey is the hardcoded public key for Phaxa license verification.
+	// This ensures that only licenses signed by Chain Nodes SRL are accepted.
+	ChainNodesPublicKey = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArebsNAqVY7iTSysWsiWh
+kAqjbe1PEM1z3gOe46nuCEhF/UKUWxBTVxgbGF7BF9pQ3nWWWPWn6E8M23ySYbSJ
+gz3HhCBb1qOLskQ3EDX4fsztjKoz+FD6lk5TsI5D6BHyWcGyQkaqIJl4h1p9FzbR
+XlKU1OQPDPD/HO9GJ/AIpiFtKFx/+lBZUvPBSgkNfBQ4/WyBYU7YoO+48XTy9DgY
++AFvCGRoyVEjjRBoc9i2qYmw5FlbkogoswUZp/OsM7ueDb/bg+YIwwY1+ubjw9g8
+eoUCavNqgjKmbPbJ0RMC5qhatr5is/kqnAJfUMFxxpNzNBoneoty+vtM3aTtG+3e
+bwIDAQAB
+-----END PUBLIC KEY-----`
 )
 
 // LicenseClaims represents the signed information in an enterprise license.
@@ -30,8 +42,6 @@ type LicenseClaims struct {
 	IssuedAt     int64    `json:"iat"`
 	ExpiresAt    int64    `json:"exp"`
 	Features     []string `json:"features,omitempty"`
-	MaxRuns      int      `json:"max_runs,omitempty"`
-	MaxWorkflows int      `json:"max_workflows,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -71,6 +81,13 @@ func (v *Verifier) Verify(tokenString string) (*LicenseClaims, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
+
+		// ALWAYS prefer the hardcoded Chain Nodes key for verification.
+		// If it fails to parse (should never happen), fall back to the configured key.
+		if hardcoded, err := ParseRSAPublicKey(ChainNodesPublicKey); err == nil {
+			return hardcoded, nil
+		}
+
 		return v.publicKey, nil
 	})
 
@@ -106,8 +123,6 @@ func DefaultFreeLicense(tenantID string) *LicenseClaims {
 	return &LicenseClaims{
 		Tier:         TierFree,
 		TenantID:     tenantID,
-		MaxWorkflows: 3,
-		MaxRuns:      100,
 		Features:     []string{"basic_execution"},
 	}
 }

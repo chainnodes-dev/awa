@@ -45,13 +45,16 @@ type Config struct {
 
 	// Logging
 	LogLevel string
+
+	// Telemetry
+	EnableTelemetry bool
 }
 
 func Load() *Config {
 	return &Config{
 		Port:              getEnv("PORT", "8080"),
-		CORSOrigins:       strings.Split(getEnv("CORS_ORIGINS", "http://localhost:5173"), ","),
-		DatabaseURL:       getEnv("DATABASE_URL", "postgres://asm:asm_secret@localhost:5433/asm?sslmode=disable"),
+		CORSOrigins:       strings.Split(getEnv("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174"), ","),
+		DatabaseURL:       getEnv("DATABASE_URL", "postgres://phaxa:phaxa_secret@localhost:5433/phaxa?sslmode=disable"),
 		RedisURL:          getEnv("REDIS_URL", "redis://localhost:6379"),
 		TemporalAddress:   getEnv("TEMPORAL_ADDRESS", "localhost:7233"),
 		TemporalNamespace: getEnv("TEMPORAL_NAMESPACE", "default"),
@@ -66,13 +69,14 @@ func Load() *Config {
 		DeepseekKey:       getEnv("DEEPSEEK_API_KEY", ""),
 		GeminiKey:         getEnv("GEMINI_API_KEY", ""),
 		JWTSecret:         getEnv("JWT_SECRET", "dev-insecure-secret-change-in-prod"),
-		AdminUsername:     getEnv("ADMIN_USERNAME", "admin"),
-		AdminPassword:     getEnv("ADMIN_PASSWORD", "pwd"),
+		AdminUsername:     getEnv("ADMIN_USERNAME", ""),
+		AdminPassword:     getEnv("ADMIN_PASSWORD", ""),
 		LogLevel:          getEnv("LOG_LEVEL", "info"),
 		LicensePublicKey:  getEnv("LICENSE_PUBLIC_KEY", ""),
 		LicensePrivateKey: getEnv("LICENSE_PRIVATE_KEY", ""),
 		AllowStdioMCP:     getEnv("PHAXA_ALLOW_STDIO_MCP", "false") == "true",
 		MCPMarketSource:   getEnv("MCP_MARKET_SOURCE", "configs/mcp-market.json"),
+		EnableTelemetry:   getEnv("ENABLE_TELEMETRY", "false") == "true",
 	}
 }
 

@@ -102,23 +102,11 @@ func (h *Handlers) GetLicenseStatus(c *gin.Context) {
 		return
 	}
 
-	// Also fetch current usage counts.
-	currentWF, _ := h.store.CountDefinitions(c.Request.Context())
-	
-	since := time.Now().Add(-enterprise.MonthlyLookback)
-	currentRuns, _ := h.store.CountRuns(c.Request.Context(), store.RunFilter{
-		StartedFrom: &since,
-	})
-
 	c.JSON(http.StatusOK, gin.H{
 		"tier":              claims.Tier,
 		"issued_at":         claims.IssuedAt,
 		"expires_at":        claims.ExpiresAt,
 		"features":          claims.Features,
-		"max_runs":          claims.MaxRuns,
-		"current_runs":      currentRuns,
-		"max_workflows":     claims.MaxWorkflows,
-		"current_workflows": currentWF,
 		"managed":           true,
 	})
 }
@@ -128,6 +116,11 @@ func (h *Handlers) UpdateBranding(c *gin.Context) {
 	tenantID := store.TenantIDFromContext(c.Request.Context())
 	if tenantID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	if err := h.RequireFeature(c.Request.Context(), "branding"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -160,6 +153,11 @@ func (h *Handlers) GetBranding(c *gin.Context) {
 		return
 	}
 
+	if err := h.RequireFeature(c.Request.Context(), "branding"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
 	tenant, err := h.store.GetTenant(c.Request.Context(), tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -177,6 +175,11 @@ func (h *Handlers) UpdateSecrets(c *gin.Context) {
 	tenantID := store.TenantIDFromContext(c.Request.Context())
 	if tenantID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	if err := h.RequireFeature(c.Request.Context(), "secrets"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -206,6 +209,11 @@ func (h *Handlers) GetSecrets(c *gin.Context) {
 		return
 	}
 
+	if err := h.RequireFeature(c.Request.Context(), "secrets"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
 	tenant, err := h.store.GetTenant(c.Request.Context(), tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -228,6 +236,11 @@ func (h *Handlers) ListAuditLogs(c *gin.Context) {
 		return
 	}
 
+	if err := h.RequireFeature(c.Request.Context(), "audit_logs"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
 	logs, err := h.store.ListAuditLogs(c.Request.Context(), tenantID, 50, 0)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -242,6 +255,11 @@ func (h *Handlers) GetAnalytics(c *gin.Context) {
 	tenantID := store.TenantIDFromContext(c.Request.Context())
 	if tenantID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	if err := h.RequireFeature(c.Request.Context(), "analytics"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -261,6 +279,11 @@ func (h *Handlers) SetIDPConfig(c *gin.Context) {
 	tenantID := store.TenantIDFromContext(c.Request.Context())
 	if tenantID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant context missing"})
+		return
+	}
+
+	if err := h.RequireFeature(c.Request.Context(), "sso"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -292,8 +315,6 @@ func (h *Handlers) GenerateLicenseToken(c *gin.Context) {
 		Tier         string   `json:"tier" binding:"required"`
 		ExpiresInDays int      `json:"expires_in_days" binding:"required"`
 		Features     []string `json:"features"`
-		MaxRuns      int      `json:"max_runs"`
-		MaxWorkflows int      `json:"max_workflows"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -307,8 +328,6 @@ func (h *Handlers) GenerateLicenseToken(c *gin.Context) {
 		IssuedAt:     time.Now().Unix(),
 		ExpiresAt:    time.Now().AddDate(0, 0, req.ExpiresInDays).Unix(),
 		Features:     req.Features,
-		MaxRuns:      req.MaxRuns,
-		MaxWorkflows: req.MaxWorkflows,
 	}
 
 	token, err := h.licenseSigner.Sign(claims)

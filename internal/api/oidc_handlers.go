@@ -29,6 +29,12 @@ func (h *Handlers) OIDCLogin(c *gin.Context) {
 		return
 	}
 
+	// Enterprise Gating: SSO requires a valid license.
+	if err := h.RequireFeature(c.Request.Context(), "sso"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
 	provider := auth.NewOIDCProvider((*auth.IDPConfig)(cfg))
 	disc, err := provider.Discover(c.Request.Context())
 	if err != nil {
@@ -63,6 +69,12 @@ func (h *Handlers) OIDCCallback(c *gin.Context) {
 	cfg, err := h.store.GetTenantIDPConfig(c.Request.Context(), tenant.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load IDP config"})
+		return
+	}
+
+	// Enterprise Gating: SSO requires a valid license.
+	if err := h.RequireFeature(c.Request.Context(), "sso"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 

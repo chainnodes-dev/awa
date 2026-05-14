@@ -63,7 +63,7 @@ Workers read the blackboard to understand what to do. They write their results b
 
 ### State Types
 
-Every state in a workflow has a `type` that determines how the engine processes it. There are **nine** types. They form a natural progression from the structural (`initial`, `terminal`) to the operational (`intermediate`, `script`, `hitl`, `wait`).
+Every state in a workflow has a `type` that determines how the engine processes it. There are **nine** types. They form a natural progression from the structural (`initial`, `terminal`) to the operational (`prompt`, `script`, `hitl`, `wait`).
 
 ---
 
@@ -103,11 +103,11 @@ states:
 
 ---
 
-#### `intermediate`
+#### `prompt`
 
 A standard processing step. This is the most common type — it represents any state where work needs to be done before the run can progress.
 
-An `intermediate` state can be handled in two ways:
+A `prompt` state can be handled in two ways:
 
 1. **With an agent** — the engine dispatches the named agent (LLM or specialist worker). The agent reads the blackboard, performs its task, and returns a trigger + updated blackboard fields.
 2. **Without an agent** — the engine parks and waits for an external `POST /api/v1/runs/{id}/trigger` call. Use this for states driven by external systems (e.g. "waiting for document upload").
@@ -120,7 +120,7 @@ An `intermediate` state can be handled in two ways:
 ```yaml
 states:
   - name: VALIDATING
-    type: intermediate
+    type: prompt
     agent: invoice-validator
     timeout: 5m
     on_timeout: validation_timeout
@@ -405,7 +405,7 @@ Processes are composed using `subprocess` states. Callers only need to know the 
 | I need to… | Use |
 |---|---|
 | Start processing when a run is created | `initial` |
-| Run an LLM agent or specialist worker | `intermediate` |
+| Run an LLM agent or specialist worker | `prompt` |
 | Make a deterministic decision without an LLM | `script` |
 | Run JavaScript logic (more than one line) | `code` |
 | Invoke a reusable sub-process | `subprocess` |

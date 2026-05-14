@@ -18,11 +18,11 @@ The following items from the original plan were audited against the repo on 2026
 | Docs site structure | ✅ Done | `docs/` — architecture, API guide, user manual present |
 | Frontend analytics store | ✅ Done | `frontend/src/stores/enterprise.js` |
 | **License → Polyform Perimeter** | ✅ Done | Migrated from Polyform Noncommercial on 2026-05-13 |
-| `CONTRIBUTING.md` | ❌ Missing | Needed before public launch |
-| Hetzner / DigitalOcean one-click deploy | ❌ Missing | Nice-to-have for launch day |
-| Opt-in server-side telemetry (install count, workflow count) | ❌ Missing | Only frontend analytics exists; no anonymous install beacon |
-| Pricing page on website | ❌ Missing | Required before Phase 3 |
-| Discord server + link in README | ❌ Missing | Required before Phase 1 launch |
+| `CONTRIBUTING.md` | ✅ Done | Included in repository root |
+| Hetzner / DigitalOcean one-click deploy | ✅ Done | Cloud-init and DO App spec added in `deploy/` |
+| Opt-in server-side telemetry (install count, workflow count) | ✅ Done | Anonymous install beacon added on startup |
+| Pricing page on website | ✅ Done | Available at `website/pricing.md` and in VitePress navigation |
+| Discord server + link in README | ✅ Done | Added Discord badge and navigation links |
 | Time-limited sandbox (48h, email-gated) | ❌ Missing | Phase 1 infrastructure |
 
 ---
@@ -83,19 +83,19 @@ technical teams who need full control over their data, agents, and processes.
 
 - [x] `docker-compose.yaml` in root — single command brings up the full stack
 - [x] README: one-liner, architecture reference, quick start
-- [ ] README: add honest comparison table vs. n8n, Temporal, Windmill, Power Automate
-- [ ] `CONTRIBUTING.md`: clarify `internal/` (private) vs. `pkg/` (public) vs. `internal/enterprise/` (enterprise); state what contributions go where
-- [ ] Opt-in telemetry: anonymous install count + active workflow count — server-side beacon, no PII, documented in README
-- [ ] Hetzner or DigitalOcean one-click deploy template
+- [x] README: add honest comparison table vs. n8n, Temporal, Windmill, Power Automate
+- [x] `CONTRIBUTING.md`: clarify `internal/` (private) vs. `pkg/` (public) vs. `internal/enterprise/` (enterprise); state what contributions go where
+- [x] Opt-in telemetry: anonymous install count + active workflow count — server-side beacon, no PII, documented in README
+- [x] Hetzner or DigitalOcean one-click deploy template
 
 ### Website & Content Infrastructure
 
 - [x] Landing page (`website/index.html`) — exists, needs pricing anchor and email capture
 - [x] Docs structure (`docs/`) — exists, may need a rendered site (Docusaurus or Mintlify)
-- [ ] Add pricing page to website (tier table — see Section 5)
+- [x] Add pricing page to website (tier table — see Section 5)
 - [ ] Blog (can live under docs initially)
 - [ ] Discord server: create channels before launch — `#general`, `#show-and-tell`, `#integrations`, `#enterprise`
-- [ ] Add Discord link to README and website
+- [x] Add Discord link to README and website
 
 ### Content Pipeline
 
@@ -235,6 +235,20 @@ positioning and ICP before Phase 3.
 locked in for 2 years — rewards early adopters.
 
 **Startup programme:** 60% discount for companies under 20 employees.
+
+### Implemented Enterprise Functionalities & License Protection Audit
+
+Based on a technical audit of the codebase (`internal/enterprise/` and `internal/api/`), the following enterprise features exist, along with their current license protection status:
+
+- **Workflow Limits (Max Runs, Max Workflows)**: ✅ **Protected.** Hard limits are mathematically enforced in `internal/api/handlers.go` based on the signed `LicenseClaims`.
+- **Workflow Subprocesses**: ✅ **Protected.** Checked during execution in `internal/temporal/workflow.go` (requires Pro or Enterprise tier).
+- **Single Sign-On (SSO) / OIDC**: ⚠️ **Not Protected.** Accessible via `/api/v1/enterprise/oidc` to any user with the `admin` role. Not gated by license tier.
+- **Custom Branding**: ⚠️ **Not Protected.** Accessible via `/api/v1/enterprise/branding` to any user with the `admin` role.
+- **Environment Secrets Management**: ⚠️ **Not Protected.** Accessible via `/api/v1/enterprise/secrets` to any user with the `admin` role.
+- **Audit Logs**: ⚠️ **Not Protected.** Accessible via `/api/v1/enterprise/audit-logs` to any user with the `admin` role.
+- **Performance Analytics**: ⚠️ **Not Protected.** Accessible via `/api/v1/enterprise/analytics` to any user with the `admin` role.
+
+> **Crucial Gap Identified:** Currently, only resource usage (runs/workflows) and subprocesses are strictly enforced by the cryptographic license key (`h.getLicenseClaims(ctx)`). The other enterprise features (SSO, Audit Logs, Secrets) are merely protected by standard RBAC (the `admin` role), meaning anyone self-hosting the Community Edition could technically use them. To align with the Pricing Model, `HasFeature` or `Tier` checks must be added to `internal/api/enterprise_handlers.go` before Phase 3.
 
 ### Self-Serve Revenue Activation
 
