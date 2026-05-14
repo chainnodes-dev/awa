@@ -64,8 +64,14 @@ export const useEnterpriseStore = defineStore('enterprise', () => {
     await fetchStatus()
   }
 
+  const hasFeature = (name) => {
+    if (!status.value) return false
+    if (status.value.tier === 'enterprise') return true
+    return status.value.features?.includes(name) || false
+  }
+
   return { 
-    status, branding, secrets, auditLogs, analytics, loading, 
+    status, branding, secrets, auditLogs, analytics, loading, hasFeature,
     fetchStatus, fetchBranding, updateBranding, 
     fetchSecrets, updateSecrets, fetchAuditLogs, fetchAnalytics,
     setLicense 

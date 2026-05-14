@@ -258,11 +258,6 @@ func (h *Handlers) GetAnalytics(c *gin.Context) {
 		return
 	}
 
-	if err := h.RequireFeature(c.Request.Context(), "analytics"); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
-		return
-	}
-
 	stats, err := h.store.GetRunStats(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

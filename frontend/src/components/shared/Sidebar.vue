@@ -2,7 +2,7 @@
   <aside class="w-14 flex flex-col items-center py-4 gap-1 border-r border-border bg-surface-1 shrink-0">
     <!-- Logo / Home -->
     <RouterLink to="/dashboard" :title="entStore.branding?.name || 'Home'" class="mb-8 w-10 h-10 flex items-center justify-center shrink-0 cursor-pointer hover:scale-105 transition-transform overflow-hidden">
-      <img :src="entStore.branding?.logo_url || '/logo.png'" class="w-full h-full object-contain" />
+      <img :src="entStore.branding?.logo_url || '/logo.svg'" class="w-full h-full object-contain" />
     </RouterLink>
 
     <NavItem to="/dashboard" title="Dashboard">
@@ -113,6 +113,7 @@ function onLogout() {
 
 onMounted(() => {
   entStore.fetchBranding()
+  entStore.fetchStatus()
 })
 
 const pendingCount = computed(() => execStore.pendingHITL.length)

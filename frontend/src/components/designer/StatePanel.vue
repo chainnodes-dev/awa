@@ -20,7 +20,7 @@
         <option value="script">script</option>
         <option value="code">code</option>
         <optgroup label="──────────────"></optgroup>
-        <option value="subprocess">subprocess</option>
+        <option value="subprocess">subprocess (Pro 🔒)</option>
         <optgroup label="──────────────"></optgroup>
         <option value="hitl">hitl</option>
         <option value="wait">wait</option>
@@ -197,11 +197,32 @@
     <!-- Sub-Process section -->
     <template v-if="form.type === 'subprocess'">
       <div class="pt-3 border-t border-border space-y-2.5">
-        <h4 class="text-xs font-semibold text-violet-400/80 uppercase tracking-wider">Sub-Process Call</h4>
-        <p class="text-[10px] text-text-muted leading-relaxed">
-          Invoke another workflow as a child process. The child runs to completion
-          before this state transitions.
-        </p>
+        <div v-if="!entStore.hasFeature('subprocesses')" class="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+          <div class="flex items-start gap-3">
+            <div class="p-2 rounded-lg bg-amber-500/20 text-amber-500 shrink-0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <div class="space-y-1">
+              <h5 class="text-xs font-bold text-amber-500 uppercase tracking-tight">Enterprise Feature</h5>
+              <p class="text-[10px] text-amber-500/80 leading-relaxed font-medium">
+                Modular workflows (sub-processes) require a **Pro** or **Enterprise** license. 
+                Free tier is limited to single-workflow execution.
+              </p>
+              <RouterLink to="/usage" class="inline-block pt-1 text-[10px] font-bold text-amber-400 hover:text-amber-300 underline underline-offset-2">
+                Upgrade to Unlock &rarr;
+              </RouterLink>
+            </div>
+          </div>
+        </div>
+
+        <div :class="{ 'opacity-50 grayscale pointer-events-none': !entStore.hasFeature('subprocesses') }">
+          <h4 class="text-xs font-semibold text-violet-400/80 uppercase tracking-wider">Sub-Process Call</h4>
+          <p class="text-[10px] text-text-muted leading-relaxed">
+            Invoke another workflow as a child process. The child runs to completion
+            before this state transitions.
+          </p>
 
         <div class="flex gap-2">
           <div class="space-y-1 flex-[2]">
@@ -286,7 +307,8 @@
           :parent-options="Object.keys(bbSchema)"
         />
       </div>
-    </template>
+    </div>
+  </template>
 
     <!-- Transitions -->
     <div class="pt-3 border-t border-border space-y-3">

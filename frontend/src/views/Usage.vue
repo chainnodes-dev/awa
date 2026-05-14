@@ -89,9 +89,21 @@
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
           </svg>
           <h2 class="text-sm font-bold text-text uppercase tracking-wider">Security Audit Trail</h2>
+          <span v-if="!entStore.hasFeature('audit_logs')" class="badge bg-amber-500/10 text-amber-500 text-[9px] font-bold tracking-widest">Enterprise Feature</span>
         </div>
 
-        <div class="card overflow-hidden">
+        <div v-if="!entStore.hasFeature('audit_logs')" class="p-4 bg-amber-500/5 border border-amber-500/20 rounded-lg flex items-center gap-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-500">
+            <path d="M12 15v2m0-8v4m0-6h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <div class="text-xs text-amber-200/80">
+            <span class="font-semibold text-amber-500">Feature Locked:</span> Detailed security audit logs are available in the Enterprise tier.
+          </div>
+          <div class="flex-1" />
+          <button @click="updatingLicense = true" class="text-xs font-semibold text-amber-500 hover:underline">Upgrade License &rarr;</button>
+        </div>
+
+        <div class="card overflow-hidden" :class="{'opacity-30 grayscale pointer-events-none select-none': !entStore.hasFeature('audit_logs')}">
           <table class="w-full text-[11px]">
             <thead class="bg-surface-2 text-text-muted uppercase tracking-wider font-semibold">
               <tr>

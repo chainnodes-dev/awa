@@ -108,4 +108,7 @@ router.beforeEach(async (to) => {
   return true
 })
 
+// Need to import useEnterpriseStore
+import { useEnterpriseStore } from '@/stores/enterprise'
+
 export default router

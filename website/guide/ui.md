@@ -95,11 +95,11 @@ The **Properties** tab exposes workflow-level configuration:
 - **Name** and **Short Abstract** — identifier and human-readable description
 - **Cron Schedule** — Off, Interval, Daily, Weekly, or Advanced cron expression to schedule autonomous execution
 - **Business Process Description** — natural language summary used as context for AI generation
-- **Mark as Reusable** — enables this workflow to be called as a sub-process by other workflows
+- **Mark as Reusable** — enables this workflow to be called as a sub-process by other workflows (**Pro/Enterprise** feature)
 - **Blackboard Schema** — define the shared data contract (fields and types) that all states read from and write to
 - **Workflow Prompt (Global Personality)** — a system prompt applied to every LLM agent state in the workflow
 
-When an individual state node is selected on the canvas, the Properties panel switches to show that node's configuration: type, instructions, MCP tool bindings, transition conditions, and per-state prompts.
+When an individual state node is selected on the canvas, the Properties panel switches to show that node's configuration: type, instructions, MCP tool bindings, transition conditions, and per-state prompts. Note: **Sub-Process** nodes are restricted to the **Pro** and **Enterprise** tiers.
 
 ### Generate Panel — AI Workflow Generation
 
@@ -188,9 +188,7 @@ Non-admin users can view the server list and health status but cannot add or mod
 
 ![User Management](/screenshots/user-management.png)
 
-**Route:** `/users` · _Admin only_
-
-User Management gives administrators a full view of every account in the tenant and the ability to create new users.
+User Management gives administrators a full view of every account in the tenant. In the **Free** tier, this page operates in **read-only mode**, allowing you to see existing accounts but not create or manage additional users. Full team management is available in the **Pro** and **Enterprise** tiers.
 
 ### Components
 
@@ -223,7 +221,7 @@ Displays the active license tier (e.g. `free`, `pro`, `enterprise`), the license
 
 **Security Audit Trail**
 
-An append-only log of security-relevant events. Each row records the timestamp, action type, the user who performed it, and any relevant details. This log supports compliance, incident investigation, and access reviews.
+An append-only log of security-relevant events. In the **Free** tier, this section is **locked**, providing a placeholder view of the audit infrastructure. Full access to historical security logs is available in the **Enterprise** tier.
 
 ---
 
@@ -270,11 +268,11 @@ Choose the UI theme: **Light**, **Dark**, or **System** (follows the operating s
 
 **Tenant Identity & Branding**
 
-Set the **Company Name** and **Logo URL** for white-label deployments. These values are reflected in the sidebar logo and browser tab title across the entire tenant.
+Set the **Company Name** and **Logo URL** for white-label deployments. In the **Free** tier, this section is **read-only**, allowing you to preview how custom branding appears across the tenant. Permanent branding is available in the **Enterprise** tier.
 
 **Environment Secrets**
 
-A key-value store for secrets that agent tools and scripts can access at runtime via the `secrets` object. Secrets are stored encrypted and never exposed in logs or the workflow YAML. Use the **+ Add Secret** button to add entries, then **Save Secrets** to persist them.
+A key-value store for secrets that agent tools and scripts can access at runtime via the `secrets` object. In the **Free** tier, secrets management is **locked**. Upgrade to **Pro** or **Enterprise** to add and manage secure environment variables.
 
 **LLM Provider Configuration**
 

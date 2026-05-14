@@ -49,10 +49,20 @@
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
                <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
              </svg>
-             <h2 class="text-sm font-bold text-text uppercase tracking-wider">Tenant Identity & Branding</h2>
-           </div>
+              <h2 class="text-sm font-bold text-text uppercase tracking-wider">Tenant Identity & Branding</h2>
+              <span v-if="!entStore.hasFeature('branding')" class="badge bg-amber-500/10 text-amber-500 text-[9px] font-bold tracking-widest">Enterprise Feature</span>
+            </div>
 
-           <div class="card p-5 space-y-4">
+            <div v-if="!entStore.hasFeature('branding')" class="p-4 bg-amber-500/5 border border-amber-500/20 rounded-lg flex items-center gap-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-500">
+                <path d="M12 15v2m0-8v4m0-6h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <div class="text-xs text-amber-200/80">
+                <span class="font-semibold text-amber-500">Feature Locked:</span> Custom platform branding requires an Enterprise license.
+              </div>
+            </div>
+ 
+            <div class="card p-5 space-y-4" :class="{'opacity-40 grayscale pointer-events-none select-none': !entStore.hasFeature('branding')}">
               <div class="grid grid-cols-2 gap-4">
                  <div>
                     <label class="text-[10px] font-bold text-text-muted uppercase tracking-widest block mb-1">Company Name</label>
@@ -78,10 +88,20 @@
              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
              </svg>
-             <h2 class="text-sm font-bold text-text uppercase tracking-wider">Environment Secrets</h2>
-           </div>
+              <h2 class="text-sm font-bold text-text uppercase tracking-wider">Environment Secrets</h2>
+              <span v-if="!entStore.hasFeature('secrets')" class="badge bg-amber-500/10 text-amber-500 text-[9px] font-bold tracking-widest">Pro Feature</span>
+            </div>
 
-           <div class="card p-5 space-y-4">
+            <div v-if="!entStore.hasFeature('secrets')" class="p-4 bg-amber-500/5 border border-amber-500/20 rounded-lg flex items-center gap-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-500">
+                <path d="M12 15v2m0-8v4m0-6h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <div class="text-xs text-amber-200/80">
+                <span class="font-semibold text-amber-500">Feature Locked:</span> Secure environment secrets management is a Pro feature.
+              </div>
+            </div>
+ 
+            <div class="card p-5 space-y-4" :class="{'opacity-40 grayscale pointer-events-none select-none': !entStore.hasFeature('secrets')}">
               <p class="text-[10px] text-text-muted mb-2">Secrets are stored securely and available to Agent tools/scripts via the <code>secrets</code> object.</p>
               <div v-if="!Object.keys(secretsForm).length" class="text-center py-4 bg-black/5 rounded border border-dashed border-border/40">
                 <p class="text-xs text-text-muted italic">No secrets defined yet.</p>

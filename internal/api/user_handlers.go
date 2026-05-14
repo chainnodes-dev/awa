@@ -27,6 +27,11 @@ func (h *Handlers) ListUsers(c *gin.Context) {
 // CreateUser adds a new user. Admin only.
 // POST /api/v1/users
 func (h *Handlers) CreateUser(c *gin.Context) {
+	if err := h.RequireFeature(c.Request.Context(), "user_management"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
 	var body struct {
 		Username string `json:"username" binding:"required"`
 		Password string `json:"password" binding:"required"`
@@ -69,6 +74,11 @@ func (h *Handlers) CreateUser(c *gin.Context) {
 // UpdateUserRole changes a user's role. Admin only.
 // PUT /api/v1/users/:id/role
 func (h *Handlers) UpdateUserRole(c *gin.Context) {
+	if err := h.RequireFeature(c.Request.Context(), "user_management"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
 	var body struct {
 		Role string `json:"role" binding:"required"`
 	}
@@ -92,6 +102,11 @@ func (h *Handlers) UpdateUserRole(c *gin.Context) {
 // DeleteUser removes a user. Admin only.
 // DELETE /api/v1/users/:id
 func (h *Handlers) DeleteUser(c *gin.Context) {
+	if err := h.RequireFeature(c.Request.Context(), "user_management"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
 	id := c.Param("id")
 	// Prevent admins from deleting themselves.
 	if claims := auth.ClaimsFrom(c); claims != nil && claims.UserID == id {
