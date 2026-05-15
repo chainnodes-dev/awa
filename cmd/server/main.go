@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"go.temporal.io/sdk/client"
 
 	"github.com/asm-platform/asm/internal/api"
 	"github.com/asm-platform/asm/internal/config"
@@ -25,192 +26,162 @@ import (
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/internal/telemetry"
 	temporalpkg "github.com/asm-platform/asm/internal/temporal"
+	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
-// Removed redundant seedLLMConfigs. Seeding is now handled via api.SeedLLMConfigs.
-
 func main() {
-	// Load .env if present. Existing environment variables take precedence so
-	// that explicit exports (e.g. EXECUTOR_MODE=temporal go run ...) are never
-	// overwritten. Silently ignore the file when it doesn't exist.
 	_ = godotenv.Load()
-
 	cfg := config.Load()
 	logger.Init(cfg.LogLevel)
 	
-
-	// -- Health checker (populated as deps are wired) --
 	checker := health.New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	ctx := context.Background()
-
-	// -- Event Bus --
-	// NewRedisBus only parses the URL — the TCP handshake is lazy.
-	// Ping immediately so we fall back to the local bus when Redis is down
-	// rather than silently dropping events at runtime.
-	var bus events.Bus
-	if cfg.RedisURL != "" {
-		redisBus, err := events.NewRedisBus(cfg.RedisURL)
-		if err == nil {
-			pingCtx, pingCancel := context.WithTimeout(ctx, 3*time.Second)
-			err = redisBus.Ping(pingCtx)
-			pingCancel()
-		}
-		if err != nil {
-			slog.Warn("Redis unavailable, using in-process event bus — multi-process fan-out disabled",
-				"error", err)
-			bus = events.NewLocalBus()
-		} else {
-			checker.Add("redis", redisBus)
-			bus = redisBus
-			slog.Info("Event bus: Redis", "url", cfg.RedisURL)
-		}
-	} else {
-		slog.Info("Event bus: in-process (REDIS_URL not set)")
-		bus = events.NewLocalBus()
-	}
-
-	// -- Database migrations --
-	if cfg.DatabaseURL != "" {
-		if err := migrate.Up(cfg.DatabaseURL); err != nil {
-			slog.Error("Migration failed", "error", err)
-			os.Exit(1)
-		}
-	}
-
-	// -- Store --
+	// 1. Database & Migrations
 	var s store.Store
 	if cfg.DatabaseURL != "" {
-		pgStore, err := store.NewPostgresStore(ctx, cfg.DatabaseURL)
-		if err != nil {
-			slog.Warn("Postgres unavailable, using memory store", "error", err)
-			s = store.NewMemoryStore()
-		} else {
-			checker.Add("postgres", pgStore)
-			s = pgStore
+		slog.Info("Connecting to database...", "url", cfg.DatabaseURL)
+		var pgStore *store.PostgresStore
+		var err error
+		for i := 0; i < 10; i++ {
+			if err = migrate.Up(cfg.DatabaseURL); err == nil {
+				pgStore, err = store.NewPostgresStore(ctx, cfg.DatabaseURL)
+				if err == nil {
+					break
+				}
+			}
+			slog.Warn("Waiting for database...", "attempt", i+1, "error", err)
+			time.Sleep(3 * time.Second)
 		}
+		if err != nil {
+			slog.Error("Database failed to initialize", "error", err)
+			os.Exit(1)
+		}
+		checker.Add("postgres", pgStore)
+		s = pgStore
 	} else {
 		s = store.NewMemoryStore()
 	}
 	defer s.Close()
 
-	// -- Telemetry --
-	if cfg.EnableTelemetry {
-		telemetry.Start(s)
-	}
-
-	// -- Ensure Default Tenant exists --
+	// 2. Tenants & Seeding
 	defaultTenant, err := api.EnsureDefaultTenant(ctx, s)
 	if err != nil {
 		slog.Error("Failed to ensure default tenant", "error", err)
 		os.Exit(1)
 	}
 	tenantCtx := store.WithTenantID(ctx, defaultTenant.ID)
-
-	// -- Seeding (Sync) --
-	api.SeedAdminWithTenant(cfg, s, defaultTenant)
-	api.SeedLLMConfigs(cfg, s, defaultTenant.ID)
-	// Workflows and MCP seeding will happen below after mcpEntries are loaded.
-
-	// -- LLM Config: Load registry from DB --
-	llmRegistry, activeLLMProvider, err := llm.BuildRegistryFromDB(tenantCtx, s)
-	if err != nil {
-		slog.Warn("Failed to build LLM registry from DB, using empty registry", "error", err)
-		llmRegistry = llm.NewRegistry()
+	
+	if cfg.AdminPassword != "" {
+		api.SeedAdminWithTenant(cfg, s, defaultTenant)
 	}
-	if activeLLMProvider == "" {
-		if first := llmRegistry.First(); first != nil {
-			activeLLMProvider = first.Name()
-			slog.Info("LLM default provider", "provider", activeLLMProvider)
-		} else {
-			slog.Warn("No LLM providers configured — agent states will fail")
+	api.SeedLLMConfigs(cfg, s, defaultTenant.ID)
+
+	// 3. Temporal (Lazy connection)
+	var temporalEngine orchestrator.TemporalEngineClient
+	go func() {
+		for {
+			tClient, err := temporalpkg.NewClient(cfg.TemporalAddress, cfg.TemporalNamespace)
+			if err == nil {
+				hCtx, hCancel := context.WithTimeout(ctx, 5*time.Second)
+				err = temporalpkg.CheckHealth(hCtx, tClient)
+				hCancel()
+				if err == nil {
+					slog.Info("Temporal connected successfully")
+					temporalEngine = temporalpkg.NewEngineClient(tClient, cfg.TemporalTaskQueue)
+					checker.Add("temporal", &temporalPinger{client: tClient})
+					return
+				}
+			}
+			slog.Warn("Temporal not ready yet, retrying...", "error", err)
+			time.Sleep(5 * time.Second)
+		}
+	}()
+
+	// 4. Infrastructure
+	var bus events.Bus = events.NewLocalBus()
+	if cfg.RedisURL != "" {
+		if rb, err := events.NewRedisBus(cfg.RedisURL); err == nil {
+			bus = rb
+			checker.Add("redis", rb)
 		}
 	}
 
-	// -- Temporal client (Mandatory) --
-	temporalClient, err := temporalpkg.NewClient(cfg.TemporalAddress, cfg.TemporalNamespace)
-	if err != nil {
-		slog.Error("Failed to connect to Temporal", "address", cfg.TemporalAddress, "error", err)
-		os.Exit(1)
-	}
-	defer temporalClient.Close()
-
-	healthCtx, healthCancel := context.WithTimeout(ctx, 5*time.Second)
-	if err := temporalpkg.CheckHealth(healthCtx, temporalClient); err != nil {
-		slog.Error("Temporal health check failed", "address", cfg.TemporalAddress, "error", err)
-		os.Exit(1)
-	}
-	healthCancel()
-
-	temporalEngine := temporalpkg.NewEngineClient(temporalClient, cfg.TemporalTaskQueue)
-
-	// -- Engine --
-	engine := orchestrator.NewEngine(s, bus, temporalEngine)
-	slog.Info("Temporal connected",
-		"address", cfg.TemporalAddress,
-		"namespace", cfg.TemporalNamespace,
-		"queue", cfg.TemporalTaskQueue)
-
-	// -- AI Workflow Generator --
-	// Resolve mcp_registry.yaml relative to the project root.
+	// 5. Engine
+	engine := orchestrator.NewEngine(s, bus, &lazyTemporalExecutor{get: func() orchestrator.TemporalEngineClient { return temporalEngine }})
+	
 	_, filename, _, _ := runtime.Caller(0)
 	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
 	registryPath := filepath.Join(projectRoot, "mcp_registry.yaml")
+	mcpEntries, _ := designer.LoadMCPRegistry(registryPath)
 
-	mcpEntries, regErr := designer.LoadMCPRegistry(registryPath)
-	if regErr != nil {
-		slog.Warn("MCP registry not loaded; AI generation will have no server context", "error", regErr)
-		mcpEntries = nil
-	}
-
-	// -- Seeding (Sync - Continued) --
 	api.SeedWorkflows(s, defaultTenant.ID)
 	api.SeedMCPServers(s, defaultTenant.ID, mcpEntries)
 
+	llmRegistry, activeLLMProvider, _ := llm.BuildRegistryFromDB(tenantCtx, s)
 	var gen *designer.Generator
-	// Use the active LLM provider if available.
 	if llmProv, _ := llmRegistry.Get(activeLLMProvider); llmProv != nil {
 		gen = designer.NewGenerator(llmProv, mcpEntries, s)
-		slog.Info("AI workflow generator enabled", "provider", activeLLMProvider)
-	} else {
-		slog.Info("AI workflow generator disabled (no LLM provider configured)")
 	}
 
-	// -- Scheduler --
-	// Load all stored workflow definitions and register any that carry a cron
-	// schedule expression.  New workflows are registered when SaveDefinition is
-	// called (handled in the API layer); removed when DeleteDefinition is called.
+	// 6. Server
 	sched := scheduler.New(engine.StartRun)
-	if defs, err := s.ListDefinitions(ctx, store.DefinitionFilter{}); err == nil {
-		for _, def := range defs {
-			if err := sched.AddWorkflow(def); err != nil {
-				slog.Warn("Failed to register workflow schedule", "workflow", def.Metadata.Name, "error", err)
-			}
-		}
-	}
-	sched.Start()
-	slog.Info("Scheduler started")
-
-	// -- API Server --
 	srv := api.NewServer(cfg, engine, s, bus, gen, mcpEntries, checker, sched, llmRegistry)
-
-	// Graceful shutdown
+	
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		slog.Info("Server listening", "port", cfg.Port)
+		slog.Info("Server binding port", "port", cfg.Port)
 		if err := srv.Start(); err != nil {
 			slog.Info("Server stopped", "reason", err)
 		}
 	}()
 
+	sched.Start()
+	if cfg.EnableTelemetry {
+		telemetry.Start(s)
+	}
+
 	<-quit
 	slog.Info("Shutting down...")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_ = srv.Shutdown(shutdownCtx)
-	stopCtx := sched.Stop()
-	<-stopCtx.Done() // wait for in-flight cron jobs to finish
+	sdCtx, sdCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer sdCancel()
+	_ = srv.Shutdown(sdCtx)
 	slog.Info("Goodbye")
+}
+
+// wrappers
+type temporalPinger struct{ client client.Client }
+func (tp *temporalPinger) Ping(ctx context.Context) error { return temporalpkg.CheckHealth(ctx, tp.client) }
+
+type lazyTemporalExecutor struct{ get func() orchestrator.TemporalEngineClient }
+func (l *lazyTemporalExecutor) StartWorkflow(ctx context.Context, run *asmtypes.WorkflowRun, def *asmtypes.WorkflowDef) (string, error) {
+	exec := l.get()
+	if exec == nil { return "", context.DeadlineExceeded }
+	return exec.StartWorkflow(ctx, run, def)
+}
+func (l *lazyTemporalExecutor) SendTriggerSignal(ctx context.Context, tid, trigger string, payload map[string]interface{}) error {
+	exec := l.get()
+	if exec == nil { return context.DeadlineExceeded }
+	return exec.SendTriggerSignal(ctx, tid, trigger, payload)
+}
+func (l *lazyTemporalExecutor) SendHITLSignal(ctx context.Context, tid string, sig asmtypes.HITLSignal) error {
+	exec := l.get()
+	if exec == nil { return context.DeadlineExceeded }
+	return exec.SendHITLSignal(ctx, tid, sig)
+}
+func (l *lazyTemporalExecutor) SendChatSignal(ctx context.Context, tid, msg, snd string) error {
+	exec := l.get()
+	if exec == nil { return context.DeadlineExceeded }
+	return exec.SendChatSignal(ctx, tid, msg, snd)
+}
+func (l *lazyTemporalExecutor) TerminateWorkflow(ctx context.Context, tid string) error {
+	exec := l.get()
+	if exec == nil { return context.DeadlineExceeded }
+	return exec.TerminateWorkflow(ctx, tid)
+}
+func (l *lazyTemporalExecutor) Close() {
+	if exec := l.get(); exec != nil { exec.Close() }
 }
