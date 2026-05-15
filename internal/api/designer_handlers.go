@@ -38,6 +38,7 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 		Args        []string          `json:"args"`
 		EnvVars     map[string]string `json:"env_vars"`
 		Description string            `json:"description"`
+		DocURL      string            `json:"doc_url"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -66,6 +67,7 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 		Args:        body.Args,
 		EnvVars:     body.EnvVars,
 		Description: body.Description,
+		DocURL:      body.DocURL,
 		CreatedBy:   createdBy,
 	}
 	if err := h.store.CreateMCPServer(c.Request.Context(), srv); err != nil {
@@ -86,6 +88,7 @@ func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 		Args        []string          `json:"args"`
 		EnvVars     map[string]string `json:"env_vars"`
 		Description string            `json:"description"`
+		DocURL      string            `json:"doc_url"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -113,6 +116,7 @@ func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 		Args:        body.Args,
 		EnvVars:     body.EnvVars,
 		Description: body.Description,
+		DocURL:      body.DocURL,
 		CreatedBy:   existing.CreatedBy,
 		CreatedAt:   existing.CreatedAt,
 	}
@@ -276,9 +280,15 @@ func (h *Handlers) DiscoverMCPServer(c *gin.Context) {
 		parts = append(parts, entry)
 	}
 	description := "Tools: " + strings.Join(parts, "; ")
-	if len(parts) == 0 { description = "No tools advertised." }
+	if len(parts) == 0 {
+		description = "No tools advertised."
+	}
 
-	c.JSON(http.StatusOK, gin.H{"tools": toolsResp.Tools, "description": description})
+	c.JSON(http.StatusOK, gin.H{
+		"tools":       toolsResp.Tools,
+		"description": description,
+		"raw_tools":   toolsResp.Tools, // Added for frontend to render structured UI
+	})
 }
 
 // GenerateWorkflow calls the LLM to produce a WorkflowDef from a description.

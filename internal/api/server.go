@@ -78,6 +78,7 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 	router.MaxMultipartMemory = 64 << 20 // 64 MiB
 	router.Use(gin.Recovery())
 	router.Use(auth.RequestID())
+	router.Use(SecurityMiddleware(cfg.Environment, cfg.CORSOrigins))
 	router.Use(MetricsMiddleware())
 
 	// CORS

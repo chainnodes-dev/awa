@@ -27,6 +27,8 @@ type MCPServer struct {
 	// These will be injected into the MCP server process on startup.
 	EnvVars     map[string]string `json:"env_vars,omitempty"`
 	Description string            `json:"description"`
+	// DocURL is an optional link to the server's documentation.
+	DocURL      string            `json:"doc_url,omitempty"`
 	CreatedBy   string    `json:"created_by,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 }

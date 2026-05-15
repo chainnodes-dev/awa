@@ -269,6 +269,48 @@ func (h *Handlers) GetAnalytics(c *gin.Context) {
 	c.JSON(http.StatusOK, stats)
 }
 
+// UpdateMarketSource updates the URL or file path for the MCP Marketplace.
+// PUT /api/v1/enterprise/mcp-market-source
+func (h *Handlers) UpdateMarketSource(c *gin.Context) {
+	if err := h.RequireFeature(c.Request.Context(), "audit_logs"); err != nil { // Reuse audit_logs as a proxy for admin-level config
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	var req struct {
+		Source string `json:"source" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.store.SetSystemSetting(c.Request.Context(), "mcp_market_source", req.Source); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	_ = enterprise.RecordAction(c.Request.Context(), h.store, enterprise.ActionSettingsUpdated, map[string]interface{}{
+		"setting": "mcp_market_source",
+		"value":   req.Source,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Marketplace source updated"})
+}
+
+// GetMarketSource returns the currently configured MCP Marketplace source.
+// GET /api/v1/enterprise/mcp-market-source
+func (h *Handlers) GetMarketSource(c *gin.Context) {
+	ctx := c.Request.Context()
+	source := h.cfg.MCPMarketSource
+
+	if dbSource, err := h.store.GetSystemSetting(ctx, "mcp_market_source"); err == nil && dbSource != "" {
+		source = dbSource
+	}
+
+	c.JSON(http.StatusOK, gin.H{"source": source})
+}
+
 // SetIDPConfig handles the configuration of external OIDC providers.
 func (h *Handlers) SetIDPConfig(c *gin.Context) {
 	tenantID := store.TenantIDFromContext(c.Request.Context())

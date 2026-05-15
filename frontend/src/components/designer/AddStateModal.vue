@@ -11,7 +11,7 @@
         <option value="script">script</option>
         <option value="code">code</option>
         <optgroup label="──────────────"></optgroup>
-        <option value="subprocess">subprocess (Pro 🔒)</option>
+        <option value="subprocess" :disabled="!entStore.hasFeature('subprocesses')">subprocess (Pro)</option>
         <optgroup label="──────────────"></optgroup>
         <option value="hitl">hitl</option>
         <option value="wait">wait</option>
@@ -26,7 +26,9 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useEnterpriseStore } from '@/stores/enterprise'
 const emit = defineEmits(['close', 'add'])
+const entStore = useEnterpriseStore()
 const name = ref('')
 const type = ref('prompt')
 function onAdd() {

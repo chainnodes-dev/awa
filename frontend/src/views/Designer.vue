@@ -223,13 +223,22 @@
                     </div>
                     <textarea v-model="meta.processDescription" class="input h-32 resize-none text-[11px]" placeholder="Detailed natural language description of the process..." @input="isDirty=true"/>
                   </div>
-                  <label class="flex items-center gap-2 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20 cursor-pointer hover:bg-indigo-500/10 transition-colors group">
-                    <input type="checkbox" v-model="meta.reusable" class="accent-indigo-500" @change="isDirty=true" />
-                    <div class="flex-1">
-                      <div class="text-xs font-semibold text-indigo-300 group-hover:text-indigo-200 transition-colors">Mark as Reusable</div>
-                      <div class="text-[10px] text-text-muted">Enables this workflow to be called as a sub-process by others.</div>
+                  <div class="space-y-1">
+                    <div class="flex items-center justify-between px-1">
+                      <label class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Modular Workflow</label>
+                      <span v-if="!entStore.hasFeature('subprocesses')" class="badge bg-amber-500/10 text-amber-500 text-[9px] font-bold tracking-widest uppercase">Pro Feature</span>
                     </div>
-                  </label>
+                    <label 
+                      class="flex items-center gap-2 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20 cursor-pointer hover:bg-indigo-500/10 transition-colors group"
+                      :class="{ 'opacity-40 grayscale pointer-events-none select-none': !entStore.hasFeature('subprocesses') }"
+                    >
+                      <input type="checkbox" v-model="meta.reusable" class="accent-indigo-500" @change="isDirty=true" :disabled="!entStore.hasFeature('subprocesses')" />
+                      <div class="flex-1">
+                        <div class="text-xs font-semibold text-indigo-300 group-hover:text-indigo-200 transition-colors">Mark as Reusable</div>
+                        <div class="text-[10px] text-text-muted leading-tight">Enables this workflow to be called as a sub-process by other workflows.</div>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -358,6 +367,7 @@ import BBFieldModal         from '@/components/designer/BBFieldModal.vue'
 import SchemaEditorModal    from '@/components/designer/SchemaEditorModal.vue'
 
 import { useWorkflowStore } from '@/stores/workflows'
+import { useEnterpriseStore } from '@/stores/enterprise'
 import { useWorkflowIO }    from '@/composables/useWorkflowIO'
 import { useCanvasSync }    from '@/composables/useCanvasSync'
 import { useCanvasActions } from '@/composables/useCanvasActions'
@@ -366,6 +376,7 @@ import { useLayout }        from '@/composables/useLayout'
 const route   = useRoute()
 const router  = useRouter()
 const wfStore = useWorkflowStore()
+const entStore = useEnterpriseStore()
 const { fitView } = useVueFlow()
 const { layout }  = useLayout()
 

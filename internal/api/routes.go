@@ -155,6 +155,8 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 				entAdmin.GET("/audit-logs", h.ListAuditLogs)
 				entAdmin.GET("/analytics", h.GetAnalytics)
 				entAdmin.PUT("/oidc", h.SetIDPConfig)
+				entAdmin.GET("/mcp-market-source", h.GetMarketSource)
+				entAdmin.PUT("/mcp-market-source", h.UpdateMarketSource)
 			}
 		}
 

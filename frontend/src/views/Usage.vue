@@ -82,6 +82,32 @@
         </div>
       </section>
 
+      <!-- Marketplace Governance -->
+      <section class="card p-5 space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-xs font-bold text-text uppercase tracking-wide">Marketplace Governance</h3>
+            <p class="text-[10px] text-text-muted">Control which MCP servers are discoverable by your users.</p>
+          </div>
+          <button @click="saveMarketSource" :disabled="marketBusy" class="btn-primary text-[10px] font-bold px-6 py-1.5 h-8 uppercase tracking-widest">
+            {{ marketBusy ? 'Saving...' : 'Save Settings' }}
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <div class="space-y-1.5">
+            <div class="flex justify-between items-center">
+              <label class="text-[10px] uppercase font-bold text-text-muted tracking-widest">Marketplace Source (URL or Path)</label>
+              <button @click="marketSource = 'configs/mcp-market.json'" class="text-[9px] font-bold text-indigo-500 hover:underline italic">Reset to Default</button>
+            </div>
+            <input v-model="marketSource" class="input text-[11px] font-mono" placeholder="https://phaxa.io/registry.json or local path..." />
+            <p class="text-[9px] text-text-muted leading-relaxed">
+              Admins can host a curated list of approved MCP servers to restrict external threats and ensure reliability.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <!-- Audit Logs -->
       <section class="space-y-4">
         <div class="flex items-center gap-2 px-1">
@@ -135,11 +161,34 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useEnterpriseStore } from '@/stores/enterprise'
+import { api } from '@/stores/auth'
 
 const entStore = useEnterpriseStore()
 const updatingLicense = ref(false)
 const licenseInput = ref('')
 const licenseBusy = ref(false)
+
+const marketSource = ref('')
+const marketBusy = ref(false)
+
+async function fetchMarketSource() {
+  try {
+    const { data } = await api.get('/enterprise/mcp-market-source')
+    marketSource.value = data.source
+  } catch (e) { console.error('Failed to fetch market source', e) }
+}
+
+async function saveMarketSource() {
+  marketBusy.value = true
+  try {
+    await api.put('/enterprise/mcp-market-source', { source: marketSource.value })
+    alert('Marketplace source updated successfully!')
+  } catch (e) {
+    alert('Update failed: ' + (e.response?.data?.error ?? e.message))
+  } finally {
+    marketBusy.value = false
+  }
+}
 
 async function saveLicense() {
   if (!licenseInput.value) return
@@ -155,8 +204,6 @@ async function saveLicense() {
   }
 }
 
-
-
 function tierBadgeClass(tier) {
   if (tier === 'enterprise') return 'badge bg-purple-500/20 text-purple-400'
   if (tier === 'pro') return 'badge bg-indigo-500/20 text-indigo-400'
@@ -171,5 +218,6 @@ function formatDateTime(ts) {
 onMounted(() => {
   entStore.fetchStatus()
   entStore.fetchAuditLogs()
+  fetchMarketSource()
 })
 </script>

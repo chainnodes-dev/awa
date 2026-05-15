@@ -1,148 +1,208 @@
 <template>
-  <div class="flex flex-col h-full overflow-hidden">
+  <div class="flex flex-col h-full overflow-hidden bg-surface-0">
     <!-- Top bar -->
     <header class="flex items-center gap-4 px-6 py-4 border-b border-border shrink-0">
-      <h1 class="text-base font-semibold text-text">MCP Servers</h1>
-      <p class="text-xs text-text-muted">Manage and monitor Model Context Protocol servers</p>
-      <div class="flex-1"/>
-      <button @click="pingAll" :disabled="pingingAll" class="btn-ghost text-xs gap-1.5 border border-border">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-        </svg>
-        {{ pingingAll ? 'Checking...' : 'Check All' }}
-      </button>
-      <button v-if="isAdmin" @click="openModal(null)" class="btn-primary text-xs gap-1.5">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        Add Server
-      </button>
+      <div class="flex flex-col">
+        <h1 class="text-base font-bold text-text tracking-tight uppercase">MCP Infrastructure</h1>
+        <p class="text-[10px] text-text-muted font-bold uppercase tracking-widest opacity-60">Model Context Protocol</p>
+      </div>
+      
+      <div class="flex-1 px-4">
+        <!-- Tab Switcher -->
+        <div class="flex p-1 bg-surface-2 rounded-xl border border-border w-fit">
+          <button @click="activeTab = 'registered'" 
+                  :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
+                           activeTab === 'registered' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']">
+            Registered Servers
+          </button>
+          <button @click="activeTab = 'marketplace'" 
+                  :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all flex items-center gap-2', 
+                           activeTab === 'marketplace' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']">
+            Marketplace
+            <span class="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-500 text-[8px]">CURATED</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button v-if="activeTab === 'registered'" @click="pingAll" :disabled="pingingAll" class="btn-ghost h-9 px-4 text-xs gap-2 border border-border bg-surface-1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          {{ pingingAll ? 'Checking...' : 'Check All' }}
+        </button>
+        <button v-if="isAdmin" @click="openModal(null)" class="btn-primary h-9 px-4 text-xs gap-2 shadow-xl shadow-indigo-500/20">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Custom
+        </button>
+      </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-6 bg-surface-0">
-      <!-- Non-admin notice -->
-      <div v-if="!isAdmin" class="px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-sm mb-6">
-        MCP server management requires admin privileges. You can view registered servers and their status.
-      </div>
+    <!-- Content Area -->
+    <main class="flex-1 overflow-y-auto p-6 scroll-smooth">
+      
+      <!-- Registered Servers Tab -->
+      <div v-if="activeTab === 'registered'" class="space-y-6">
+        <div v-if="loading" class="flex flex-col items-center justify-center py-20 gap-4">
+          <div class="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"/>
+          <p class="text-xs text-text-muted font-mono uppercase tracking-widest animate-pulse">Syncing Registry...</p>
+        </div>
 
-      <div v-if="loading" class="text-text-muted text-sm py-12 text-center">Loading...</div>
-
-      <div v-else-if="!servers.length" class="card p-12 text-center">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="mx-auto mb-4 text-text-muted opacity-50">
-          <rect x="2" y="2" width="20" height="8" rx="2"/>
-          <rect x="2" y="14" width="20" height="8" rx="2"/>
-          <circle cx="6" cy="6" r="1" fill="currentColor"/>
-          <circle cx="6" cy="18" r="1" fill="currentColor"/>
-        </svg>
-        <p class="text-text text-sm mb-1 font-medium">No MCP servers registered</p>
-        <p class="text-text-muted text-xs mb-4">Add an MCP server to make its tools available to workflow agents.</p>
-        <button v-if="isAdmin" @click="openModal(null)" class="btn-primary text-xs">Add Server</button>
-      </div>
-
-      <!-- Server cards -->
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div v-for="srv in servers" :key="srv.id || srv.name" class="card p-4 space-y-2 relative overflow-hidden group">
-          <!-- Background decoration -->
-          <div class="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity text-text pointer-events-none">
-            <svg width="120" height="120" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="20" height="20" rx="2"/></svg>
+        <div v-else-if="!servers.length" class="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed border-border rounded-2xl bg-surface-1/50">
+          <div class="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-6 border border-border shadow-inner">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-text-muted opacity-40"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
           </div>
+          <h3 class="text-lg font-bold text-text mb-2 uppercase tracking-tight">No Active Servers</h3>
+          <p class="text-sm text-text-muted mb-8 max-w-sm">Register a custom MCP server or browse the marketplace to enable tools for your workflows.</p>
+          <button @click="activeTab = 'marketplace'" class="btn-primary px-8">Browse Marketplace</button>
+        </div>
 
-          <!-- Header row -->
-          <div class="flex items-start gap-3 relative z-10">
-            <div class="mt-0.5 shrink-0" :title="statusTitle(srv)">
-              <div v-if="healthStatus[srv.id] === undefined" class="w-2.5 h-2.5 rounded-full bg-slate-600 ring-2 ring-slate-600/30"/>
-              <div v-else-if="healthStatus[srv.id] === 'checking'" class="w-2.5 h-2.5 rounded-full bg-blue-400 ring-2 ring-blue-400/30 animate-pulse"/>
-              <div v-else-if="healthStatus[srv.id] === 'online'" class="w-2.5 h-2.5 rounded-full bg-green-400 ring-2 ring-green-400/30 shadow-[0_0_8px_rgba(74,222,128,0.4)]"/>
-              <div v-else-if="healthStatus[srv.id] === 'offline'" class="w-2.5 h-2.5 rounded-full bg-red-400 ring-2 ring-red-400/30"/>
-              <div v-else class="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-400/30"/>
-            </div>
-
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="font-display text-sm font-bold text-text tracking-tight uppercase">{{ srv.name }}</span>
-                <span v-if="healthLatency[srv.id]" class="text-[10px] font-mono text-green-500 font-bold">{{ healthLatency[srv.id] }}ms</span>
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div v-for="srv in servers" :key="srv.id" class="card group hover:border-indigo-500/50 transition-all duration-300">
+            <div class="p-5 space-y-4">
+              <!-- Header -->
+              <div class="flex items-start justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="relative">
+                    <div v-if="healthStatus[srv.id] === 'online'" class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.6)]"/>
+                    <div v-else-if="healthStatus[srv.id] === 'offline'" class="w-2.5 h-2.5 rounded-full bg-red-500"/>
+                    <div v-else-if="healthStatus[srv.id] === 'checking'" class="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"/>
+                    <div v-else class="w-2.5 h-2.5 rounded-full bg-slate-600"/>
+                  </div>
+                  <h4 class="font-display font-bold text-sm text-text uppercase tracking-tight truncate max-w-[150px]">{{ srv.name }}</h4>
+                </div>
+                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button @click="pingServer(srv)" class="p-1.5 rounded hover:bg-surface-2 text-text-muted hover:text-text" title="Refresh Status">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  </button>
+                  <button v-if="isAdmin" @click="openModal(srv)" class="p-1.5 rounded hover:bg-surface-2 text-indigo-500" title="Configure Server">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  </button>
+                </div>
               </div>
-              <p class="text-sm text-text-muted leading-relaxed line-clamp-2 h-10">{{ srv.description || 'No capabilities discovered yet' }}</p>
-            </div>
 
-            <!-- Actions -->
-            <div class="flex gap-1 shrink-0">
-              <button @click="pingServer(srv)" :disabled="healthStatus[srv.id] === 'checking'" class="btn-ghost p-1" title="Check availability">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                </svg>
-              </button>
-              <template v-if="isAdmin">
-                <button @click="openModal(srv)" class="btn-ghost p-1 text-indigo-500 hover:text-indigo-600" title="Settings">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
-              </template>
-            </div>
-          </div>
+              <!-- Description -->
+              <p class="text-xs text-text-muted leading-relaxed line-clamp-2 min-h-[32px]">
+                {{ srv.description || 'No capabilities registered yet.' }}
+              </p>
 
-          <!-- Connection details -->
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-2 border-t border-border/40">
-            <div v-if="srv.transport === 'stdio'" class="flex items-center gap-1.5 text-[11px]">
-              <span v-if="srv.command === 'npx'" class="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold uppercase tracking-widest text-[8px]">NPX</span>
-              <span v-else class="px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-[8px]">Local</span>
-              <span class="font-mono text-text opacity-50 truncate max-w-[120px]">{{ srv.command }}</span>
-            </div>
-            <div v-else-if="srv.url" class="flex items-center gap-1.5 text-[11px]">
-              <span class="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold uppercase tracking-widest text-[8px]">Remote</span>
-              <span class="font-mono text-text opacity-50 truncate max-w-[140px] font-bold">{{ new URL(srv.url).hostname }}</span>
-            </div>
-            
-            <!-- Env vars list -->
-            <div v-if="srv.env_vars && Object.keys(srv.env_vars).length" class="flex flex-wrap gap-1">
-              <div v-for="(v, k) in srv.env_vars" :key="k" class="flex items-center gap-1 px-1.5 py-0.5 rounded border border-border/50">
-                <span class="text-[9px] text-text-muted font-mono">{{ k }}</span>
-                <span class="text-[9px] text-indigo-500/60 font-bold font-mono">••</span>
+              <!-- Transport Badge -->
+              <div class="flex items-center justify-between pt-4 border-t border-border/40">
+                <div class="flex items-center gap-2">
+                  <span v-if="srv.transport === 'stdio'" class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-500 text-[9px] font-bold uppercase tracking-wider">LOCAL / STDIO</span>
+                  <span v-else class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 text-[9px] font-bold uppercase tracking-wider">REMOTE / SSE</span>
+                  <span v-if="healthLatency[srv.id]" class="text-[10px] font-mono text-green-500 font-bold">{{ healthLatency[srv.id] }}ms</span>
+                </div>
+                <a v-if="srv.doc_url" :href="srv.doc_url" target="_blank" class="text-text-muted hover:text-indigo-500">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+              </div>
+
+              <!-- Error state -->
+              <div v-if="healthError[srv.id]" class="mt-2 p-2 rounded bg-red-500/5 border border-red-500/10 text-[9px] text-red-500 font-mono truncate" :title="healthError[srv.id]">
+                {{ healthError[srv.id] }}
               </div>
             </div>
-          </div>
-
-          <!-- Health error message / Setup prompt -->
-          <div v-if="healthStatus[srv.id] === 'offline' && srv.transport === 'sse' && !srv.url" class="mt-2">
-            <button @click="openModal(srv)" class="w-full py-1.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider hover:bg-indigo-500/20 transition-colors">
-              Configure Connection
-            </button>
-          </div>
-          <div v-else-if="healthError[srv.id]" class="mt-2 text-[10px] text-red-500 bg-red-500/5 rounded px-2 py-1.5 font-mono truncate border border-red-500/10" :title="healthError[srv.id]">
-            {{ healthError[srv.id] }}
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Add/Edit Modal -->
+      <!-- Marketplace Tab -->
+      <div v-if="activeTab === 'marketplace'" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <!-- Hero Section -->
+        <div class="relative p-10 rounded-3xl overflow-hidden bg-gradient-to-br from-indigo-900/40 to-slate-900 border border-indigo-500/20 shadow-2xl">
+          <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/10 via-transparent to-transparent opacity-50"/>
+          <div class="relative z-10 max-w-2xl">
+            <h2 class="text-3xl font-display font-bold text-white mb-4 tracking-tight">Curated Marketplace</h2>
+            <p class="text-indigo-100/70 text-base leading-relaxed">
+              Explore "Known Good" MCP servers verified by the Phaxa team. These configurations are tested and ready to use in your enterprise workflows.
+            </p>
+          </div>
+        </div>
+
+        <div v-if="marketLoading" class="flex flex-col items-center justify-center py-20 gap-4">
+          <div class="w-8 h-8 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"/>
+          <p class="text-xs text-text-muted font-mono uppercase tracking-widest animate-pulse">Syncing Curated List...</p>
+        </div>
+
+        <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div v-for="item in marketplace" :key="item.id" 
+               class="flex gap-6 p-6 rounded-2xl bg-surface-1 border border-border hover:border-indigo-500/40 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 group">
+            
+            <!-- Icon / Brand -->
+            <div class="w-16 h-16 shrink-0 rounded-2xl bg-surface-2 flex items-center justify-center border border-border shadow-sm group-hover:scale-105 transition-transform">
+              <svg v-if="item.id === 'sec-edgar'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-amber-500"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <svg v-else-if="item.id === 'brave-search'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-indigo-500"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <svg v-else-if="item.id === 'slack'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-pink-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <svg v-else-if="item.id === 'github'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+              <div v-else class="text-2xl font-bold text-indigo-500">{{ item.name[0] }}</div>
+            </div>
+
+            <!-- Info -->
+            <div class="flex-1 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <h3 class="font-display font-bold text-lg text-text tracking-tight">{{ item.name }}</h3>
+                  <span v-if="item.is_verified" class="px-1.5 py-0.5 rounded bg-green-500/10 text-green-500 text-[8px] font-bold uppercase tracking-tighter">Verified</span>
+                </div>
+                <span class="text-[10px] font-bold text-text-muted uppercase tracking-widest">{{ item.category }}</span>
+              </div>
+              <p class="text-sm text-text-muted leading-relaxed">{{ item.description }}</p>
+              
+              <div class="flex items-center gap-4 pt-2">
+                <button @click="installFromMarket(item)" 
+                        :disabled="isInstalled(item.name)"
+                        class="btn-primary px-6 py-2 h-9 text-[11px] uppercase tracking-widest font-bold disabled:bg-surface-2 disabled:text-text-muted disabled:border-border">
+                  {{ isInstalled(item.name) ? 'Already Installed' : 'Install Server' }}
+                </button>
+                <a v-if="item.doc_url" :href="item.doc_url" target="_blank" class="text-[11px] font-bold text-indigo-500 hover:underline">Documentation</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modals -->
     <MCPServerModal v-if="modalServer !== undefined" :server="modalServer" @close="modalServer = undefined" @saved="onSaved" />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useAuthStore, api } from '@/stores/auth'
 
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.hasRole('admin'))
 
+const activeTab = ref('registered')
 const servers = ref([])
+const marketplace = ref([])
 const loading = ref(true)
+const marketLoading = ref(false)
 const pingingAll = ref(false)
-const modalServer = ref(undefined)  // undefined = closed; null = add; object = edit
+const modalServer = ref(undefined)
 
-// Health state per server ID
-const healthStatus  = reactive({})  // 'checking' | 'online' | 'offline' | 'unknown' | 'error'
-const healthLatency = reactive({})  // ms number
-const healthError   = reactive({})  // error string
+// Health state
+const healthStatus  = reactive({})
+const healthLatency = reactive({})
+const healthError   = reactive({})
 
 async function fetchServers() {
   loading.value = true
   try {
     const { data } = await api.get('/mcp-servers')
     servers.value = data ?? []
-  } catch { /* non-fatal */ } finally {
+  } catch (e) { console.error('Failed to fetch servers', e) } finally {
     loading.value = false
+  }
+}
+
+async function fetchMarketplace() {
+  marketLoading.value = true
+  try {
+    const { data } = await api.get('/mcp-market')
+    marketplace.value = data ?? []
+  } catch (e) { console.error('Failed to fetch marketplace', e) } finally {
+    marketLoading.value = false
   }
 }
 
@@ -168,26 +228,55 @@ async function pingAll() {
   pingingAll.value = false
 }
 
-function statusTitle(srv) {
-  const id = srv.id || srv.name
-  const s = healthStatus[id]
-  if (!s) return 'Not checked'
-  if (s === 'checking') return 'Checking...'
-  if (s === 'online') return 'Online (' + (healthLatency[id] || '?') + 'ms)'
-  if (s === 'offline') return 'Offline'
-  return 'Unknown'
-}
-
-function openModal(srv) {
-  modalServer.value = srv
-}
+function openModal(srv) { modalServer.value = srv }
 
 function onSaved(srv) {
-  modalServer.value = undefined
   const idx = servers.value.findIndex(s => s.id === srv.id)
   if (idx !== -1) servers.value[idx] = srv
-  else servers.value.push(srv)
+  else {
+    servers.value.push(srv)
+    // If it was a new server, update the modalServer to the newly created one 
+    // so the modal knows it has an ID now (switches to edit mode)
+    modalServer.value = srv
+  }
 }
+
+function isInstalled(name) {
+  return servers.value.some(s => s.name === name)
+}
+
+async function installFromMarket(item) {
+  if (!isAdmin.value) return
+  
+  // Pre-fill modal with market data
+  const newSrv = {
+    name: item.name,
+    transport: item.transport,
+    command: item.command,
+    args: item.args || [],
+    url: item.URL,
+    description: item.description,
+    doc_url: item.doc_url,
+    env_vars: {}
+  }
+  
+  // If there are required env vars, we open the modal for the user to fill them
+  if (item.env_vars && item.env_vars.length > 0) {
+    item.env_vars.forEach(ev => { newSrv.env_vars[ev.Name] = '' })
+    openModal(newSrv)
+  } else {
+    // Just install it directly
+    try {
+      const { data } = await api.post('/mcp-servers', newSrv)
+      servers.value.push(data)
+      activeTab.value = 'registered'
+    } catch (e) { alert(e.response?.data?.error || e.message) }
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'marketplace' && !marketplace.value.length) fetchMarketplace()
+})
 
 onMounted(() => {
   fetchServers()
@@ -195,17 +284,16 @@ onMounted(() => {
 </script>
 
 <script>
-import { defineComponent, h, ref, reactive } from 'vue'
+// MCPServerModal is imported from the previous turn's structure 
+// but we need to ensure it's exported correctly in this file if we're not using separate files.
+import { defineComponent, h, ref } from 'vue'
 import { api } from '@/stores/auth'
 
-// ── MCPServerModal ────────────────────────────────────────────────────────────
 export const MCPServerModal = defineComponent({
   props: { server: { default: null } },
   emits: ['close', 'saved'],
   setup(p, { emit }) {
     const isEdit = !!p.server?.id
-    
-    // Convert map to array for easier form management
     const envList = ref([])
     if (p.server?.env_vars) {
       envList.value = Object.entries(p.server.env_vars).map(([key, val]) => ({ key, val }))
@@ -217,17 +305,16 @@ export const MCPServerModal = defineComponent({
       transport:   p.server?.transport   ?? 'stdio',
       url:         p.server?.url         ?? '',
       command:     p.server?.command     ?? '',
-      args:        p.server?.args?.join(' ') ?? '',
+      args:        Array.isArray(p.server?.args) ? p.server.args.join(' ') : (p.server?.args ?? ''),
       description: p.server?.description ?? '',
+      doc_url:     p.server?.doc_url     ?? '',
     })
 
+    const discoveredTools = ref([])
     const saving      = ref(false)
+    const savedSuccess = ref(false)
     const discovering = ref(false)
-    const deleting    = ref(false)
     const error       = ref('')
-
-    function addEnv() { envList.value.push({ key: '', val: '' }) }
-    function removeEnv(idx) { envList.value.splice(idx, 1) }
 
     function getEnvMap() {
       const m = {}
@@ -236,13 +323,6 @@ export const MCPServerModal = defineComponent({
     }
 
     async function discover() {
-      if (form.value.transport === 'sse' && !form.value.url) { 
-        error.value = 'Enter a URL first'; return 
-      }
-      if (form.value.transport === 'stdio' && !form.value.command) {
-        error.value = 'Enter an executable first'; return
-      }
-      
       discovering.value = true; error.value = ''
       try {
         const payload = {
@@ -252,10 +332,11 @@ export const MCPServerModal = defineComponent({
         }
         const { data } = await api.post('/mcp-servers/discover', payload)
         if (data.error) error.value = data.error
-        else form.value.description = data.description
-      } catch (e) {
-        error.value = e.response?.data?.error ?? e.message
-      } finally {
+        else {
+          form.value.description = data.description
+          discoveredTools.value = data.raw_tools || []
+        }
+      } catch (e) { error.value = e.response?.data?.error ?? e.message } finally {
         discovering.value = false
       }
     }
@@ -272,157 +353,109 @@ export const MCPServerModal = defineComponent({
         let res
         if (isEdit) res = await api.put('/mcp-servers/' + p.server.id, payload)
         else res = await api.post('/mcp-servers', payload)
+        
+        savedSuccess.value = true
+        setTimeout(() => { savedSuccess.value = false }, 3000)
+        
         emit('saved', res.data)
-      } catch (e) {
-        error.value = e.response?.data?.error ?? e.message
-      } finally {
+      } catch (e) { error.value = e.response?.data?.error ?? e.message } finally {
         saving.value = false
       }
     }
 
-    async function doDelete() {
-      if (!confirm('Permanently remove this server?')) return
-      deleting.value = true
-      try {
-        await api.delete('/mcp-servers/' + p.server.id)
-        location.reload() // Simple way to refresh the list since we don't have a shared store here
-      } catch (e) {
-        error.value = e.response?.data?.error ?? e.message
-      } finally {
-        deleting.value = false
-      }
-    }
-
-    const inputClass = 'input text-sm font-mono'
-
-    return () => h('div', {
-      class: 'fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[100] p-4',
-    }, [
+    return () => h('div', { class: 'fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] p-4' }, [
       h('div', { class: 'card w-full max-w-xl p-8 space-y-6 shadow-2xl border-border max-h-[90vh] overflow-y-auto' }, [
         h('div', { class: 'flex justify-between items-center' }, [
-          h('h3', { class: 'text-lg font-bold text-text uppercase tracking-tight' }, isEdit ? 'Configure MCP Server' : 'Register New MCP Server'),
+          h('h3', { class: 'text-lg font-bold text-text uppercase tracking-tight' }, isEdit ? 'Configure Server' : 'Install Server'),
           h('button', { class: 'text-text-muted hover:text-text', onClick: () => emit('close') }, '\u2715')
         ]),
 
-        // Basic Info
         h('div', { class: 'grid grid-cols-2 gap-4' }, [
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Logical Name'),
-            h('input', {
-              class: inputClass,
-              value: form.value.name,
-              placeholder: 'e.g. slack-main',
-              autocomplete: 'off',
-              onInput: e => form.value.name = e.target.value,
-            }),
+            h('label', { class: 'text-[10px] uppercase font-bold text-text-muted tracking-widest' }, 'Name'),
+            h('input', { class: 'input font-mono text-sm', value: form.value.name, onInput: e => form.value.name = e.target.value }),
           ]),
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Transport'),
-            h('div', { class: 'flex p-1 bg-surface-2 rounded-lg border border-border' }, [
-              ['stdio', 'Local'], ['sse', 'Remote']
-            ].map(([val, label]) => h('button', {
-              class: 'flex-1 py-1.5 text-[11px] font-bold uppercase rounded transition-all ' + 
-                     (form.value.transport === val ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text'),
-              onClick: () => form.value.transport = val,
-            }, label))),
+            h('label', { class: 'text-[10px] uppercase font-bold text-text-muted tracking-widest' }, 'Transport'),
+            h('select', { 
+              class: 'input text-sm', 
+              value: form.value.transport, 
+              onChange: e => form.value.transport = e.target.value 
+            }, [
+              h('option', { value: 'stdio' }, 'Local (stdio)'),
+              h('option', { value: 'sse' }, 'Remote (SSE)')
+            ]),
           ]),
         ]),
 
-        // Transport Specifics
         form.value.transport === 'stdio' ? [
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Executable / Command'),
-            h('input', {
-              class: inputClass,
-              value: form.value.command,
-              placeholder: 'npx',
-              autocomplete: 'off',
-              onInput: e => form.value.command = e.target.value,
-            }),
+            h('label', { class: 'text-[10px] uppercase font-bold text-text-muted tracking-widest' }, 'Executable'),
+            h('input', { class: 'input font-mono text-sm', value: form.value.command, onInput: e => form.value.command = e.target.value }),
           ]),
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Arguments'),
-            h('input', {
-              class: inputClass,
-              value: form.value.args,
-              placeholder: '-y @modelcontextprotocol/server-slack',
-              autocomplete: 'off',
-              onInput: e => form.value.args = e.target.value,
-            }),
+            h('label', { class: 'text-[10px] uppercase font-bold text-text-muted tracking-widest' }, 'Arguments'),
+            h('input', { class: 'input font-mono text-sm', value: form.value.args, onInput: e => form.value.args = e.target.value }),
           ]),
         ] : [
           h('div', { class: 'space-y-1.5' }, [
-            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'SSE Endpoint URL'),
-            h('input', {
-              class: inputClass,
-              value: form.value.url,
-              placeholder: 'https://mcp.example.com/sse',
-              autocomplete: 'off',
-              onInput: e => form.value.url = e.target.value,
-            }),
+            h('label', { class: 'text-[10px] uppercase font-bold text-text-muted tracking-widest' }, 'Endpoint URL'),
+            h('input', { class: 'input font-mono text-sm', value: form.value.url, onInput: e => form.value.url = e.target.value }),
           ]),
         ],
 
-        // Environment Variables
         h('div', { class: 'space-y-3' }, [
           h('div', { class: 'flex justify-between items-center' }, [
-            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Environment Variables / Secrets'),
-            h('button', { 
-              class: 'text-[11px] font-bold text-indigo-500 hover:text-indigo-600',
-              onClick: addEnv
-            }, '+ Add Variable')
+            h('label', { class: 'text-[10px] uppercase font-bold text-text-muted tracking-widest' }, 'Environment Variables'),
+            h('button', { class: 'text-[10px] font-bold text-indigo-500', onClick: () => envList.value.push({key:'',val:''}) }, '+ Add')
           ]),
-          h('div', { class: 'space-y-2' }, envList.value.map((e, idx) => h('div', { class: 'flex gap-2' }, [
-            h('input', {
-              class: 'input text-xs font-mono flex-1',
-              value: e.key,
-              placeholder: 'KEY',
-              onInput: v => e.key = v.target.value,
-            }),
-            h('input', {
-              class: 'input text-xs font-mono flex-1',
-              type: 'password',
-              value: e.val,
-              placeholder: 'VALUE',
-              autocomplete: 'new-password',
-              onInput: v => e.val = v.target.value,
-            }),
-            h('button', { 
-              class: 'p-2 text-text-muted hover:text-red-500',
-              onClick: () => removeEnv(idx)
-            }, '\u2715')
-          ])))
+          envList.value.map((e, idx) => h('div', { class: 'flex gap-2' }, [
+            h('input', { class: 'input text-xs font-mono flex-1', value: e.key, placeholder: 'KEY', onInput: v => e.key = v.target.value }),
+            h('input', { class: 'input text-xs font-mono flex-1', type: 'password', value: e.val, placeholder: 'VALUE', onInput: v => e.val = v.target.value }),
+            h('button', { class: 'p-2 text-text-muted hover:text-red-500', onClick: () => envList.value.splice(idx, 1) }, '\u2715')
+          ]))
         ]),
 
-        // Capabilities / Discovery
-        h('div', { class: 'space-y-1.5' }, [
-          h('div', { class: 'flex justify-between items-end' }, [
-            h('label', { class: 'text-[11px] uppercase font-bold text-text-muted tracking-widest' }, 'Discovered Capabilities'),
-            h('button', {
-              class: 'btn-ghost text-[11px] px-3 h-7 gap-1.5 ' + (discovering.value ? 'animate-pulse' : ''),
-              onClick: discover,
-              disabled: saving.value || discovering.value,
-            }, discovering.value ? 'Syncing...' : 'Discover Tools'),
+        error.value && h('div', { class: 'p-3 rounded bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-mono' }, error.value),
+
+        discoveredTools.value.length > 0 && h('div', { class: 'space-y-2' }, [
+          h('label', { class: 'text-[10px] uppercase font-bold text-text-muted tracking-widest' }, 'Discovered Tools'),
+          h('div', { class: 'grid grid-cols-2 gap-2 max-h-[150px] overflow-y-auto p-1' }, 
+            discoveredTools.value.map(t => h('div', { class: 'p-2 rounded bg-surface-2 border border-border flex flex-col gap-1' }, [
+              h('span', { class: 'text-[10px] font-bold text-text truncate' }, t.name),
+              h('span', { class: 'text-[8px] text-text-muted line-clamp-1' }, t.description)
+            ]))
+          )
+        ]),
+
+        h('div', { class: 'flex gap-3 pt-4 items-center' }, [
+          h('button', { class: 'btn-ghost text-xs px-4 border border-border', onClick: discover, disabled: discovering.value }, discovering.value ? 'Discovering...' : 'Discover Tools'),
+          h('div', { class: 'flex-1' }, [
+            savedSuccess.value && h('span', { class: 'text-[10px] font-bold text-green-500 animate-pulse' }, '✓ Saved Successfully')
           ]),
-          h('div', {
-            class: 'p-4 rounded-lg bg-surface-2 border border-border text-xs text-text-muted leading-relaxed font-mono min-h-[60px] max-h-48 overflow-y-auto whitespace-pre-wrap'
-          }, form.value.description ? form.value.description.replace(/; /g, '\n') : 'No tools discovered yet.')
-        ]),
-
-        error.value && h('div', { class: 'p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs' }, error.value),
-
-        h('div', { class: 'flex gap-3 pt-4' }, [
-          isEdit && h('button', { class: 'btn-danger px-4', onClick: doDelete, disabled: deleting.value }, deleting.value ? '...' : 'Delete'),
-          h('div', { class: 'flex-1' }),
-          h('button', { class: 'btn-ghost px-6', onClick: () => emit('close') }, 'Cancel'),
-          h('button', { 
-            class: 'btn-primary px-8 font-bold uppercase tracking-widest text-[11px]', 
-            onClick: save, 
-            disabled: saving.value || discovering.value 
-          }, saving.value ? 'Saving...' : 'Save Configuration'),
-        ]),
-      ]),
+          h('button', { class: 'btn-primary px-8 font-bold text-[10px] uppercase tracking-widest', onClick: save, disabled: saving.value }, saving.value ? 'Saving...' : 'Save Configuration'),
+        ])
+      ])
     ])
-  },
+  }
 })
 </script>
+
+<style scoped>
+.font-display { font-family: 'Outfit', sans-serif; }
+.card {
+  @apply bg-surface-1 border border-border rounded-2xl overflow-hidden;
+}
+.btn-primary {
+  @apply bg-indigo-600 hover:bg-indigo-700 text-white border-none transition-all;
+}
+.btn-ghost {
+  @apply transition-colors;
+}
+.btn-ghost:hover {
+  background-color: var(--color-surface-2);
+}
+.input {
+  @apply w-full bg-surface-2 border border-border rounded-xl px-4 py-2 text-text focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none;
+}
+</style>

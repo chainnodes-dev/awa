@@ -8,6 +8,7 @@ import (
 type Config struct {
 	// Server
 	Port        string
+	Environment string   // "development" | "production"
 	CORSOrigins []string
 
 	// Database
@@ -53,6 +54,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		Port:              getEnv("PORT", "8080"),
+		Environment:       getEnv("ENVIRONMENT", "development"),
 		CORSOrigins:       strings.Split(getEnv("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174"), ","),
 		DatabaseURL:       getEnv("DATABASE_URL", "postgres://phaxa:phaxa_secret@localhost:5433/phaxa?sslmode=disable"),
 		RedisURL:          getEnv("REDIS_URL", "redis://localhost:6379"),

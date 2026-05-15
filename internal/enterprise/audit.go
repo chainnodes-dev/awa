@@ -18,6 +18,7 @@ const (
 	ActionBrandingUpdated = "branding.updated"
 	ActionSecretsUpdated  = "secrets.updated"
 	ActionAnalyticsViewed = "analytics.viewed"
+	ActionSettingsUpdated  = "settings.updated"
 )
 
 // RecordAction is a helper to record a tenant-scoped audit log.

@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap');
+
 @layer base {
   * { box-sizing: border-box; }
 
@@ -70,12 +72,12 @@
   }
   
   .btn-ghost {
-    @apply btn;
+    @apply btn transition-colors;
     color: var(--color-text-muted);
   }
   .btn-ghost:hover {
     color: var(--color-text);
-    background-color: color-mix(in srgb, var(--color-text), transparent 95%);
+    background-color: var(--color-surface-2);
   }
   
   .btn-danger {

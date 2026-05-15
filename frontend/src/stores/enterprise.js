@@ -26,11 +26,13 @@ export const useEnterpriseStore = defineStore('enterprise', () => {
       if (data.logo_url) {
         branding.value = data
       } else {
-        // Update name but keep default logo
         branding.value = { ...branding.value, name: data.name || 'Phaxa' }
       }
     } catch (e) {
-      console.error('Failed to fetch branding', e)
+      // Silence 403 (Forbidden) errors as they are expected for Free tier
+      if (e.response?.status !== 403) {
+        console.error('Failed to fetch branding', e)
+      }
     }
   }
 
@@ -40,8 +42,14 @@ export const useEnterpriseStore = defineStore('enterprise', () => {
   }
 
   async function fetchSecrets() {
-    const { data } = await api.get('/enterprise/secrets')
-    secrets.value = data
+    try {
+      const { data } = await api.get('/enterprise/secrets')
+      secrets.value = data
+    } catch (e) {
+      if (e.response?.status !== 403) {
+        console.error('Failed to fetch secrets', e)
+      }
+    }
   }
 
   async function updateSecrets(payload) {
@@ -50,13 +58,25 @@ export const useEnterpriseStore = defineStore('enterprise', () => {
   }
 
   async function fetchAuditLogs() {
-    const { data } = await api.get('/enterprise/audit-logs')
-    auditLogs.value = data
+    try {
+      const { data } = await api.get('/enterprise/audit-logs')
+      auditLogs.value = data
+    } catch (e) {
+      if (e.response?.status !== 403) {
+        console.error('Failed to fetch audit logs', e)
+      }
+    }
   }
 
   async function fetchAnalytics() {
-    const { data } = await api.get('/enterprise/analytics')
-    analytics.value = data
+    try {
+      const { data } = await api.get('/enterprise/analytics')
+      analytics.value = data
+    } catch (e) {
+      if (e.response?.status !== 403) {
+        console.error('Failed to fetch analytics', e)
+      }
+    }
   }
 
   async function setLicense(token) {

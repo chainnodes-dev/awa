@@ -1,62 +1,31 @@
 package api
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
-	"os"
-	"strings"
-	"time"
 
+	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/gin-gonic/gin"
 )
 
-var (
-	httpClient = &http.Client{Timeout: 10 * time.Second}
-)
-
+// GetMCPMarket returns a curated list of MCP servers from a marketplace source.
+// This source can be a remote URL (curated by Phaxa or an enterprise) or a local file.
+// GET /api/v1/mcp-market
 func (h *Handlers) GetMCPMarket(c *gin.Context) {
+	ctx := c.Request.Context()
 	source := h.cfg.MCPMarketSource
 
-	var data []byte
-	var err error
-
-	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
-		// Fetch from remote URL
-		resp, fetchErr := httpClient.Get(source)
-		if fetchErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch marketplace data from remote source: " + fetchErr.Error()})
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Marketplace remote source returned status " + resp.Status})
-			return
-		}
-
-		data, err = io.ReadAll(resp.Body)
-	} else {
-		// Read from local file
-		data, err = os.ReadFile(source)
+	// Check if there is a dynamic override in the database
+	if dbSource, err := h.store.GetSystemSetting(ctx, "mcp_market_source"); err == nil && dbSource != "" {
+		source = dbSource
 	}
 
+	// FetchMarketplace handles both remote URLs and local file fallbacks
+	entries, err := mcp.FetchMarketplace(ctx, source)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// Return empty list if file doesn't exist yet
-			c.JSON(http.StatusOK, []interface{}{})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read marketplace data: " + err.Error()})
-		return
+		// If the specific source fails, fall back to built-in curated list
+		// rather than returning a 500 error, to ensure UI always works.
+		entries = mcp.GetDefaultMarketplace()
 	}
 
-	// Parse JSON to ensure it's valid before sending (optional but good for validation)
-	var marketData interface{}
-	if err := json.Unmarshal(data, &marketData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid JSON in marketplace source: " + err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, marketData)
+	c.JSON(http.StatusOK, entries)
 }

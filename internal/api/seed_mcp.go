@@ -212,7 +212,8 @@ func SeedMCPServers(s store.Store, tenantID string, registryEntries []designer.M
 			if len(e.Args) > 0 {
 				srv.Args = e.Args
 			} else if srv.Command == "npx" {
-				srv.Args = []string{"-y", e.Name}
+				// Default to official MCP server namespace if just a name is provided
+				srv.Args = []string{"-y", "@modelcontextprotocol/server-" + e.Name}
 			}
 		} else {
 			if e.URL != "" {

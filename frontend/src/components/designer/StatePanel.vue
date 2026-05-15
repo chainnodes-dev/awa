@@ -20,7 +20,7 @@
         <option value="script">script</option>
         <option value="code">code</option>
         <optgroup label="──────────────"></optgroup>
-        <option value="subprocess">subprocess (Pro 🔒)</option>
+        <option value="subprocess" :disabled="!entStore.hasFeature('subprocesses')">subprocess (Pro)</option>
         <optgroup label="──────────────"></optgroup>
         <option value="hitl">hitl</option>
         <option value="wait">wait</option>
@@ -201,11 +201,14 @@
           <div class="flex items-start gap-3">
             <div class="p-2 rounded-lg bg-amber-500/20 text-amber-500 shrink-0">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
               </svg>
             </div>
             <div class="space-y-1">
-              <h5 class="text-xs font-bold text-amber-500 uppercase tracking-tight">Enterprise Feature</h5>
+              <div class="flex items-center gap-2">
+                <h5 class="text-xs font-bold text-amber-500 uppercase tracking-tight">Feature Locked</h5>
+                <span class="badge bg-amber-500/10 text-amber-500 text-[9px] font-bold tracking-widest uppercase">Pro Feature</span>
+              </div>
               <p class="text-[10px] text-amber-500/80 leading-relaxed font-medium">
                 Modular workflows (sub-processes) require a **Pro** or **Enterprise** license. 
                 Free tier is limited to single-workflow execution.
@@ -217,8 +220,11 @@
           </div>
         </div>
 
-        <div :class="{ 'opacity-50 grayscale pointer-events-none': !entStore.hasFeature('subprocesses') }">
-          <h4 class="text-xs font-semibold text-violet-400/80 uppercase tracking-wider">Sub-Process Call</h4>
+        <div :class="{ 'opacity-40 grayscale pointer-events-none select-none': !entStore.hasFeature('subprocesses') }">
+          <div class="flex items-center justify-between mb-1">
+            <h4 class="text-xs font-semibold text-violet-400/80 uppercase tracking-wider">Sub-Process Call</h4>
+            <span v-if="!entStore.hasFeature('subprocesses')" class="badge bg-amber-500/10 text-amber-500 text-[9px] font-bold tracking-widest uppercase">Pro</span>
+          </div>
           <p class="text-[10px] text-text-muted leading-relaxed">
             Invoke another workflow as a child process. The child runs to completion
             before this state transitions.
@@ -474,6 +480,7 @@
 <script setup>
 import { reactive, ref, computed, watch } from 'vue'
 import { api } from '@/stores/auth'
+import { useEnterpriseStore } from '@/stores/enterprise'
 import AgentCombobox from './AgentCombobox.vue'
 import CodeEditor from './CodeEditor.vue'
 import CodeEditorModal from './CodeEditorModal.vue'
@@ -504,6 +511,7 @@ const props = defineProps({
   agents:   { type: Array,  default: () => [] },
 })
 const emit = defineEmits(['update', 'delete'])
+const entStore = useEnterpriseStore()
 
 // Helper to convert subprocess mappings object { portName: bbField } → array of { name, bbField }
 function mappingsToArray(obj) {

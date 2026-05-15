@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -77,7 +78,8 @@ func (m *Manager) findServer(ctx context.Context, name string) (*store.MCPServer
 
 func (m *Manager) startStdioClient(srv *store.MCPServer) (*stdioProcess, io.Closer, error) {
 	cmd := exec.Command(srv.Command, srv.Args...)
-	cmd.Stderr = os.Stderr
+	stderr := &bytes.Buffer{}
+	cmd.Stderr = stderr
 
 	// Inject environment variables
 	if len(srv.EnvVars) > 0 {
@@ -112,6 +114,7 @@ func (m *Manager) startStdioClient(srv *store.MCPServer) (*stdioProcess, io.Clos
 		stdout:  stdout,
 		encoder: json.NewEncoder(stdin),
 		decoder: json.NewDecoder(stdout),
+		stderr:  stderr,
 	}
 	return p, p, nil
 }
@@ -119,7 +122,8 @@ func (m *Manager) startStdioClient(srv *store.MCPServer) (*stdioProcess, io.Clos
 // TestStdioClientMap starts a temporary process for discovery/testing with multiple env vars.
 func (m *Manager) TestStdioClientMap(command string, args []string, envVars map[string]string) (Client, io.Closer, error) {
 	cmd := exec.Command(command, args...)
-	cmd.Stderr = os.Stderr
+	stderr := &bytes.Buffer{}
+	cmd.Stderr = stderr
 
 	if len(envVars) > 0 {
 		env := os.Environ()
@@ -144,7 +148,7 @@ func (m *Manager) TestStdioClientMap(command string, args []string, envVars map[
 	}
 
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("failed to start mcp server: %w", err)
+		return nil, nil, fmt.Errorf("failed to start mcp server: %w (stderr: %s)", err, stderr.String())
 	}
 
 	p := &stdioProcess{
@@ -153,6 +157,7 @@ func (m *Manager) TestStdioClientMap(command string, args []string, envVars map[
 		stdout:  stdout,
 		encoder: json.NewEncoder(stdin),
 		decoder: json.NewDecoder(stdout),
+		stderr:  stderr,
 	}
 	return p, p, nil
 }
@@ -163,6 +168,7 @@ type stdioProcess struct {
 	stdout  io.ReadCloser
 	encoder *json.Encoder
 	decoder *json.Decoder
+	stderr  *bytes.Buffer
 	idCount int
 	mu      sync.Mutex
 }
@@ -218,6 +224,13 @@ func (p *stdioProcess) Call(ctx context.Context, method string, params interface
 	}
 
 	if err := p.decoder.Decode(&resp); err != nil {
+		if err == io.EOF {
+			// Check if process exited with an error
+			if exitErr := p.cmd.Wait(); exitErr != nil {
+				return nil, fmt.Errorf("mcp server exited: %v (stderr: %s)", exitErr, p.stderr.String())
+			}
+			return nil, fmt.Errorf("mcp server closed connection (EOF). stderr: %s", p.stderr.String())
+		}
 		return nil, err
 	}
 

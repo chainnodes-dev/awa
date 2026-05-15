@@ -76,9 +76,13 @@ mcp_servers:
     description: "Financial instrument lookups. Tools: figi_lookup(ticker)."
 
   - name: yahoo-finance
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-yfinance"]
     description: "Real-time market data, stock prices, and analyst ratings. Tools: get_stock_price(ticker), get_analyst_ratings(ticker)."
 
   - name: sec-edgar
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-sec-edgar"]
     description: "Official SEC filings database. Tools: search_filings(ticker, form_type), get_latest_10k(ticker)."
 
   # ── Environment & Energy ──────────────────────────────────────────

@@ -85,22 +85,35 @@ const router = createRouter({
   routes
 })
 
-// Navigation guard: redirect unauthenticated users to /login.
+// Navigation guard: redirect unauthenticated users to /login or /setup.
 router.beforeEach(async (to) => {
-  if (to.meta.public) return true
-
   const authStore = useAuthStore()
 
-  // First navigation: try to restore session from stored tokens.
+  // 1. If not authenticated, check if the system needs initial setup.
+  // We skip this check ONLY if we are already going to /setup.
+  if (!authStore.isAuthenticated && to.name !== 'Setup') {
+    try {
+      const { initialized } = await authStore.checkStatus()
+      if (!initialized) return { name: 'Setup' }
+    } catch (e) {
+      console.error('Platform status check failed', e)
+    }
+  }
+
+  // 2. Allow public pages (Login, Setup) once system is initialized.
+  if (to.meta.public) return true
+
+  // 3. Restore session from stored tokens.
   if (!authStore.isAuthenticated) {
     await authStore.init()
   }
 
+  // 4. Force Login if still unauthenticated.
   if (!authStore.isAuthenticated) {
     return { name: 'Login', query: { redirect: to.fullPath } }
   }
 
-  // Role-based guarding.
+  // 5. Role-based guarding.
   if (to.meta.role && !authStore.hasRole(to.meta.role)) {
     return { name: 'Dashboard' }
   }
