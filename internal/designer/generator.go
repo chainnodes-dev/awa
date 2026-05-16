@@ -195,11 +195,13 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 
 	interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
 
-	// Extract and validate.
+	if isRefinement {
+		return g.handleRefinementResponse(req, resp.Content, interaction)
+	}
+
+	// Legacy/Initial extraction for new workflows
 	yamlStr, def, err := g.extractAndValidate(resp.Content)
 	if err != nil {
-		// No automatic retry. We return the result even on error so the user
-		// can see the faulty YAML and interactions in the trace tab.
 		return &GenerateResult{
 			YAML:         yamlStr,
 			Definition:   def,
@@ -208,7 +210,6 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 	}
 
 	// Ensure process description is persisted.
-	// If the LLM didn't fill it in, use the user's latest request.
 	if def != nil && def.Metadata.ProcessDescription == "" {
 		def.Metadata.ProcessDescription = req.Description
 	}
@@ -217,6 +218,111 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 		YAML:         yamlStr,
 		Definition:   def,
 		Interactions: interaction,
+	}, nil
+}
+
+func (g *Generator) handleRefinementResponse(req GenerateRequest, content string, interactions []llm.Message) (*GenerateResult, error) {
+	var result struct {
+		Explanation string `json:"explanation"`
+		StateUpdates []struct {
+			Name                  string            `json:"name"`
+			Type                  string            `json:"type"`
+			Instructions          string            `json:"instructions"`
+			TechnicalRequirements string            `json:"technical_requirements"`
+			Code                  string            `json:"code"`
+			Script                struct {
+				Trigger string            `json:"trigger"`
+				Updates map[string]string `json:"updates"`
+			} `json:"script"`
+			Agent      string   `json:"agent"`
+			MCPServers []string `json:"mcp_servers"`
+		} `json:"state_updates"`
+		NewStates []struct {
+			Name                  string `json:"name"`
+			Type                  string `json:"type"`
+			Instructions          string `json:"instructions"`
+			TechnicalRequirements string `json:"technical_requirements"`
+		} `json:"new_states"`
+		DeletedStates     []string `json:"deleted_states"`
+		TransitionUpdates []struct {
+			From    string `json:"from"`
+			To      string `json:"to"`
+			Trigger string `json:"trigger"`
+			Guard   string `json:"guard"`
+		} `json:"transition_updates"`
+		WorkflowCapabilities    []string                    `json:"workflow_capabilities"`
+		BlackboardSchemaUpdates map[string]asmtypes.FieldDef `json:"blackboard_schema_updates"`
+	}
+
+	jsonStr, err := extractJSONBlock(content)
+	if err != nil {
+		return &GenerateResult{Interactions: interactions}, fmt.Errorf("failed to extract JSON from AI response: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return &GenerateResult{Interactions: interactions}, fmt.Errorf("failed to parse AI refinement response: %w", err)
+	}
+
+	// Apply patches via WorkflowEditor
+	def, _, err := asmtypes.LoadFromYAML([]byte(req.ExistingYAML))
+	if err != nil {
+		return &GenerateResult{Interactions: interactions}, fmt.Errorf("failed to load current workflow for refinement: %w", err)
+	}
+	editor := NewWorkflowEditor(def)
+
+	// 1. Deleted States
+	for _, name := range result.DeletedStates {
+		editor.DeleteState(name)
+	}
+
+	// 2. New States
+	for _, s := range result.NewStates {
+		editor.AddState(s.Name, asmtypes.StateType(s.Type), s.Instructions, s.TechnicalRequirements)
+	}
+
+	// 3. State Updates
+	for _, s := range result.StateUpdates {
+		editor.UpdateState(s.Name, asmtypes.StateType(s.Type), s.Instructions, s.TechnicalRequirements)
+		if s.Type == string(asmtypes.StateCode) && s.Code != "" {
+			editor.SetStateCode(s.Name, s.Code)
+		}
+		if s.Type == string(asmtypes.StateScript) && s.Script.Trigger != "" {
+			editor.SetStateScript(s.Name, s.Script.Trigger, s.Script.Updates)
+		}
+		if s.Agent != "" {
+			editor.SetStateAgent(s.Name, s.Agent, s.MCPServers)
+		}
+	}
+
+	// 4. Transitions
+	for _, t := range result.TransitionUpdates {
+		editor.AddTransition(t.From, t.To, t.Trigger, t.Guard)
+	}
+
+	// 5. Workflow Capabilities
+	if len(result.WorkflowCapabilities) > 0 {
+		editor.SetCapabilities(result.WorkflowCapabilities)
+	}
+
+	// 6. Blackboard Schema
+	if len(result.BlackboardSchemaUpdates) > 0 {
+		if def.Blackboard.Schema == nil {
+			def.Blackboard.Schema = make(map[string]asmtypes.FieldDef)
+		}
+		for k, v := range result.BlackboardSchemaUpdates {
+			def.Blackboard.Schema[k] = v
+		}
+	}
+
+	newYAML, err := yaml.Marshal(def)
+	if err != nil {
+		return &GenerateResult{Interactions: interactions}, fmt.Errorf("failed to marshal refined workflow: %w", err)
+	}
+
+	return &GenerateResult{
+		YAML:         string(newYAML),
+		Definition:   def,
+		Interactions: interactions,
 	}, nil
 }
 
@@ -262,34 +368,95 @@ func (g *Generator) DebugWorkflow(ctx context.Context, req DebugWorkflowRequest)
 		return nil, fmt.Errorf("LLM debug call failed: %w", err)
 	}
 
-	// The debugger prompt asks for JSON.
+	// The debugger prompt asks for structured JSON fixes.
 	var result struct {
-		YAML        string `json:"yaml"`
 		Explanation string `json:"explanation"`
+		StateUpdates []struct {
+			Name                  string            `json:"name"`
+			Type                  string            `json:"type"`
+			Instructions          string            `json:"instructions"`
+			TechnicalRequirements string            `json:"technical_requirements"`
+			Code                  string            `json:"code"`
+			Script                struct {
+				Trigger string            `json:"trigger"`
+				Updates map[string]string `json:"updates"`
+			} `json:"script"`
+		} `json:"state_updates"`
+		NewStates []struct {
+			Name                  string `json:"name"`
+			Type                  string `json:"type"`
+			Instructions          string `json:"instructions"`
+			TechnicalRequirements string `json:"technical_requirements"`
+		} `json:"new_states"`
+		TransitionUpdates []struct {
+			From    string `json:"from"`
+			To      string `json:"to"`
+			Trigger string `json:"trigger"`
+			Guard   string `json:"guard"`
+		} `json:"transition_updates"`
+		BlackboardSchemaUpdates map[string]asmtypes.FieldDef `json:"blackboard_schema_updates"`
 	}
-	
-	// Try to extract JSON from the response if it's wrapped in markdown.
-	jsonStr := resp.Content
-	if start := strings.Index(jsonStr, "{"); start != -1 {
-		if end := strings.LastIndex(jsonStr, "}"); end != -1 {
-			jsonStr = jsonStr[start : end+1]
-		}
+
+	jsonStr, err := extractJSONBlock(resp.Content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract JSON from AI debug response: %w", err)
 	}
 
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		// Fallback: if it's not valid JSON, maybe it returned raw YAML?
-		// But our prompt specifically asks for JSON.
-		return nil, fmt.Errorf("failed to parse AI debug response as JSON: %w\nResponse: %s", err, resp.Content)
+		return nil, fmt.Errorf("failed to parse AI debug response: %w\nResponse: %s", err, resp.Content)
+	}
+
+	// Apply fixes via WorkflowEditor
+	def, _, err := asmtypes.LoadFromYAML([]byte(req.WorkflowYAML))
+	if err != nil {
+		// Fallback if current YAML is broken, but it shouldn't be if it was running.
+		def = &asmtypes.WorkflowDef{}
+	}
+	editor := NewWorkflowEditor(def)
+
+	// 1. New States
+	for _, s := range result.NewStates {
+		editor.AddState(s.Name, asmtypes.StateType(s.Type), s.Instructions, s.TechnicalRequirements)
+	}
+
+	// 2. State Updates
+	for _, s := range result.StateUpdates {
+		editor.UpdateState(s.Name, asmtypes.StateType(s.Type), s.Instructions, s.TechnicalRequirements)
+		if s.Type == string(asmtypes.StateCode) && s.Code != "" {
+			editor.SetStateCode(s.Name, s.Code)
+		}
+		if s.Type == string(asmtypes.StateScript) && s.Script.Trigger != "" {
+			editor.SetStateScript(s.Name, s.Script.Trigger, s.Script.Updates)
+		}
+	}
+
+	// 3. Transitions
+	for _, t := range result.TransitionUpdates {
+		editor.AddTransition(t.From, t.To, t.Trigger, t.Guard)
+	}
+
+	// 4. Blackboard Schema
+	if len(result.BlackboardSchemaUpdates) > 0 {
+		if def.Blackboard.Schema == nil {
+			def.Blackboard.Schema = make(map[string]asmtypes.FieldDef)
+		}
+		for k, v := range result.BlackboardSchemaUpdates {
+			def.Blackboard.Schema[k] = v
+		}
+	}
+
+	newYAML, err := yaml.Marshal(def)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal fixed workflow: %w", err)
 	}
 
 	interactions := []llm.Message{
-		{Role: "system", Content: system},
 		{Role: "user", Content: userMsg},
 		{Role: "assistant", Content: resp.Content},
 	}
 
 	return &DebugWorkflowResult{
-		YAML:         result.YAML,
+		YAML:         string(newYAML),
 		Explanation:  result.Explanation,
 		Interactions: interactions,
 	}, nil

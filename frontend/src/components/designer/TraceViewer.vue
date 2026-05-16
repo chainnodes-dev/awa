@@ -23,7 +23,7 @@
         </div>
         
         <div class="bg-surface-0 border border-border rounded-lg overflow-hidden">
-          <pre class="p-3 text-[11px] font-mono leading-relaxed text-text overflow-x-auto whitespace-pre-wrap">{{ msg.content }}</pre>
+          <pre class="p-3 text-sm font-mono leading-relaxed text-text overflow-x-auto whitespace-pre-wrap">{{ msg.content }}</pre>
         </div>
       </div>
 

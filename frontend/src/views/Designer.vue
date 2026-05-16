@@ -221,7 +221,7 @@
                         </svg>
                       </button>
                     </div>
-                    <textarea v-model="meta.processDescription" class="input h-32 resize-none text-[11px]" placeholder="Detailed natural language description of the process..." @input="isDirty=true"/>
+                    <textarea v-model="meta.processDescription" class="input h-32 resize-none text-sm" placeholder="Detailed natural language description of the process..." @input="isDirty=true"/>
                   </div>
                   <div class="space-y-1">
                     <div class="flex items-center justify-between px-1">
@@ -262,7 +262,7 @@
               <!-- Workflow Prompt (relocated to bottom) -->
               <div class="space-y-1 pt-2 border-t border-border/50">
                 <label class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Workflow Prompt (Global Personality)</label>
-                <textarea v-model="meta.systemPrompt" class="input h-32 font-mono text-[11px] leading-relaxed resize-none" placeholder="You are a helpful assistant…" @input="isDirty=true"/>
+                <textarea v-model="meta.systemPrompt" class="input h-32 font-mono text-sm leading-relaxed resize-none" placeholder="You are a helpful assistant…" @input="isDirty=true"/>
               </div>
             </div>
 

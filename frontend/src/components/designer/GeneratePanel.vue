@@ -71,7 +71,7 @@
           <textarea
             :value="description"
             @input="onDescriptionInput"
-            class="input text-[11px] h-28 resize-none font-sans leading-relaxed"
+            class="input text-sm h-28 resize-none font-sans leading-relaxed"
             placeholder="Describe the end-to-end business process in detail..."
           />
         </div>
@@ -177,7 +177,7 @@
               </span>
               <div 
                 :class="[
-                  'max-w-[90%] px-3 py-2 rounded-xl text-[11px] leading-relaxed',
+                  'max-w-[90%] px-3 py-2 rounded-xl text-sm leading-relaxed',
                   item.role === 'user' 
                     ? 'bg-indigo-600 text-white rounded-tr-none' 
                     : 'bg-surface-2 text-text border border-border/50 rounded-tl-none'
@@ -202,7 +202,7 @@
                 :value="prompt"
                 @input="emit('update:prompt', $event.target.value)"
                 @keydown.enter.meta.prevent="applyRefinement"
-                class="w-full bg-surface-0 border border-border/40 rounded-lg px-3 py-2 text-[11px] h-16 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all pr-10"
+                class="w-full bg-surface-0 border border-border/40 rounded-lg px-3 py-2 text-sm h-16 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all pr-10"
                 placeholder="e.g. Add error handling..."
               />
               <button 

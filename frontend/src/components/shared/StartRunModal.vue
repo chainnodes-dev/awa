@@ -129,7 +129,37 @@ const hasSchema = computed(() => {
 })
 
 const jsonSchema = computed(() => {
-  return convertPhaxaSchemaToJsonSchema(props.definition?.blackboard?.schema, true)
+  const schema = props.definition?.blackboard?.schema || {}
+  const inputs = props.definition?.inputs || []
+  const outputs = props.definition?.outputs || []
+
+  const inputNames = new Set(inputs.map(i => i.name))
+  const outputNames = new Set(outputs.map(o => o.name))
+
+  // Build a sorted, filtered schema
+  const filtered = {}
+
+  // 1. Inputs first (respecting the order in definition.inputs)
+  for (const port of inputs) {
+    const field = schema[port.name] || { type: port.type }
+    filtered[port.name] = { 
+      ...field, 
+      required: true,
+      title: port.description || field.title || port.name
+    }
+  }
+
+  // 2. Add other fields that are NOT outputs and NOT already added
+  for (const [key, field] of Object.entries(schema)) {
+    if (inputNames.has(key)) continue
+    
+    // Skip if labeled as output (unless also explicitly an input, handled above)
+    if (outputNames.has(key) || field.is_output) continue
+    
+    filtered[key] = field
+  }
+
+  return convertPhaxaSchemaToJsonSchema(filtered, false)
 })
 
 function syncFromForm(data) {

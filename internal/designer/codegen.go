@@ -67,7 +67,11 @@ func (g *Generator) Codegen(ctx context.Context, req CodegenRequest) (*CodegenRe
 // the goja sandbox environment and expected output format.
 func buildCodegenSystemPrompt() string {
 	return `You are a JavaScript code generator for a state-machine automation engine.
-Your task is to write JavaScript code that runs inside a deterministic sandboxed Code node.
+Your task is to write JavaScript code that runs inside a deterministic sandboxed Code node based on plain-language instructions or technical requirements.
+
+## Source of Truth
+- **Technical Requirements**: If provided, these are your primary, machine-readable instructions.
+- **Instructions**: If technical requirements are missing or ambiguous, use the human-readable instructions as a fallback.
 
 ## Sandbox Environment
 

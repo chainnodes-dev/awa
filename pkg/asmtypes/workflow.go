@@ -77,10 +77,11 @@ const (
 )
 
 type StateDef struct {
-	Name         string     `yaml:"name"                   json:"name"`
-	Type         StateType  `yaml:"type"                   json:"type"`
-	Instructions string     `yaml:"instructions,omitempty" json:"instructions,omitempty"` // Plain-language context for the LLM agent
-	Agent        string     `yaml:"agent,omitempty"        json:"agent,omitempty"`
+	Name                  string     `yaml:"name"                   json:"name"`
+	Type                  StateType  `yaml:"type"                   json:"type"`
+	Instructions          string     `yaml:"instructions,omitempty" json:"instructions,omitempty"` // Plain-language context for the LLM agent
+	TechnicalRequirements string     `yaml:"technical_requirements,omitempty" json:"technical_requirements,omitempty"` // Machine-readable logic
+	Agent                 string     `yaml:"agent,omitempty"        json:"agent,omitempty"`
 	Script       *ScriptDef `yaml:"script,omitempty"       json:"script,omitempty"`        // Set when type == "script"
 	Timeout      string     `yaml:"timeout,omitempty"      json:"timeout,omitempty"`
 	OnTimeout    string     `yaml:"on_timeout,omitempty"   json:"on_timeout,omitempty"`

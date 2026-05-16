@@ -39,7 +39,7 @@
           </svg>
         </button>
       </div>
-      <textarea class="input text-xs leading-relaxed resize-none h-16" v-model="form.instructions" placeholder="Describe what should happen in this state…" />
+      <textarea class="input text-sm leading-relaxed resize-none h-16" v-model="form.instructions" placeholder="Describe what should happen in this state…" />
       <!-- Generate Code button — only shown for code nodes -->
       <div v-if="form.type === 'code'" class="pt-0.5">
         <button

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -14,26 +15,18 @@ import (
 
 // PipelineRequest is the shared input for every step of the multi-step generator.
 type PipelineRequest struct {
-	// ProcessDescription is the original plain-language business process description.
-	// Carried through every step so the LLM always has full context.
-	ProcessDescription string `json:"process_description"`
-	// CurrentYAML is the YAML produced by the previous step.
-	// Empty only for Step 1 (Decompose).
-	CurrentYAML string `json:"current_yaml,omitempty"`
-	// Provider optionally overrides the default LLM provider.
-	Provider string `json:"provider,omitempty"`
-	// MCPServers optionally restricts which MCP servers are injected into the prompt.
-	MCPServers []string `json:"mcp_servers,omitempty"`
+	ProcessDescription string   `json:"process_description"`
+	CurrentYAML        string   `json:"current_yaml,omitempty"`
+	Provider           string   `json:"provider,omitempty"`
+	MCPServers         []string `json:"mcp_servers,omitempty"`
 }
 
 // PipelineStepResult is the output of any pipeline step.
 type PipelineStepResult struct {
-	YAML         string                `json:"yaml"`
-	Definition   *asmtypes.WorkflowDef `json:"definition"`
-	Interactions []llm.Message         `json:"interactions"`
-	// ValidationError is populated when YAML parses but fails semantic validation.
-	// Steps 1–3 tolerate this because the workflow is not yet runnable by design.
-	ValidationError string `json:"validation_error,omitempty"`
+	YAML            string                `json:"yaml"`
+	Definition      *asmtypes.WorkflowDef `json:"definition"`
+	Interactions    []llm.Message         `json:"interactions"`
+	ValidationError string                `json:"validation_error,omitempty"`
 }
 
 // MarshalPipelineStepResult serialises a PipelineStepResult to the standard API shape.
@@ -55,14 +48,12 @@ func MarshalPipelineStepResult(r *PipelineStepResult) (map[string]interface{}, e
 	return out, nil
 }
 
-// codeJobResult holds the outcome of a parallel Codegen call.
 type codeJobResult struct {
 	stateName string
 	result    *CodegenResult
 	err       error
 }
 
-// scriptJobResult holds the outcome of a parallel Scaffold call.
 type scriptJobResult struct {
 	stateName string
 	result    *ScaffoldResult
@@ -71,75 +62,166 @@ type scriptJobResult struct {
 
 // ── Step 1: Decompose ────────────────────────────────────────────────────────
 
-// DecomposeWorkflow identifies the states/nodes of a process from a plain-language
-// description.  All states are typed as 'prompt' so the canvas can render
-// them immediately.  No transitions, code, or expressions are generated yet.
 func (g *Generator) DecomposeWorkflow(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
 	system := g.assemblePipelineSystemPrompt(ctx, PromptIDDecompose, DefaultDecomposePrompt(), req.MCPServers)
 	userMsg := fmt.Sprintf("Process description:\n\n%s", req.ProcessDescription)
-	return g.runPipelineStep(ctx, req, system, userMsg, true)
+
+	type step1Response struct {
+		Name                string `json:"name"`
+		Abstract            string `json:"abstract"`
+		DetailedDescription string `json:"detailed_description"`
+		States              []struct {
+			Name                  string `json:"name"`
+			Instructions          string `json:"instructions"`
+			TechnicalRequirements string `json:"technical_requirements"`
+			DataContract          struct {
+				Reads []struct {
+					Name            string `json:"name"`
+					Type            string `json:"type"`
+					Description     string `json:"description"`
+					IsWorkflowInput bool   `json:"is_workflow_input"`
+				} `json:"reads"`
+				Writes []struct {
+					Name             string `json:"name"`
+					Type             string `json:"type"`
+					Description      string `json:"description"`
+					IsWorkflowOutput bool   `json:"is_workflow_output"`
+				} `json:"writes"`
+			} `json:"data_contract"`
+		} `json:"states"`
+		Transitions []struct {
+			From    string `json:"from"`
+			To      string `json:"to"`
+			Trigger string `json:"trigger"`
+		} `json:"transitions"`
+	}
+
+	return g.runJSONPipelineStep(ctx, req, system, userMsg, func(e *WorkflowEditor, b []byte) error {
+		var resp step1Response
+		if err := json.Unmarshal(b, &resp); err != nil {
+			return err
+		}
+
+		e.SetMetadata(resp.Name, resp.Abstract, resp.DetailedDescription)
+
+		bbSchema := make(map[string]asmtypes.FieldDef)
+		inputsMap := make(map[string]asmtypes.PortDef)
+		outputsMap := make(map[string]asmtypes.PortDef)
+
+		for i, s := range resp.States {
+			stype := asmtypes.StatePrompt
+			if i == 0 {
+				stype = asmtypes.StateInitial
+			} else if i == len(resp.States)-1 && len(resp.States) > 1 {
+				stype = asmtypes.StateTerminal
+			}
+			e.AddState(s.Name, stype, s.Instructions, s.TechnicalRequirements)
+
+			// Process Data Contract
+			for _, r := range s.DataContract.Reads {
+				if _, exists := bbSchema[r.Name]; !exists {
+					bbSchema[r.Name] = asmtypes.FieldDef{Type: r.Type, Required: r.IsWorkflowInput}
+				}
+				if r.IsWorkflowInput {
+					inputsMap[r.Name] = asmtypes.PortDef{Name: r.Name, Type: r.Type, Description: r.Description, Required: true}
+				}
+			}
+			for _, w := range s.DataContract.Writes {
+				if _, exists := bbSchema[w.Name]; !exists {
+					bbSchema[w.Name] = asmtypes.FieldDef{Type: w.Type, IsOutput: w.IsWorkflowOutput}
+				}
+				if w.IsWorkflowOutput {
+					outputsMap[w.Name] = asmtypes.PortDef{Name: w.Name, Type: w.Type, Description: w.Description}
+				}
+			}
+		}
+
+		var inputs []asmtypes.PortDef
+		for _, p := range inputsMap {
+			inputs = append(inputs, p)
+		}
+		var outputs []asmtypes.PortDef
+		for _, p := range outputsMap {
+			outputs = append(outputs, p)
+		}
+
+		e.SetBlackboardSchema(bbSchema)
+		e.SetPorts(inputs, outputs)
+
+		for _, t := range resp.Transitions {
+			e.AddTransition(t.From, t.To, t.Trigger, "")
+		}
+		return nil
+	})
 }
 
 // ── Step 2: Categorise ───────────────────────────────────────────────────────
 
-// CategoriseNodes assigns the correct node type to every state produced by
-// DecomposeWorkflow.  Placeholder implementations are injected for code/script
-// nodes so the YAML remains loadable throughout the pipeline.
 func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
 	if req.CurrentYAML == "" {
 		return nil, fmt.Errorf("current_yaml is required for the categorise step")
 	}
 	system := g.assemblePipelineSystemPrompt(ctx, PromptIDCategorise, DefaultCategorisePrompt(), req.MCPServers)
-
 	userMsg := fmt.Sprintf(
-		"Process description:\n\n%s\n\nSkeleton workflow YAML (all nodes currently typed as 'prompt'):\n\n```yaml\n%s\n```",
+		"Process description:\n\n%s\n\nSkeleton workflow YAML:\n\n```yaml\n%s\n```",
 		req.ProcessDescription, req.CurrentYAML,
 	)
-	return g.runPipelineStep(ctx, req, system, userMsg, true)
-}
 
-// ── Step 3: Wire ─────────────────────────────────────────────────────────────
-
-// WireWorkflow defines all transitions and the blackboard schema.  Node
-// implementations remain as placeholders — this step produces the shared data
-// contract that Step 4's code generators depend on.
-func (g *Generator) WireWorkflow(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
-	if req.CurrentYAML == "" {
-		return nil, fmt.Errorf("current_yaml is required for the wire step")
-	}
-	system := g.assemblePipelineSystemPrompt(ctx, PromptIDWire, DefaultWirePrompt(), req.MCPServers)
-
-	userMsg := fmt.Sprintf(
-		"Process description:\n\n%s\n\nCategorised workflow YAML (types assigned, needs transitions and blackboard schema):\n\n```yaml\n%s\n```",
-		req.ProcessDescription, req.CurrentYAML,
-	)
-	return g.runPipelineStep(ctx, req, system, userMsg, true)
-}
-
-// ── Step 4: Implement ────────────────────────────────────────────────────────
-
-// ImplementNodes generates the final implementation for every node that needs it.
-//
-// Strategy:
-//  1. Parse the wired YAML to extract BB schema and per-state trigger lists.
-//  2. Fan out parallel Codegen() calls for code nodes and Scaffold() calls for
-//     script nodes (both have dedicated specialised prompts).
-//  3. Patch the generated code back into the YAML.
-//  4. Run one final LLM pass to implement prompt, hitl, wait, and
-//     emit_event nodes and produce a complete, runnable workflow.
-func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
-	if req.CurrentYAML == "" {
-		return nil, fmt.Errorf("current_yaml is required for the implement step")
+	type step2Response struct {
+		States []struct {
+			Name       string   `json:"name"`
+			Type       string   `json:"type"`
+			AgentName  string   `json:"agent_name"`
+			MCPServers []string `json:"mcp_servers"`
+		} `json:"states"`
 	}
 
-	def, _, parseErr := asmtypes.LoadFromYAML([]byte(req.CurrentYAML))
-	if parseErr != nil || def == nil {
-		return g.implementFallback(ctx, req)
+	res, err := g.runJSONPipelineStep(ctx, req, system, userMsg, func(e *WorkflowEditor, b []byte) error {
+		var resp step2Response
+		if err := json.Unmarshal(b, &resp); err != nil {
+			return err
+		}
+		for _, s := range resp.States {
+			if s.Type == "" {
+				continue
+			}
+			e.UpdateState(s.Name, asmtypes.StateType(s.Type), "", "")
+			switch s.Type {
+			case "prompt":
+				if s.AgentName != "" {
+					e.SetStateAgent(s.Name, s.AgentName, s.MCPServers)
+				}
+			case "code":
+				e.SetStateCode(s.Name, "// TODO: implemented in background")
+			case "script":
+				e.SetStateScript(s.Name, "'done'", nil)
+			}
+		}
+		hasInitial := false
+		hasTerminal := false
+		for _, s := range e.Def.States {
+			if s.Type == asmtypes.StateInitial {
+				hasInitial = true
+			}
+			if s.Type == asmtypes.StateTerminal {
+				hasTerminal = true
+			}
+		}
+		if !hasInitial && len(e.Def.States) > 0 {
+			e.Def.States[0].Type = asmtypes.StateInitial
+		}
+		if !hasTerminal && len(e.Def.States) > 1 {
+			e.Def.States[len(e.Def.States)-1].Type = asmtypes.StateTerminal
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return res, err
 	}
 
-	bbSchema := buildBBSchemaMap(def)
-	triggersPerState := buildTriggersPerState(def)
-
+	// Post-processing: Auto-generate code/scripts for algorithmic nodes
 	var (
 		wg         sync.WaitGroup
 		mu         sync.Mutex
@@ -147,62 +229,140 @@ func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*P
 		scriptJobs []scriptJobResult
 	)
 
-	for _, s := range def.States {
+	for _, s := range res.Definition.States {
 		switch s.Type {
 		case asmtypes.StateCode:
-			if isPlaceholderCode(s) {
-				wg.Add(1)
-				go func(state asmtypes.StateDef) {
-					defer wg.Done()
-					res, err := g.Codegen(ctx, CodegenRequest{
-						Instructions:  state.Instructions,
-						StateName:     state.Name,
-						ValidTriggers: triggersPerState[state.Name],
-						BBSchema:      bbSchema,
-					})
-					mu.Lock()
-					codeJobs = append(codeJobs, codeJobResult{state.Name, res, err})
-					mu.Unlock()
-				}(s)
-			}
+			wg.Add(1)
+			go func(state asmtypes.StateDef) {
+				defer wg.Done()
+				triggers := getValidTriggers(res.Definition, state.Name)
+				codegenRes, cErr := g.Codegen(ctx, CodegenRequest{
+					Instructions:  state.TechnicalRequirements + "\n" + state.Instructions,
+					StateName:     state.Name,
+					ValidTriggers: triggers,
+					BBSchema:      buildBBSchemaMap(res.Definition),
+				})
+				mu.Lock()
+				codeJobs = append(codeJobs, codeJobResult{stateName: state.Name, result: codegenRes, err: cErr})
+				mu.Unlock()
+			}(s)
 		case asmtypes.StateScript:
-			if isPlaceholderScript(s) {
-				wg.Add(1)
-				go func(state asmtypes.StateDef) {
-					defer wg.Done()
-					res, err := g.Scaffold(ctx, ScaffoldRequest{
-						StateName:   state.Name,
-						Description: state.Instructions,
-						Triggers:    triggersPerState[state.Name],
-						BBSchema:    bbSchema,
-					})
-					mu.Lock()
-					scriptJobs = append(scriptJobs, scriptJobResult{state.Name, res, err})
-					mu.Unlock()
-				}(s)
-			}
+			wg.Add(1)
+			go func(state asmtypes.StateDef) {
+				defer wg.Done()
+				triggers := getValidTriggers(res.Definition, state.Name)
+				scaffoldRes, sErr := g.Scaffold(ctx, ScaffoldRequest{
+					AgentName:   "system",
+					StateName:   state.Name,
+					Description: state.TechnicalRequirements + "\n" + state.Instructions,
+					Triggers:    triggers,
+					BBSchema:    buildBBSchemaMap(res.Definition),
+				})
+				mu.Lock()
+				scriptJobs = append(scriptJobs, scriptJobResult{stateName: state.Name, result: scaffoldRes, err: sErr})
+				mu.Unlock()
+			}(s)
 		}
 	}
+
 	wg.Wait()
 
-	patchedYAML, patchErr := patchImplementations(req.CurrentYAML, codeJobs, scriptJobs)
-	if patchErr != nil {
-		patchedYAML = req.CurrentYAML
+	// Apply generated code
+	editor := NewWorkflowEditor(res.Definition)
+	for _, job := range codeJobs {
+		if job.err == nil && job.result != nil {
+			editor.SetStateCode(job.stateName, job.result.Code)
+		}
+	}
+	for _, job := range scriptJobs {
+		if job.err == nil && job.result != nil {
+			editor.SetStateScript(job.stateName, job.result.Trigger, job.result.Updates)
+		}
 	}
 
-	system := g.assemblePipelineSystemPrompt(ctx, PromptIDImplFinish, DefaultImplementFinishPrompt(), req.MCPServers)
-	finishMsg := fmt.Sprintf(
-		"Original process description:\n\n%s\n\nWorkflow with code and script nodes already implemented (remaining nodes need finalising):\n\n```yaml\n%s\n```",
-		req.ProcessDescription, patchedYAML,
+	outYAML, _ := yaml.Marshal(editor.Def)
+	res.YAML = string(outYAML)
+	return res, nil
+}
+
+// ── Step 3: Wire ─────────────────────────────────────────────────────────────
+
+func (g *Generator) WireWorkflow(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
+	if req.CurrentYAML == "" {
+		return nil, fmt.Errorf("current_yaml is required for the wire step")
+	}
+	system := g.assemblePipelineSystemPrompt(ctx, PromptIDWire, DefaultWirePrompt(), req.MCPServers)
+	userMsg := fmt.Sprintf(
+		"Process description:\n\n%s\n\nCategorised workflow YAML:\n\n```yaml\n%s\n```",
+		req.ProcessDescription, req.CurrentYAML,
 	)
-	return g.runPipelineStep(ctx, req, system, finishMsg, false)
+
+	type step3Response struct {
+		Transitions []struct {
+			From    string `json:"from"`
+			To      string `json:"to"`
+			Trigger string `json:"trigger"`
+			Guard   string `json:"guard"`
+		} `json:"transitions"`
+	}
+
+	return g.runJSONPipelineStep(ctx, req, system, userMsg, func(e *WorkflowEditor, b []byte) error {
+		var resp step3Response
+		if err := json.Unmarshal(b, &resp); err != nil {
+			return err
+		}
+		for _, t := range resp.Transitions {
+			e.AddTransition(t.From, t.To, t.Trigger, t.Guard)
+		}
+		return nil
+	})
+}
+
+// ── Step 4: Implement ────────────────────────────────────────────────────────
+
+func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
+	if req.CurrentYAML == "" {
+		return nil, fmt.Errorf("current_yaml is required for the implement step")
+	}
+	system := g.assemblePipelineSystemPrompt(ctx, PromptIDImplFinish, DefaultImplementFinishPrompt(), req.MCPServers)
+	userMsg := fmt.Sprintf(
+		"Process description:\n\n%s\n\nWired workflow YAML:\n\n```yaml\n%s\n```",
+		req.ProcessDescription, req.CurrentYAML,
+	)
+
+	type step4Response struct {
+		Metadata struct {
+			Name               string `json:"name"`
+			Abstract           string `json:"abstract"`
+			DetailedDescription string `json:"detailed_description"`
+		} `json:"metadata"`
+		BlackboardSchema map[string]asmtypes.FieldDef `json:"blackboard_schema"`
+		Inputs           []asmtypes.PortDef           `json:"inputs"`
+		Outputs          []asmtypes.PortDef           `json:"outputs"`
+	}
+
+	return g.runJSONPipelineStep(ctx, req, system, userMsg, func(e *WorkflowEditor, b []byte) error {
+		var resp step4Response
+		if err := json.Unmarshal(b, &resp); err != nil {
+			return err
+		}
+		e.SetMetadata(resp.Metadata.Name, resp.Metadata.Abstract, resp.Metadata.DetailedDescription)
+		e.SetBlackboardSchema(resp.BlackboardSchema)
+		
+		if len(resp.Inputs) > 0 {
+			e.Def.Inputs = resp.Inputs
+		}
+		if len(resp.Outputs) > 0 {
+			e.Def.Outputs = resp.Outputs
+		}
+		
+		return nil
+	})
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
-// runPipelineStep performs a single LLM call and extracts a YAML block from the response.
-// When softValidate is true, validation failures populate ValidationError but are not fatal.
-func (g *Generator) runPipelineStep(ctx context.Context, req PipelineRequest, system, userMsg string, softValidate bool) (*PipelineStepResult, error) {
+func (g *Generator) runJSONPipelineStep(ctx context.Context, req PipelineRequest, system, userMsg string, applyFunc func(e *WorkflowEditor, b []byte) error) (*PipelineStepResult, error) {
 	interaction := []llm.Message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: userMsg},
@@ -219,6 +379,21 @@ func (g *Generator) runPipelineStep(ctx context.Context, req PipelineRequest, sy
 	var lastExtractErr error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Initialize editor on every attempt to ensure clean slate if previous attempt partially modified it
+		var def *asmtypes.WorkflowDef
+		if req.CurrentYAML != "" {
+			parsedDef, _, err := asmtypes.LoadFromYAML([]byte(req.CurrentYAML))
+			if err == nil && parsedDef != nil {
+				def = parsedDef
+			} else {
+				slog.Error("Pipeline step failed to load current YAML", "error", err, "yaml_snippet", req.CurrentYAML[:minVal(len(req.CurrentYAML), 100)])
+				def = &asmtypes.WorkflowDef{}
+			}
+		} else {
+			def = &asmtypes.WorkflowDef{}
+		}
+		editor := NewWorkflowEditor(def)
+
 		resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
 			SystemPrompt: system,
 			Messages:     messages,
@@ -231,58 +406,48 @@ func (g *Generator) runPipelineStep(ctx context.Context, req PipelineRequest, sy
 		interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
 		messages = append(messages, llm.Message{Role: "assistant", Content: resp.Content})
 
-		yamlStr, err := extractYAMLBlock(resp.Content)
+		jsonStr, err := extractJSONBlock(resp.Content)
 		if err != nil {
 			lastExtractErr = err
-			failMsg := fmt.Sprintf("No YAML block found in your response: %v. Please output ONLY a valid YAML block.", err)
+			failMsg := fmt.Sprintf("No JSON block found in your response: %v. Please output ONLY a valid JSON block matching the schema.", err)
 			interaction = append(interaction, llm.Message{Role: "user", Content: failMsg})
 			messages = append(messages, llm.Message{Role: "user", Content: failMsg})
 			continue
 		}
 
-		// SELF-HEALING: AI often produces 'script: "string"' instead of 'script: {trigger: "string"}'
-		// or 'code: "string"' instead of 'code: {code: "string"}'. We fix these common shortcuts here.
-		yamlStr = repairNodeStructures(yamlStr)
-		lastYamlStr = yamlStr
-
-		def, _, valErr := asmtypes.LoadFromYAML([]byte(yamlStr))
-		if valErr != nil {
-			lastValErr = valErr
-			errorDetail := valErr.Error()
-			// Provide specific guidance for common formatting hallucinations
-			if strings.Contains(errorDetail, "cannot start any token") || strings.Contains(errorDetail, "found character") {
-				errorDetail = "You likely used TAB characters for indentation. YAML REQUIRES SPACES. Please rewrite using ONLY SPACES (2 per level)."
-			}
-
-			failMsg := fmt.Sprintf("The generated YAML is invalid and failed to parse: %v. Please fix the formatting errors and ensure you strictly follow the schema rules.", errorDetail)
+		// Apply the JSON changes via Editor
+		if applyErr := applyFunc(editor, []byte(jsonStr)); applyErr != nil {
+			lastValErr = applyErr
+			failMsg := fmt.Sprintf("Failed to apply JSON parameters: %v. Please correct the parameters.", applyErr)
 			interaction = append(interaction, llm.Message{Role: "user", Content: failMsg})
 			messages = append(messages, llm.Message{Role: "user", Content: failMsg})
 			continue
 		}
 
-		lastDef = def
+		// Success! Serialize to YAML
+		outYAML, err := yaml.Marshal(editor.Def)
+		if err != nil {
+			lastValErr = err
+			continue
+		}
+
+		lastYamlStr = string(outYAML)
+		lastDef = editor.Def
 		lastValErr = nil
-		break // Success!
+		break 
 	}
 
-	// If we still have an extraction error after all retries and no YAML at all
 	if lastExtractErr != nil && lastYamlStr == "" {
-		return &PipelineStepResult{Interactions: interaction}, fmt.Errorf("no YAML block in response after %d attempts: %w", maxRetries, lastExtractErr)
+		return &PipelineStepResult{Interactions: interaction}, fmt.Errorf("no JSON block in response after %d attempts: %w", maxRetries, lastExtractErr)
 	}
 
-	validationError := ""
 	if lastValErr != nil {
-		if !softValidate {
-			return &PipelineStepResult{YAML: lastYamlStr, Interactions: interaction},
-				fmt.Errorf("YAML validation failed after %d attempts: %w", maxRetries, lastValErr)
-		}
-		validationError = lastValErr.Error()
+		return &PipelineStepResult{YAML: lastYamlStr, Interactions: interaction},
+			fmt.Errorf("JSON application failed after %d attempts: %w", maxRetries, lastValErr)
 	}
 
-	// PERSISTENCE: Ensure the process description is carried through every step.
 	if lastDef != nil {
 		lastDef.Metadata.ProcessDescription = req.ProcessDescription
-		// Update the YAML string to include the persisted description
 		if out, err := yaml.Marshal(lastDef); err == nil {
 			lastYamlStr = string(out)
 		}
@@ -292,50 +457,7 @@ func (g *Generator) runPipelineStep(ctx context.Context, req PipelineRequest, sy
 		YAML:            lastYamlStr,
 		Definition:      lastDef,
 		Interactions:    interaction,
-		ValidationError: validationError,
 	}, nil
-}
-
-// repairNodeStructures uses simple string/regex replacement to fix common AI YAML shortcuts
-// that violate the strict Phaxa schema.
-func repairNodeStructures(y string) string {
-	y = sanitizeYAML(y)
-	lines := strings.Split(y, "\n")
-	var out []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// Fix 'script: "expr"' -> 'script: { trigger: "expr" }'
-		if strings.HasPrefix(trimmed, "script:") && !strings.Contains(trimmed, "{") && len(trimmed) > 8 {
-			val := strings.TrimSpace(trimmed[7:])
-			if val != "" && val != "{}" {
-				indent := line[:strings.Index(line, "script:")]
-				out = append(out, fmt.Sprintf("%sscript: { trigger: %s }", indent, val))
-				continue
-			}
-		}
-		// Fix 'code: "body"' -> 'code: { code: "body" }'
-		if strings.HasPrefix(trimmed, "code:") && !strings.Contains(trimmed, "{") && len(trimmed) > 6 {
-			val := strings.TrimSpace(trimmed[5:])
-			if val != "" && val != "{}" {
-				indent := line[:strings.Index(line, "code:")]
-				out = append(out, fmt.Sprintf("%scode: { code: %s }", indent, val))
-				continue
-			}
-		}
-		out = append(out, line)
-	}
-	return strings.Join(out, "\n")
-}
-
-// implementFallback runs a single refinement LLM call when the wired YAML cannot
-// be structurally parsed for the parallel code-generation fanout.
-func (g *Generator) implementFallback(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
-	system := g.AssembleSystemPrompt(ctx, req.MCPServers, nil, g.refinementAddendum())
-	userMsg := fmt.Sprintf(
-		"Here is the current workflow YAML:\n\n```yaml\n%s\n```\n\nProcess context: %s\n\nPlease apply the following change:\n\nImplement all placeholder nodes. Replace any TODO code with working JavaScript. Replace placeholder script triggers with real expr-lang expressions. Finalise hitl assignees, wait conditions, and emit_event definitions. Produce a complete runnable workflow.",
-		req.CurrentYAML, req.ProcessDescription,
-	)
-	return g.runPipelineStep(ctx, req, system, userMsg, false)
 }
 
 // buildMCPSection builds the MCP server context block for a pipeline step prompt.
@@ -355,103 +477,38 @@ func (g *Generator) buildMCPSection(requestedServers []string, registry []MCPSer
 	return sb.String()
 }
 
-// buildBBSchemaMap extracts a flat fieldName→type map from the workflow definition.
+// buildBBSchemaMap returns a simple map of bb field names to their types.
 func buildBBSchemaMap(def *asmtypes.WorkflowDef) map[string]string {
-	out := make(map[string]string, len(def.Blackboard.Schema))
-	for name, fd := range def.Blackboard.Schema {
-		out[name] = fd.Type
+	m := make(map[string]string)
+	if def == nil || def.Blackboard.Schema == nil {
+		return m
 	}
-	return out
+	for k, v := range def.Blackboard.Schema {
+		m[k] = v.Type
+	}
+	return m
 }
 
-// buildTriggersPerState returns outgoing trigger names indexed by state name.
-func buildTriggersPerState(def *asmtypes.WorkflowDef) map[string][]string {
-	out := make(map[string][]string)
+// getValidTriggers returns a list of trigger names defined in transitions leaving the state.
+func getValidTriggers(def *asmtypes.WorkflowDef, stateName string) []string {
+	var triggers []string
+	if def == nil {
+		return triggers
+	}
 	for _, t := range def.Transitions {
-		out[t.From] = append(out[t.From], t.Trigger)
-	}
-	return out
-}
-
-// isPlaceholderCode returns true when a code node still has a placeholder body.
-func isPlaceholderCode(s asmtypes.StateDef) bool {
-	if s.Code == nil {
-		return true
-	}
-	code := strings.TrimSpace(s.Code.Code)
-	return code == "" ||
-		strings.Contains(code, "// TODO: implement") ||
-		code == "return {trigger: 'done'}" ||
-		code == "return { trigger: 'done' }"
-}
-
-// isPlaceholderScript returns true when a script node still has a placeholder trigger.
-func isPlaceholderScript(s asmtypes.StateDef) bool {
-	if s.Script == nil {
-		return true
-	}
-	t := strings.TrimSpace(s.Script.Trigger)
-	return t == "" || t == `"done"` || t == "'done'"
-}
-
-// patchImplementations merges parallel code/script generation results into the YAML
-// by round-tripping through a generic yaml map.
-func patchImplementations(yamlStr string, codeJobs []codeJobResult, scriptJobs []scriptJobResult) (string, error) {
-	var doc map[string]interface{}
-	if err := yaml.Unmarshal([]byte(yamlStr), &doc); err != nil {
-		return yamlStr, fmt.Errorf("parse YAML for patching: %w", err)
-	}
-
-	statesRaw, ok := doc["states"]
-	if !ok {
-		return yamlStr, nil
-	}
-	states, ok := statesRaw.([]interface{})
-	if !ok {
-		return yamlStr, nil
-	}
-
-	codeByName := make(map[string]*CodegenResult)
-	for _, j := range codeJobs {
-		if j.err == nil && j.result != nil {
-			codeByName[j.stateName] = j.result
+		if t.From == stateName {
+			triggers = append(triggers, t.Trigger)
 		}
 	}
-	scriptByName := make(map[string]*ScaffoldResult)
-	for _, j := range scriptJobs {
-		if j.err == nil && j.result != nil {
-			scriptByName[j.stateName] = j.result
-		}
-	}
-
-	for _, raw := range states {
-		state, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		name, _ := state["name"].(string)
-		if res, ok := codeByName[name]; ok {
-			// Ensure we always produce the nested {code: {code: "..."}} structure
-			state["code"] = map[string]interface{}{"code": res.Code}
-		}
-		if res, ok := scriptByName[name]; ok {
-			// Ensure we always produce the nested {script: {trigger: "...", updates: [...]}} structure
-			script := map[string]interface{}{"trigger": res.Trigger}
-			if len(res.Updates) > 0 {
-				script["updates"] = res.Updates
-			}
-			state["script"] = script
-		}
-	}
-
-	out, err := yaml.Marshal(doc)
-	if err != nil {
-		return yamlStr, fmt.Errorf("re-marshal patched YAML: %w", err)
-	}
-	return string(out), nil
+	return triggers
 }
 
 func (g *Generator) assemblePipelineSystemPrompt(ctx context.Context, promptID, defaultContent string, mcpServers []string) string {
 	return g.AssembleSystemPrompt(ctx, mcpServers, nil, g.prompts.Get(promptID, defaultContent))
 }
-
+func minVal(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

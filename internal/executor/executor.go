@@ -52,6 +52,7 @@ func (e *Executor) RegisterTool(t tools.Tool) {
 }
 
 func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*asmtypes.AgentOutput, error) {
+	ctx = store.WithTenantID(ctx, task.TenantID)
 	agent := task.AgentDef
 	start := time.Now()
 
@@ -295,17 +296,33 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, task orchestrator.AgentTask) (*tools.Registry, error) {
 	reg := tools.NewRegistry()
 
-	serverList := agent.Config["mcp_servers"]
-	if serverList == "" {
+	// 1. Collect all requested MCP servers
+	var rawServers []string
+	
+	// Node/Agent level
+	if list := agent.Config["mcp_servers"]; list != "" {
+		rawServers = append(rawServers, strings.Split(list, ",")...)
+	}
+	
+	// Workflow/Global level
+	for _, cap := range task.Def.Capabilities {
+		if cap.MCPServer != "" {
+			rawServers = append(rawServers, cap.MCPServer)
+		}
+	}
+
+	if len(rawServers) == 0 {
 		return reg, nil
 	}
 
-	for _, rawRef := range strings.Split(serverList, ",") {
+	// 2. Resolve and load each unique server
+	seen := make(map[string]bool)
+	for _, rawRef := range rawServers {
 		serverRef := strings.TrimSpace(rawRef)
-		if serverRef == "" {
+		if serverRef == "" || seen[serverRef] {
 			continue
 		}
-
+		seen[serverRef] = true
 		serverURL := serverRef
 		// Resolve logical name from DB if it doesn't look like a URL or an expanded env var.
 		// Also handle the case where it might be a template placeholder that wasn't expanded.

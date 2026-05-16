@@ -31,9 +31,9 @@
           />
 
           <!-- State / agent labels -->
-          <span class="text-[11px] font-mono text-text truncate">{{ call.stateName }}</span>
+          <span class="text-xs font-mono text-text truncate">{{ call.stateName }}</span>
           <span class="text-[10px] text-text-muted shrink-0">·</span>
-          <span class="text-[11px] font-mono text-accent/80 truncate">{{ call.agentName }}</span>
+          <span class="text-xs font-mono text-accent/80 truncate">{{ call.agentName }}</span>
 
           <span class="flex-1"/>
 
@@ -76,7 +76,7 @@
             </button>
             <pre
               v-if="sectionOpen(call.id, 'system')"
-              class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-64 overflow-y-auto"
+              class="text-xs font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-64 overflow-y-auto"
             >{{ call.system }}</pre>
           </div>
 
@@ -111,7 +111,7 @@
                     ]"
                   >{{ msg.role }}</span>
                 </div>
-                <pre class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto">{{ msgContent(msg) }}</pre>
+                <pre class="text-xs font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto">{{ msgContent(msg) }}</pre>
               </div>
             </div>
           </div>
@@ -123,18 +123,18 @@
             <!-- Reasoning -->
             <div v-if="call.response.reasoning" class="mb-2 rounded bg-black/20 px-2.5 py-2">
               <div class="text-[10px] text-text-muted mb-1">Reasoning</div>
-              <p class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed">{{ call.response.reasoning }}</p>
+              <p class="text-sm font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed">{{ call.response.reasoning }}</p>
             </div>
 
             <!-- Raw content -->
             <div class="rounded bg-black/20 px-2.5 py-2">
               <div class="text-[10px] text-text-muted mb-1">Raw content</div>
-              <pre class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed max-h-64 overflow-y-auto">{{ call.response.content }}</pre>
+              <pre class="text-sm font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed max-h-64 overflow-y-auto">{{ call.response.content }}</pre>
             </div>
           </div>
 
           <!-- Awaiting response -->
-          <div v-else class="px-3 py-2 flex items-center gap-2 text-[11px] text-amber-500/70">
+          <div v-else class="px-3 py-2 flex items-center gap-2 text-xs text-amber-500/70">
             <div class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0"/>
             Awaiting response…
           </div>

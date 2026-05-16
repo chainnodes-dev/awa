@@ -137,7 +137,11 @@ func (g *Generator) Scaffold(ctx context.Context, req ScaffoldRequest) (*Scaffol
 // the specialist-worker SDK conventions.
 func buildScaffoldSystemPrompt() string {
 	return `You are a deterministic logic generator for a state-machine automation engine.
-Your task is to convert plain-language instructions into deterministic "expr-lang" expressions.
+Your task is to convert plain-language instructions or technical requirements into deterministic "expr-lang" expressions.
+
+## Source of Truth
+- **Technical Requirements**: If provided, these are your primary, machine-readable instructions.
+- **Instructions**: If technical requirements are missing or ambiguous, use the human-readable instructions as a fallback.
 
 ## expr-lang Syntax
 

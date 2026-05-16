@@ -31,9 +31,9 @@
           />
 
           <!-- Method / Tool labels -->
-          <span class="text-[11px] font-mono text-text-muted shrink-0">{{ log.method }}</span>
+          <span class="text-xs font-mono text-text-muted shrink-0">{{ log.method }}</span>
           <span v-if="log.tool_name" class="text-[10px] text-text-muted shrink-0">·</span>
-          <span v-if="log.tool_name" class="text-[11px] font-mono text-accent/80 truncate">{{ log.tool_name }}</span>
+          <span v-if="log.tool_name" class="text-xs font-mono text-accent/80 truncate">{{ log.tool_name }}</span>
 
           <span class="flex-1"/>
 
@@ -73,19 +73,19 @@
           <!-- Error message if applicable -->
           <div v-if="log.is_error" class="px-3 py-2 bg-red-500/5">
             <div class="text-[10px] text-red-400 font-semibold uppercase tracking-wider mb-1">Error</div>
-            <pre class="text-[11px] font-mono text-red-300 whitespace-pre-wrap break-words">{{ log.error_msg }}</pre>
+            <pre class="text-sm font-mono text-red-300 whitespace-pre-wrap break-words">{{ log.error_msg }}</pre>
           </div>
 
           <!-- Input section -->
           <div v-if="log.input" class="px-3 py-2">
             <div class="text-[10px] text-text-muted font-semibold uppercase tracking-wider mb-1.5">Input</div>
-            <pre class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-64 overflow-y-auto">{{ fmtJson(log.input) }}</pre>
+            <pre class="text-sm font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-64 overflow-y-auto">{{ fmtJson(log.input) }}</pre>
           </div>
 
           <!-- Output section -->
           <div v-if="log.output" class="px-3 py-2">
             <div class="text-[10px] text-text-muted font-semibold uppercase tracking-wider mb-1.5">Output</div>
-            <pre class="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-96 overflow-y-auto">{{ fmtJson(log.output) }}</pre>
+            <pre class="text-sm font-mono text-text-muted whitespace-pre-wrap break-words leading-relaxed bg-black/20 rounded px-2.5 py-2 max-h-96 overflow-y-auto">{{ fmtJson(log.output) }}</pre>
           </div>
         </div>
       </div>
