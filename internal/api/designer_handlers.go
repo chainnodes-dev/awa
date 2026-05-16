@@ -39,6 +39,7 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 		EnvVars     map[string]string `json:"env_vars"`
 		Description string            `json:"description"`
 		DocURL      string            `json:"doc_url"`
+		Tools       []store.MCPTool   `json:"tools"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -63,8 +64,10 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 		EnvVars:     body.EnvVars,
 		Description: body.Description,
 		DocURL:      body.DocURL,
+		Tools:       body.Tools,
 		CreatedBy:   createdBy,
 	}
+	slog.Info("Creating MCP server", "name", srv.Name, "tools_count", len(srv.Tools))
 	if err := h.store.CreateMCPServer(c.Request.Context(), srv); err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
@@ -84,6 +87,7 @@ func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 		EnvVars     map[string]string `json:"env_vars"`
 		Description string            `json:"description"`
 		DocURL      string            `json:"doc_url"`
+		Tools       []store.MCPTool   `json:"tools"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -107,9 +111,11 @@ func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 		EnvVars:     body.EnvVars,
 		Description: body.Description,
 		DocURL:      body.DocURL,
+		Tools:       body.Tools,
 		CreatedBy:   existing.CreatedBy,
 		CreatedAt:   existing.CreatedAt,
 	}
+	slog.Info("Updating MCP server", "id", srv.ID, "tools_count", len(srv.Tools))
 	if err := h.store.UpdateMCPServer(c.Request.Context(), srv); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

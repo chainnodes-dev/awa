@@ -18,7 +18,7 @@ import (
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/internal/tools"
-	"github.com/asm-platform/asm/internal/tools/mcp"
+	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
@@ -32,15 +32,17 @@ type Executor struct {
 	store        store.Store
 	defaultProv  string
 	globalTools  *tools.Registry // tools available to every agent
+	mcpManager   *mcp.Manager
 }
 
-func NewExecutor(registry *llm.Registry, bus events.Bus, s store.Store, defaultProvider string) *Executor {
+func NewExecutor(registry *llm.Registry, bus events.Bus, s store.Store, defaultProvider string, mcpManager *mcp.Manager) *Executor {
 	e := &Executor{
 		llmRegistry: registry,
 		bus:         bus,
 		store:       s,
 		defaultProv: defaultProvider,
 		globalTools: tools.NewRegistry(),
+		mcpManager:  mcpManager,
 	}
 	e.RegisterTool(&tools.ReadUploadedFileTool{})
 	return e
@@ -282,6 +284,72 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 	return nil, err
 }
 
+type mcpToolWrapper struct {
+	client      mcp.Client
+	name        string
+	description string
+	inputSchema json.RawMessage
+	observer    func(method string, toolName string, input, output interface{}, dur time.Duration, err error)
+}
+
+func (t *mcpToolWrapper) Name() string                 { return t.name }
+func (t *mcpToolWrapper) Description() string          { return t.description }
+func (t *mcpToolWrapper) InputSchema() json.RawMessage { return t.inputSchema }
+
+func (t *mcpToolWrapper) Execute(ctx context.Context, input json.RawMessage) (json.RawMessage, error) {
+	start := time.Now()
+	
+	var rawInput interface{}
+	if err := json.Unmarshal(input, &rawInput); err != nil {
+		rawInput = string(input)
+	}
+
+	var result struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError,omitempty"`
+	}
+
+	rawRes, err := t.client.Call(ctx, "tools/call", map[string]interface{}{
+		"name":      t.name,
+		"arguments": rawInput,
+	})
+
+	if err == nil {
+		err = json.Unmarshal(rawRes, &result)
+	}
+
+	if err == nil && result.IsError && len(result.Content) > 0 {
+		err = fmt.Errorf("tool '%s' returned error: %s", t.name, result.Content[0].Text)
+	}
+
+	var text string
+	if err == nil {
+		for _, block := range result.Content {
+			if block.Type == "text" {
+				text += block.Text
+			}
+		}
+	}
+
+	// record
+	if t.observer != nil {
+		t.observer("tools/call", t.name, rawInput, text, time.Since(start), err)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if json.Valid([]byte(text)) {
+		return json.RawMessage(text), nil
+	}
+	wrapped, _ := json.Marshal(text)
+	return wrapped, nil
+}
+
 // loadAgentTools connects to any MCP servers declared in the agent's config and
 // returns a Registry of their tools. MCP server URLs must be environment variable
 // values — they arrive here already expanded by the YAML loader.
@@ -323,40 +391,45 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 			continue
 		}
 		seen[serverRef] = true
-		serverURL := serverRef
-		// Resolve logical name from DB if it doesn't look like a URL or an expanded env var.
-		// Also handle the case where it might be a template placeholder that wasn't expanded.
+		
 		cleanRef := serverRef
 		if strings.HasPrefix(cleanRef, "{{") && strings.HasSuffix(cleanRef, "}}") {
-			// Extract name from {{ env.NAME_URL }}
 			parts := strings.Fields(strings.Trim(cleanRef, "{} "))
 			if len(parts) >= 2 && parts[0] == "env." {
 				cleanRef = parts[1]
 			} else if len(parts) >= 1 {
 				cleanRef = parts[len(parts)-1]
 			}
-			// Strip common suffixes like _URL or _ENDPOINT
 			cleanRef = strings.TrimSuffix(cleanRef, "_URL")
 			cleanRef = strings.TrimSuffix(cleanRef, "_ENDPOINT")
 		}
 
+		var client mcp.Client
+		serverName := ""
+
 		if !strings.HasPrefix(serverRef, "http") && !strings.HasPrefix(serverRef, "/") && !strings.HasPrefix(serverRef, ".") {
-			if dynamic, err := e.store.ListMCPServers(ctx); err == nil {
-				for _, d := range dynamic {
-					// Match by Name (case-insensitive) or by the cleaned-up Ref
-					if strings.EqualFold(d.Name, serverRef) || strings.EqualFold(strings.ReplaceAll(d.Name, "-", "_"), cleanRef) {
-						if d.Transport == "sse" {
-							serverURL = d.URL
-						} else {
-							serverURL = d.URL
+			if e.mcpManager != nil {
+				if dynamic, err := e.store.ListMCPServers(ctx); err == nil {
+					for _, d := range dynamic {
+						if strings.EqualFold(d.Name, serverRef) || strings.EqualFold(strings.ReplaceAll(d.Name, "-", "_"), cleanRef) {
+							client, err = e.mcpManager.GetClient(ctx, d.Name)
+							if err != nil {
+								slog.Error("Failed to get MCP client", "name", d.Name, "error", err)
+							}
+							serverName = d.Name
+							break
 						}
-						break
 					}
 				}
 			}
 		}
 
-		if serverURL == "" {
+		if client == nil && strings.HasPrefix(serverRef, "http") {
+			client = mcp.NewSSEClient(serverRef)
+			serverName = serverRef
+		}
+
+		if client == nil {
 			continue
 		}
 
@@ -369,7 +442,7 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 				RunID:      task.RunID,
 				StateName:  task.StateDef.Name,
 				AgentName:  agent.Name,
-				ServerURL:  serverURL,
+				ServerURL:  serverName,
 				Method:     method,
 				ToolName:   toolName,
 				Input:      input,
@@ -383,12 +456,34 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 			_ = e.store.RecordMCPCall(context.Background(), log)
 		}
 
-		serverReg, err := mcp.LoadRegistry(ctx, serverURL, observer)
-		if err != nil {
-			return nil, fmt.Errorf("connect to MCP server %s: %w", serverURL, err)
+		var result struct {
+			Tools []struct {
+				Name        string          `json:"name"`
+				Description string          `json:"description"`
+				InputSchema json.RawMessage `json:"inputSchema"`
+			} `json:"tools"`
 		}
-		for _, t := range serverReg.All() {
-			reg.Register(t)
+
+		rawRes, err := client.Call(ctx, "tools/list", map[string]interface{}{})
+		if err != nil {
+			return nil, fmt.Errorf("mcp tools/list from %s: %w", serverName, err)
+		}
+		if err := json.Unmarshal(rawRes, &result); err != nil {
+			return nil, fmt.Errorf("unmarshal tools/list from %s: %w", serverName, err)
+		}
+
+		for _, t := range result.Tools {
+			schema := t.InputSchema
+			if len(schema) == 0 {
+				schema = json.RawMessage(`{"type":"object","properties":{}}`)
+			}
+			reg.Register(&mcpToolWrapper{
+				client:      client,
+				name:        t.Name,
+				description: t.Description,
+				inputSchema: schema,
+				observer:    observer,
+			})
 		}
 	}
 	return reg, nil

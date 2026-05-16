@@ -17,6 +17,7 @@ type MCPServerEntry struct {
 	Command     string   `yaml:"command" json:"command,omitempty"`
 	Args        []string `yaml:"args" json:"args,omitempty"`
 	URL         string   `yaml:"url" json:"url,omitempty"`
+	Tools       []string `yaml:"tools" json:"tools,omitempty"`
 }
 
 // mcpRegistryFile wraps the top-level YAML structure.

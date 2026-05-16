@@ -2,10 +2,18 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
+
+// MCPTool represents a tool definition provided by an MCP server.
+type MCPTool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
+}
 
 // MCPServer is a registered MCP server entry managed via the platform API.
 // When the mcp_servers table has entries for a tenant, they take precedence
@@ -28,9 +36,11 @@ type MCPServer struct {
 	EnvVars     map[string]string `json:"env_vars,omitempty"`
 	Description string            `json:"description"`
 	// DocURL is an optional link to the server's documentation.
-	DocURL      string            `json:"doc_url,omitempty"`
-	CreatedBy   string    `json:"created_by,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	DocURL string `json:"doc_url,omitempty"`
+	// Tools is the list of discovered tools cached from the server.
+	Tools     []MCPTool `json:"tools,omitempty"`
+	CreatedBy string    `json:"created_by,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // MCPServerStore manages the dynamic MCP server registry.

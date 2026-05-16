@@ -129,6 +129,10 @@ func (g *Generator) getFullRegistry(ctx context.Context) []MCPServerEntry {
 					if exists {
 						continue
 					}
+					tools := make([]string, len(d.Tools))
+					for i, t := range d.Tools {
+						tools[i] = t.Name
+					}
 					entry := MCPServerEntry{
 						Name:        d.Name,
 						Description: d.Description,
@@ -136,6 +140,7 @@ func (g *Generator) getFullRegistry(ctx context.Context) []MCPServerEntry {
 						URL:         d.URL,
 						Command:     d.Command,
 						Args:        d.Args,
+						Tools:       tools,
 					}
 					full = append(full, entry)
 				}

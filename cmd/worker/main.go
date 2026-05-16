@@ -16,6 +16,7 @@ import (
 	"github.com/asm-platform/asm/internal/executor"
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/logger"
+	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/store"
 	temporalpkg "github.com/asm-platform/asm/internal/temporal"
 )
@@ -85,8 +86,12 @@ func main() {
 		}
 	}
 
+	// -- MCP Manager --
+	mcpManager := mcp.NewManager(s)
+	defer mcpManager.Shutdown()
+
 	// -- Executor (runs LLM calls inside Temporal activities) --
-	exec := executor.NewExecutor(llmRegistry, bus, s, activeLLMProvider)
+	exec := executor.NewExecutor(llmRegistry, bus, s, activeLLMProvider, mcpManager)
 
 	// Reload LLM registry from DB periodically to pick up UI config changes.
 	go func() {

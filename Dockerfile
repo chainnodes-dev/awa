@@ -21,9 +21,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM alpine:3.21
 
-# ca-certificates: required for TLS connections to external APIs (Anthropic, OpenAI, etc.)
+# ca-certificates: required for TLS connections to external APIs
 # tzdata: required for correct time-zone handling in workflow timeouts
-RUN apk add --no-cache ca-certificates tzdata
+# nodejs/npm: required to execute JS-based MCP servers (npx)
+# python3/py3-pip: required to execute Python-based MCP servers
+RUN apk add --no-cache ca-certificates tzdata nodejs npm python3 py3-pip
 
 WORKDIR /app
 

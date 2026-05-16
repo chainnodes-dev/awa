@@ -188,9 +188,18 @@ func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*
 			e.UpdateState(s.Name, asmtypes.StateType(s.Type), "", "")
 			switch s.Type {
 			case "prompt":
-				if s.AgentName != "" {
-					e.SetStateAgent(s.Name, s.AgentName, s.MCPServers)
+				agentName := s.AgentName
+				if agentName == "" {
+					agentName = "primary-agent"
 				}
+				
+				// Ensure MCP servers from the request are assigned if the LLM didn't provide specific ones
+				mcpServers := s.MCPServers
+				if len(mcpServers) == 0 && len(req.MCPServers) > 0 {
+					mcpServers = req.MCPServers
+				}
+				
+				e.SetStateAgent(s.Name, agentName, mcpServers)
 			case "code":
 				e.SetStateCode(s.Name, "// TODO: implemented in background")
 			case "script":
@@ -337,8 +346,9 @@ func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*P
 			DetailedDescription string `json:"detailed_description"`
 		} `json:"metadata"`
 		BlackboardSchema map[string]asmtypes.FieldDef `json:"blackboard_schema"`
-		Inputs           []asmtypes.PortDef           `json:"inputs"`
-		Outputs          []asmtypes.PortDef           `json:"outputs"`
+		Inputs               []asmtypes.PortDef           `json:"inputs"`
+		Outputs              []asmtypes.PortDef           `json:"outputs"`
+		WorkflowCapabilities []string                    `json:"workflow_capabilities"`
 	}
 
 	return g.runJSONPipelineStep(ctx, req, system, userMsg, func(e *WorkflowEditor, b []byte) error {
@@ -348,14 +358,14 @@ func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*P
 		}
 		e.SetMetadata(resp.Metadata.Name, resp.Metadata.Abstract, resp.Metadata.DetailedDescription)
 		e.SetBlackboardSchema(resp.BlackboardSchema)
-		
-		if len(resp.Inputs) > 0 {
-			e.Def.Inputs = resp.Inputs
+		e.SetPorts(resp.Inputs, resp.Outputs)
+		if len(resp.WorkflowCapabilities) > 0 {
+			e.SetCapabilities(resp.WorkflowCapabilities)
+		} else if len(req.MCPServers) > 0 {
+			// Fallback: if user requested specific servers but LLM didn't put them in capabilities,
+			// add them now to ensure they are available to agents.
+			e.SetCapabilities(req.MCPServers)
 		}
-		if len(resp.Outputs) > 0 {
-			e.Def.Outputs = resp.Outputs
-		}
-		
 		return nil
 	})
 }
@@ -472,7 +482,11 @@ func (g *Generator) buildMCPSection(requestedServers []string, registry []MCPSer
 	var sb strings.Builder
 	sb.WriteString("\n## Available MCP Servers\n\n")
 	for _, s := range relevantServers {
-		sb.WriteString(fmt.Sprintf("- **%s** (`{{ env.%s }}`): %s\n", s.Name, s.EnvVar, s.Description))
+		toolsStr := ""
+		if len(s.Tools) > 0 {
+			toolsStr = fmt.Sprintf(" (Tools: %s)", strings.Join(s.Tools, ", "))
+		}
+		sb.WriteString(fmt.Sprintf("- **%s** (`{{ env.%s }}`): %s%s\n", s.Name, s.EnvVar, s.Description, toolsStr))
 	}
 	return sb.String()
 }

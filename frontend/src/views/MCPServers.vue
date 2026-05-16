@@ -362,6 +362,7 @@ export const MCPServerModal = defineComponent({
   props: { server: { default: null } },
   emits: ['close', 'saved', 'deleted'],
   setup(p, { emit }) {
+    console.log('MCPServerModal setup, server:', p.server)
     const isEdit = !!p.server?.id
     const envList = ref([])
     if (p.server?.env_vars) {
@@ -379,7 +380,7 @@ export const MCPServerModal = defineComponent({
       doc_url:     p.server?.doc_url     ?? '',
     })
 
-    const discoveredTools = ref([])
+    const discoveredTools = ref(p.server?.tools ?? [])
     const saving      = ref(false)
     const savedSuccess = ref(false)
     const discovering = ref(false)
@@ -447,7 +448,8 @@ export const MCPServerModal = defineComponent({
         const payload = {
           ...form.value,
           args: form.value.args.match(/(?:[^\s"]+|"[^"]*")+/g)?.map(s => s.replace(/^"|"$/g, '')) || [],
-          env_vars: getEnvMap()
+          env_vars: getEnvMap(),
+          tools: discoveredTools.value
         }
         let res
         if (isEdit) res = await api.put('/mcp-servers/' + p.server.id, payload)

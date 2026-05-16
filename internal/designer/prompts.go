@@ -243,7 +243,9 @@ Review the workflow states and determine the optimal execution type for each.
 - Use 'prompt' ONLY when LLM intelligence or an MCP server is actually required.
 
 ### Output Format
-**IMPORTANT**: Return ONLY a valid JSON block defining the type for each state. If the type is 'prompt', optionally provide an 'agent_name' and a list of 'mcp_servers'.
+**IMPORTANT**: Return ONLY a valid JSON block defining the type for each state. 
+- For 'prompt' nodes, you MUST provide an 'agent_name' (e.g., 'primary-agent') and a list of 'mcp_servers' (e.g., ['wikipedia']).
+- If no specific agent exists, use 'primary-agent' as the default.
 
 ` + "```json" + `
 {
@@ -303,7 +305,8 @@ Review the complete workflow structure, including all node implementations, data
 1. **Metadata Polish**: Ensure the name, abstract, and detailed process description are accurate and professional.
 2. **Global Schema Review**: Ensure the Blackboard Schema correctly represents every variable used by every state.
 3. **Ports Finalization**: Finalize the Workflow Inputs and Outputs based on the entire flow logic.
-4. **Consistency Check**: Ensure all transition triggers and guards are correctly implemented.
+4. **Agent & MCP Review**: Ensure every 'prompt' node has a corresponding agent in the 'agents' section, and every required MCP server is listed in 'workflow_capabilities'.
+5. **Consistency Check**: Ensure all transition triggers and guards are correctly implemented.
 
 ### Output Format
 **IMPORTANT**: Return ONLY a valid JSON block containing the finalized metadata and schema.
@@ -315,6 +318,7 @@ Review the complete workflow structure, including all node implementations, data
     "abstract": "1-sentence abstract",
     "process_description": "Detailed multi-line description of the entire flow."
   },
+  "workflow_capabilities": ["wikipedia", "google-search"],
   "blackboard_schema": {
     "field_name": {
       "type": "string",

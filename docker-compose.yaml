@@ -86,6 +86,9 @@ services:
     environment:
       - DATABASE_URL=postgres://${DB_USER:-phaxa}:${DB_PASSWORD:-phaxa_secret}@postgres:5432/${DB_NAME:-phaxa}?sslmode=disable
       - TEMPORAL_ADDRESS=temporal:7233
+    volumes:
+      - npm_cache:/root/.npm
+      - pip_cache:/root/.cache/pip
     depends_on:
       - temporal
       - server
@@ -102,3 +105,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  npm_cache:
+  pip_cache:
