@@ -40,7 +40,6 @@ type Handlers struct {
 	licenseSigner   *enterprise.Signer
 	mcpManager      *mcp.Manager
 	mcpEntries      []designer.MCPServerEntry
-	allowStdioMCP   bool
 	cfg             *config.Config
 }
 
@@ -70,7 +69,7 @@ func (h *Handlers) ReloadLicenseKeys(ctx context.Context) error {
 	return nil
 }
 
-func NewHandlers(cfg *config.Config, engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer, mcpMgr *mcp.Manager, allowStdio bool) *Handlers {
+func NewHandlers(cfg *config.Config, engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer, mcpMgr *mcp.Manager) *Handlers {
 	return &Handlers{
 		cfg:             cfg,
 		engine:          engine,
@@ -83,7 +82,6 @@ func NewHandlers(cfg *config.Config, engine *orchestrator.Engine, s store.Store,
 		licenseVerifier: verifier,
 		licenseSigner:   signer,
 		mcpManager:      mcpMgr,
-		allowStdioMCP:   allowStdio,
 	}
 }
 

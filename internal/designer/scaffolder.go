@@ -136,7 +136,7 @@ func (g *Generator) Scaffold(ctx context.Context, req ScaffoldRequest) (*Scaffol
 // buildScaffoldSystemPrompt returns the system prompt that teaches the LLM
 // the specialist-worker SDK conventions.
 func buildScaffoldSystemPrompt() string {
-	return `You are a deterministic logic generator for the Phaxa (Phaxa) platform.
+	return `You are a deterministic logic generator for a state-machine automation engine.
 Your task is to convert plain-language instructions into deterministic "expr-lang" expressions.
 
 ## expr-lang Syntax

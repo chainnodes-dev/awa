@@ -86,8 +86,8 @@ func testRouter(t *testing.T) testEnv {
 		t.Fatalf("generate test token: %v", err)
 	}
 
-	mcpMgr := mcp.NewManager(s, true)
-	handlers := NewHandlers(&config.Config{}, eng, s, jwtSvc, nil, nil, nil, nil, nil, nil, mcpMgr, true) // nil generator, etc.
+	mcpMgr := mcp.NewManager(s)
+	handlers := NewHandlers(&config.Config{}, eng, s, jwtSvc, nil, nil, nil, nil, nil, nil, mcpMgr) // nil generator, etc.
 	router := gin.New()
 	registerRoutes(router, handlers, NewHub(bus), jwtSvc, health.New())
 

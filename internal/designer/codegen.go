@@ -66,7 +66,7 @@ func (g *Generator) Codegen(ctx context.Context, req CodegenRequest) (*CodegenRe
 // buildCodegenSystemPrompt returns the system prompt that teaches the LLM
 // the goja sandbox environment and expected output format.
 func buildCodegenSystemPrompt() string {
-	return `You are a JavaScript code generator for the Phaxa (Phaxa) platform.
+	return `You are a JavaScript code generator for a state-machine automation engine.
 Your task is to write JavaScript code that runs inside a deterministic sandboxed Code node.
 
 ## Sandbox Environment

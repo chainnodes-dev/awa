@@ -300,8 +300,45 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 		return reg, nil
 	}
 
-	for _, rawURL := range strings.Split(serverList, ",") {
-		serverURL := strings.TrimSpace(rawURL)
+	for _, rawRef := range strings.Split(serverList, ",") {
+		serverRef := strings.TrimSpace(rawRef)
+		if serverRef == "" {
+			continue
+		}
+
+		serverURL := serverRef
+		// Resolve logical name from DB if it doesn't look like a URL or an expanded env var.
+		// Also handle the case where it might be a template placeholder that wasn't expanded.
+		cleanRef := serverRef
+		if strings.HasPrefix(cleanRef, "{{") && strings.HasSuffix(cleanRef, "}}") {
+			// Extract name from {{ env.NAME_URL }}
+			parts := strings.Fields(strings.Trim(cleanRef, "{} "))
+			if len(parts) >= 2 && parts[0] == "env." {
+				cleanRef = parts[1]
+			} else if len(parts) >= 1 {
+				cleanRef = parts[len(parts)-1]
+			}
+			// Strip common suffixes like _URL or _ENDPOINT
+			cleanRef = strings.TrimSuffix(cleanRef, "_URL")
+			cleanRef = strings.TrimSuffix(cleanRef, "_ENDPOINT")
+		}
+
+		if !strings.HasPrefix(serverRef, "http") && !strings.HasPrefix(serverRef, "/") && !strings.HasPrefix(serverRef, ".") {
+			if dynamic, err := e.store.ListMCPServers(ctx); err == nil {
+				for _, d := range dynamic {
+					// Match by Name (case-insensitive) or by the cleaned-up Ref
+					if strings.EqualFold(d.Name, serverRef) || strings.EqualFold(strings.ReplaceAll(d.Name, "-", "_"), cleanRef) {
+						if d.Transport == "sse" {
+							serverURL = d.URL
+						} else {
+							serverURL = d.URL
+						}
+						break
+					}
+				}
+			}
+		}
+
 		if serverURL == "" {
 			continue
 		}
@@ -326,8 +363,6 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 			if err != nil {
 				log.ErrorMsg = err.Error()
 			}
-			// Use a background context for recording to avoid cancelling the log
-			// if the agent's main context was already cancelled/timed out.
 			_ = e.store.RecordMCPCall(context.Background(), log)
 		}
 

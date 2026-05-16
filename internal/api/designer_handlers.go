@@ -45,11 +45,6 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 		return
 	}
 
-	if body.Transport == "stdio" && !h.allowStdioMCP {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Local stdio MCP servers are disabled by the system administrator"})
-		return
-	}
-
 	claims := auth.ClaimsFrom(c)
 	tenantID := ""
 	createdBy := ""
@@ -92,11 +87,6 @@ func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if body.Transport == "stdio" && !h.allowStdioMCP {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Local stdio MCP servers are disabled by the system administrator"})
 		return
 	}
 
@@ -205,10 +195,6 @@ func (h *Handlers) DiscoverMCPServer(c *gin.Context) {
 	var closer func() error
 
 	if body.Transport == "stdio" {
-		if !h.allowStdioMCP {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Local stdio MCP is disabled"})
-			return
-		}
 		clt, cl, err := h.mcpManager.TestStdioClientMap(body.Command, body.Args, body.EnvVars)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to start server: %v", err)})

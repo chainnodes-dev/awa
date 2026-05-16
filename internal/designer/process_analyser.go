@@ -139,7 +139,7 @@ func extractExplanation(content string) string {
 
 // SummariseProcess converts a WorkflowDef YAML into a human-readable process summary.
 func (g *Generator) SummariseProcess(ctx context.Context, req ProcessSummariseRequest) (*ProcessSummariseResult, error) {
-	system := "You are a process summarisation engine. Convert the provided Phaxa workflow YAML into a professional, human-readable summary that explains the business logic, roles involved, and expected outcomes."
+	system := "You are a process summarisation engine. Convert the provided workflow YAML into a professional, human-readable summary that explains the business logic, roles involved, and expected outcomes."
 	userMsg := fmt.Sprintf("Summarise this workflow:\n\n```yaml\n%s\n```", req.WorkflowYAML)
 
 	messages := []llm.Message{
@@ -163,17 +163,7 @@ func (g *Generator) SummariseProcess(ctx context.Context, req ProcessSummariseRe
 
 // buildProcessAnalyserPrompt produces the system prompt for the workflow decomposer.
 func (g *Generator) buildProcessAnalyserPrompt(mcpServers []string, registeredProcesses []*asmtypes.WorkflowDef) string {
-	// Start from the standard schema prompt.
-	base := g.buildSystemPrompt(mcpServers)
-
-	// Prepend decomposition instructions.
-	preamble := g.prompts.Get(PromptIDSkill, DefaultSkillPrompt()) + base
-
-	if len(registeredProcesses) > 0 {
-		preamble += g.buildProcessCatalogSection(registeredProcesses)
-	}
-
-	return preamble
+	return g.AssembleSystemPrompt(context.Background(), mcpServers, registeredProcesses, g.prompts.Get(PromptIDSkill, DefaultSkillPrompt()))
 }
 
 // buildProcessCatalogSection renders the reusable process catalog as a prompt section.
@@ -275,7 +265,7 @@ func (g *Generator) buildProcessUserMsg(req ProcessAnalyseRequest) string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("Decompose this into the most efficient Phaxa workflow. ")
+	sb.WriteString("Decompose this into the most efficient workflow state machine. ")
 	sb.WriteString("Return only the YAML.\n")
 
 	return sb.String()

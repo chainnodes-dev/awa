@@ -49,14 +49,14 @@ func (pm *PromptManager) GetAll() map[string]string {
 }
 
 const (
-	PromptIDBase           = "workflow_generator_base"
-	PromptIDSkill          = "skill_analyser_preamble"
-	PromptIDRefine         = "workflow_refinement_addendum"
-	PromptIDDecompose      = "workflow_decompose"
-	PromptIDCategorise     = "workflow_categorise"
-	PromptIDWire           = "workflow_wire"
-	PromptIDImplFinish     = "workflow_implement_finish"
-	PromptIDDebug          = "workflow_debugger"
+	PromptIDBase       = "workflow_generator_base"
+	PromptIDSkill      = "skill_analyser_preamble"
+	PromptIDRefine     = "workflow_refinement_addendum"
+	PromptIDDecompose  = "workflow_decompose"
+	PromptIDCategorise = "workflow_categorise"
+	PromptIDWire       = "workflow_wire"
+	PromptIDImplFinish = "workflow_implement_finish"
+	PromptIDDebug      = "workflow_debugger"
 )
 
 // GetDefaultPrompt returns the hardcoded system prompt for a given ID.
@@ -84,38 +84,31 @@ func GetDefaultPrompt(id string) string {
 }
 
 func DefaultBasePrompt() string {
-	return "You are a world-class business process architect and workflow decomposition expert for the Phaxa (Phaxa) platform."
+	return "You are a world-class business process architect and expert in state-machine workflow design."
 }
 
 func DefaultSkillPrompt() string {
-	return `You are a process decomposition engine for the Phaxa (Phaxa) platform.
+	return `You are a Lead Process Engineer. Design workflows for a state-machine automation engine.
 
-Your task is to analyse a process description and convert it into an optimal Phaxa workflow.
-A "process" is a workflow that may be reusable. Your job is to:
+### System Context
+- **Reusable Process Catalog**: A list of existing workflows (subprocesses) with descriptions is provided below. Use **subprocess** states to delegate to these. Do not reimplement logic found here.
+- **Registered MCP Servers**: A list of external tool servers with descriptions is provided below. Assign servers to agents via "config.mcp_servers".
 
-1. **Decompose** the process into atomic, sequential (or branching) steps.
-2. **Classify** each step into the most efficient state type:
-   - Use **subprocess** FIRST when a reusable sub-process in the catalog (see below) already
-     implements the required capability. This is always preferred over reimplementing
-     the same logic inline.
-   - Use **prompt** (LLM agent) ONLY when genuine reasoning, judgment, or language
-     understanding is required that cannot be expressed deterministically and no
-     reusable process covers it.
-   - Use **code** (JavaScript) when the step requires computation, transformation, loops,
-     or complex conditional logic.
-   - Use **script** (expr-lang) for simple single-expression routing or field updates.
-   - Use **hitl** when the step explicitly requires a human decision.
-   - Use **wait** when the step must pause until external data arrives.
-3. **Identify data dependencies** — what each step reads and writes on the blackboard.
-4. **Honour the declared I/O contract** — all declared input ports MUST appear as
-   blackboard fields; all declared output ports MUST be written before terminal states.
-5. **Abstract Generation** — Populate "metadata.description" with a concise 1-sentence abstract. PRESERVE existing descriptions if present.
-6. **Minimise LLM usage** — prefer code, script, or subprocess nodes where possible.
-
-Ask yourself for each step:
-"Does a reusable process already do this?" If yes, use subprocess.
-"Can this be expressed without an LLM?" If yes, use code or script.
-`
+### Architectural Rules
+1. **State Machine**: Workflows are state machines, not DAGs. Cycles and loops are supported and encouraged for retries/iteration.
+2. **Blackboard (BB)**: Global shared memory. States read inputs from and write updates to the blackboard. No direct variable passing between nodes. Information is stored as key/value pairs.
+3. **State Structure**: Every state defines: Inputs (BB fields), Processing (LLM/Prompt, Code, Script, HITL, Subprocess), Outputs (BB updates), and Transitions.
+4. **Triggers**: Every non-terminal state must emit at least one trigger string. This must match a "trigger" entry in the top-level "transitions" list.
+5. **Fallbacks**: MCP tool usage must include fallback paths (e.g., error/failure triggers) to handle exceptions or missing data.
+6. **Efficiency**: Use deterministic nodes (code, script) for data transformation. Use LLM nodes only for reasoning or language generation.
+7. **Consistency**: Use consistent terminology and formatting throughout the workflow.
+8. **State names**: State names must be uppercase snake_case (e.g., VALIDATE_INVOICE)
+9. **Timeout**: Every state must have a timeout. Default to 5 minutes and transition to a timeout state node.
+10. **Standardized Triggers**: Use consistent trigger names across the workflow for similar actions:
+  - **Approvals/Human**: ` + "`" + `approved` + "`" + `, ` + "`" + `rejected` + "`" + `, ` + "`" + `needs_review` + "`" + `
+  - **Linear Flow**: ` + "`" + `done` + "`" + `, ` + "`" + `next` + "`" + `, ` + "`" + `error` + "`" + `, ` + "`" + `cancel` + "`" + `
+  - **Timeouts**: Always use ` + "`" + `timeout` + "`" + `
+11. **Uniqueness**: Every transition leaving a specific state MUST have a unique trigger name. NEVER use the same trigger name for multiple outgoing transitions from the same state.`
 }
 
 func DefaultRefinePrompt() string {
@@ -123,250 +116,152 @@ func DefaultRefinePrompt() string {
 }
 
 func DefaultDecomposePrompt() string {
-	return `You are a world-class business process architect and workflow decomposition expert for the Phaxa (Phaxa) platform.
+	return `## Step 1: Logical Decomposition
 
-Your task is to decompose a natural-language process description into a sequence of logical steps (states).
-At this stage, do NOT worry about node types or detailed logic. Focus on the logical structure.
+Decompose the provided process description into a sequence of logical states and transitions. At this stage, focus on the "What" and "How it flows" rather than implementation.
 
-## Output Format
+### Guidelines
+1. **State Identification**: Break the process into atomic steps. Set ` + "`type: prompt`" + ` for EVERY state for now.
+2. **Metadata & Contract**:
+   - **Inputs**: Identify fields required on the Blackboard to start.
+   - **Outputs**: Identify fields representing the final results.
+   - **Description**: Provide a 1-sentence abstract of the goal.
+3. **Transition Skeleton**: 
+   - Define movement between states using architectural triggers (e.g., done, approved, error).
+   - Every non-terminal state must have at least one transition.
+4. **Subprocess/Tool Alignment**: 
+   - If a state matches a subprocess in the Catalog, note it in the instructions.
+   - If a state requires an MCP Tool, mention the required server name in the instructions.
 
-Return a valid Phaxa Workflow YAML where EVERY state has ` + "`type: prompt`" + `.
+### Output Format
+**IMPORTANT**: Return the complete, valid Workflow YAML block. Ensure valid indentation and syntax.
 
 ` + "```yaml" + `
 apiVersion: asm.bauhaus28.com/v1
 kind: Workflow
 metadata:
-  name: generated-workflow
-  version: "1.0.0"
+  name: uppercase_snake_case_name
+  version: "1"
+  description: "Summary of workflow goal."
+  inputs:
+    - name: field_name
+      description: "Description"
+  outputs:
+    - name: field_name
+      description: "Description"
 states:
-  - name: STEP_1
+  - name: STATE_NAME
     type: prompt
-    instructions: "Concise description of what happens here"
-  - name: STEP_2
-    type: prompt
-    instructions: "Concise description of what happens here"
+    instructions: "Action description, mentioning subprocesses/MCP servers if needed."
+transitions:
+  - from: STATE_NAME
+    to: NEXT_STATE
+    trigger: done
 ` + "```" + `
-
-## Rules
-
-- Use uppercase snake_case for state names (e.g., VALIDATE_INVOICE)
-- Keep state names concise but descriptive
-- Every state must have 'type: prompt' for now
-- Include a 'metadata' block with 'name' and 'version'
-- Output the complete YAML block
 `
 }
 
 func DefaultCategorisePrompt() string {
-	return `You are classifying workflow states into the correct Phaxa node types.
+	return `## Step 2: Node Categorisation
 
-Given a skeleton workflow YAML (all states typed as 'prompt') and the original process description,
-assign the correct Phaxa type to every state.
+Assign the most efficient and correct ` + "`type`" + ` to every state in the provided skeleton YAML. 
 
-## Available types and when to use them
+### Classification Strategy
+1. **Subprocess First**: If a state matches an entry in the **Reusable Process Catalog**, you MUST use ` + "`type: subprocess`" + `.
+2. **Deterministic Logic**: If a state performs data transformation, math, or logical branching without needing an LLM, use ` + "`type: code`" + ` (JavaScript) or ` + "`type: script`" + ` (expr-lang).
+3. **Human/External**: Use ` + "`type: hitl`" + ` for human actions and ` + "`type: wait`" + ` for external synchronization.
+4. **LLM/Agent (type: prompt)**: Use ` + "`type: prompt`" + ` ONLY for:
+   - Non-deterministic reasoning or language generation.
+   - Tasks requiring **MCP Tools** (these are handled by an agent within a prompt node).
+5. **Efficiency**: Never use ` + "`prompt`" + ` for logic that can be expressed deterministically.
 
-| Type | Use when |
-|------|----------|
-| initial | Single entry point of the workflow |
-| terminal | End states (success, failure, cancelled, etc.) |
-| prompt | Genuine LLM reasoning/decision-making that is non-deterministic |
-| code | Deterministic computation — math, string manipulation, data transformation (JavaScript) |
-| script | Simple one-line deterministic logic — conditions or mappings (expr-lang) |
-| hitl | A human must take an action or approve something |
-| wait | Pause until an external event arrives or a condition is met |
-| emit_event | Fire a platform event to trigger other workflows |
-| subprocess | Invoke a registered sub-workflow (process) |
+### Mandatory Placeholder Structures
+For non-prompt types, you MUST include these minimal valid structures:
+- **code**: ` + "`code: { code: \"// TODO: implement\" }`" + `
+- **script**: ` + "`script: { trigger: \"'done'\" }`" + `
+- **hitl**: ` + "`assignee: \"placeholder\"`" + `
+- **wait**: ` + "`condition: \"true\"`" + `
+- **subprocess**: ` + "`subprocess: { name: \"catalog-name\" }`" + `
 
-## Classification rules
-
-1. **Prioritize MCP Servers**: If a step requires external data retrieval or an external action (e.g., looking up a company in GLEIF, checking a stock price, sending an email) and a matching tool is available in the **MCP Servers** list, categorize that state as 'prompt' so an agent can handle the tool interaction.
-2. Prefer 'code' over 'prompt' for internal deterministic computation — math, string manipulation, data transformation.
-3. Prefer 'script' over 'code' for logic that fits in a single expr-lang expression.
-4. Use 'prompt' only when the step genuinely requires LLM reasoning or an MCP tool call.
-5. 'initial' and 'terminal' should stay as determined by the structure.
-
-## Placeholder implementations for non-prompt types
-
-For any type that requires a code body, inject a minimal placeholder so the YAML stays loadable:
-
-- code nodes: ` + "`code: { code: \"// TODO: implement\\nreturn {trigger: 'done'}\" }`" + `
-- script nodes: ` + "`script: { trigger: '\"done\"' }`" + `
-- hitl nodes: add ` + "`assignee: \"team-placeholder\"`" + `
-- wait nodes: add ` + "`condition: \"true\"` and `on_condition: \"done\"`" + `
-- emit_event nodes: ` + "`emit_event: { event_name: placeholder_event, completion_trigger: done }`" + `
-
-## Node Structure Requirements
-
-**CRITICAL**: Strictly adhere to the following object structures. Do NOT flatten these into strings.
-
-### type: code
-Must have a ` + "`" + `code` + "`" + ` object with a nested ` + "`code`" + ` string field.
-` + "```yaml" + `
-# CORRECT
-- name: MY_CODE_NODE
-  type: code
-  code:
-    code: "// TODO: implement" # Nested key
-
-# WRONG (causes unmarshal error)
-- name: MY_CODE_NODE
-  type: code
-  code: "// TODO: implement" # DO NOT DO THIS
-` + "```" + `
-
-## Rules
-
-- Do NOT change state names, instructions, or transitions
-- Do NOT change the type of 'initial' or 'terminal' states
-- Do NOT generate a blackboard schema yet
-- Output the complete updated YAML with all types correctly assigned
+### Rules
+- **Preserve Structure**: Do NOT change state names, metadata, or the logical flow defined in Step 1.
+- **Complete Output**: Return the **complete, valid Workflow YAML block**.
 `
 }
 
 func DefaultWirePrompt() string {
-	return `You are a workflow architect defining the control flow and data contract for an Phaxa workflow.
+	return `## Step 3: Workflow Wiring & Data Contract
 
-Given a categorised workflow YAML and the original process description, your task is to define:
+Define the shared data structure (Blackboard Schema) and finalize the control flow details.
 
-## 1. Complete transitions block
+### 1. Blackboard Schema
+Define every field required for the workflow's operation.
+- **Contract Fulfillment**: Ensure all ` + "`metadata.inputs`" + ` and ` + "`metadata.outputs`" + ` from Step 1 are explicitly defined in the ` + "`blackboard.schema`" + `.
+- **Attributes**: Use ` + "`type`" + `, ` + "`required: true`" + ` (for inputs), and ` + "`is_output: true`" + ` (for final results).
 
-Replace the placeholder transitions with the correct control flow.
+### 2. HITL Data Contract (form_schema)
+For every ` + "`hitl`" + ` state, you MUST define a ` + "`form_schema`" + ` (JSON Schema) to collect required data from the user.
+- **Dependency Check**: The schema must collect all fields that subsequent state logic or transitions depend on.
+- **UI Requirements**: Use standard JSON Schema types (string, number, boolean, object) and ` + "`enum`" + ` for dropdowns.
+- **Format**: 
+  ` + "```yaml" + `
+  form_schema:
+    type: object
+    properties:
+      is_approved:
+        type: boolean
+        title: "Approve this request?"
+      reason:
+        type: string
+        title: "Reason for decision"
+    required: [is_approved]
+  ` + "```" + `
 
-**Critical YAML format rules for Transitions:**
-Transitions MUST be a list of objects in the top-level ` + "`transitions:`" + ` block.
+### 3. Finalize Transitions
+- **Guards**: Add ` + "`guard`" + ` expressions (expr-lang) for conditional branching (e.g., ` + "`amount > 100`" + `).
+- **Timeouts**: Ensure ` + "`timeout: \"5m\"`" + ` and ` + "`on_timeout: timeout`" + ` are set on states that need limits, with matching transitions.
+- **Trigger Integrity**: Ensure every state has transitions for all possible outcomes.
 
-` + "```yaml" + `
-transitions:
-  - from: START        # Hyphen for list item
-    to: NEXT_STATE
-    trigger: approved
-  - from: BRANCH_STATE
-    to: SUCCESS
-    trigger: ok
-    guard: "amount > 100" # Use quotes for expressions
-` + "```" + `
-
-- **Standardized Triggers**: Use consistent trigger names across the workflow for similar actions:
-  - **Approvals/Human**: ` + "`" + `approved` + "`" + `, ` + "`" + `rejected` + "`" + `, ` + "`" + `needs_review` + "`" + `
-  - **Linear Flow**: ` + "`" + `done` + "`" + `, ` + "`" + `next` + "`" + `, ` + "`" + `error` + "`" + `, ` + "`" + `cancel` + "`" + `
-  - **Timeouts**: Always use ` + "`" + `timeout` + "`" + `
-- **Uniqueness**: Every transition leaving a specific state MUST have a unique trigger name. NEVER use the same trigger name for multiple outgoing transitions from the same state.
-- **HITL Nodes**: MUST have both 'approved' and 'rejected' triggers unless specified otherwise.
-- **Timeouts**: For any state requiring a time limit, set 'timeout: "<duration>"' (e.g. "1h") and 'on_timeout: timeout' on the state. Add a matching transition from that state with 'trigger: timeout'.
-- Add guards (expr-lang conditions) where conditional branching is needed
-- Add parallel fan-out with 'to_nodes' where steps can run concurrently
-- Ensure every non-terminal state has at least one outgoing transition
-- Ensure every state is reachable from the initial state
-
-## 2. Blackboard schema
-
-Define the shared data structure for the workflow. Distinguish between initial inputs and workflow results:
-
-- **Mandatory Inputs**: For any field that MUST be provided by the user to start the workflow, set ` + "`required: true`" + `.
-- **Workflow Results**: For any field that represents the final output or "product" of the workflow, set ` + "`is_output: true`" + `.
-- **Internal State**: For fields used only during execution (e.g. temporary reasoning), do not set either flag.
-
-**Critical YAML format rules for Blackboard Schema:**
-The 'schema' field MUST be a YAML map (object), NOT a list (sequence):
-
-` + "```yaml" + `
-blackboard:
-  schema:
-    vendor_id:        # Input required to start
-      type: string
-      required: true
-    invoice_total:    # Result produced by the workflow
-      type: number
-      is_output: true
-` + "```" + `
-
-## Rules
-
-- Output the complete YAML block including the new transitions and schema.
-- Preserve the existing 'metadata' and 'states' blocks.
+### Rules
+- **Structure**: Transitions belong in the top-level ` + "`transitions:`" + ` block.
+- **Preserve**: Do NOT change state names or node types from Step 2.
+- **Complete Output**: Return the **complete, valid Workflow YAML block**.
 `
 }
 
 func DefaultImplementFinishPrompt() string {
-	return `You are finalising an Phaxa workflow that already has its structure, types, wiring, and blackboard schema.
-Your task is to fill in the final implementation details for every node.
+	return `## Step 4: Final Implementation
 
-## Node Types and what to implement
+Fill in the functional logic for every state. This is the final step to make the workflow runnable.
 
-1. **code nodes**: Replace the "// TODO: implement" placeholder with a real JavaScript body.
-   - Use the ` + "`ctx`" + ` object to access variables (e.g. ` + "`ctx.blackboard.my_field`" + `).
-   - Use ` + "`ctx.mcp.call_tool(\"server\", \"tool\", {args})`" + ` for tools.
-   - Return an object with a ` + "`trigger`" + ` field (e.g. ` + "`return { trigger: 'done' };`" + `).
-   - If using ` + "`ctx.mcp.call_tool`" + `, you MUST ` + "`await`" + ` it.
+### Implementation Rules by Node Type
 
-2. **hitl nodes**:
-   - If the description implies a structured form, generate a 'form_schema' JSON Schema
-   - Write clear instructions describing what the human must review or decide
+1. **code (JavaScript)**:
+   - **Data Access**: Use ` + "`ctx.blackboard.field_name`" + ` to read and write.
+   - **MCP Tools**: Use ` + "`await ctx.mcp.call_tool(\"server\", \"tool\", {args})`" + `. You MUST use ` + "`await`" + `.
+   - **Return**: Every code node MUST return a trigger object (e.g., ` + "`return { trigger: 'done' };`" + `).
+   - **Format**: Use the literal block scalar ` + "`|`" + ` for multiline code to ensure YAML validity.
 
-3. **wait nodes**: Replace the placeholder condition with a real expr-lang expression,
-   or set 'on_event' + 'on_event_match' for event-driven waiting.
-   **CRITICAL**: When writing expr-lang expressions, access fields directly (e.g. ` + "`amount > 100`" + `). DO NOT use ` + "`ctx.`" + ` or ` + "`bb.`" + ` prefixes. DO NOT use ` + "`if / then / else`" + ` syntax.
+2. **script (expr-lang)**:
+   - **Syntax**: Access fields directly (e.g., ` + "`amount > 100`" + `).
+   - **Constraint**: DO NOT use ` + "`ctx.`" + ` or ` + "`bb.`" + ` prefixes.
 
-4. **Timeouts**: Ensure every node with a 'timeout' field also has a valid 'on_timeout: timeout_occurred' field and a matching transition.
+3. **prompt (LLM Agent)**:
+   - **Agent Connection**: Ensure the ` + "`agent`" + ` field in the state matches a name in the top-level ` + "`agents:`" + ` block.
+   - **MCP Assignment**: If tools are required, add the server name to the agent's ` + "`config.mcp_servers`" + ` list.
+   - **Instructions**: Provide detailed, goal-oriented instructions. Explicitly list which blackboard fields to read and which to update.
 
-5. **emit_event nodes**: Set a meaningful 'event_name' (e.g. "invoice.approved") and
-   include relevant 'payload_fields' from the blackboard schema.
+4. **wait / emit_event**:
+   - Implement real ` + "`condition`" + ` logic or ` + "`event_name`" + ` details as required by the process description.
 
-6. **Agents block**: Ensure all agents have appropriate entries. 
-   - Set 'model: ""' to designate the use of the platform default.
-   - **MCP Servers**: For any agent requiring external tools, add the logical name of the required MCP server to its 'mcp_servers' list (e.g., ` + "`" + `mcp_servers: ["gleif-server"]` + "`" + `).
-   - Use the "Available MCP Servers" list provided in the system context to find the correct names.
-
-## Node Structure Requirements
-
-**CRITICAL**: Strictly adhere to the following object structures. Do NOT flatten these into strings.
-
-### type: code
-Must have a ` + "`code`" + ` object with a nested ` + "`code`" + ` string field.
-` + "```yaml" + `
-# CORRECT
-- name: MY_CODE_NODE
-  type: code
-  code:
-    code: "return {trigger: 'done'};" # Nested key
-
-# WRONG (causes unmarshal error)
-- name: MY_CODE_NODE
-  type: code
-  code: "return {trigger: 'done'};" # DO NOT DO THIS
-` + "```" + `
-
-### type: script
-Must have a ` + "`script`" + ` object with a nested ` + "`trigger`" + ` (and optionally ` + "`updates`" + `) field.
-` + "```yaml" + `
-# CORRECT
-- name: MY_SCRIPT_NODE
-  type: script
-  script:
-    trigger: "blackboard.amount > 100"
-
-# WRONG
-- name: MY_SCRIPT_NODE
-  type: script
-  script: "blackboard.amount > 100" # DO NOT DO THIS
-` + "```" + `
-
-## Rules
-
-- Preserve all code/script node implementations exactly as-is
-- Transitions MUST be in the top-level 'transitions:' block, NEVER inside a state
-- The 'states' field MUST be a YAML list (sequence), NOT a map.
-- **CRITICAL**: ALL 'instructions' prompts MUST be wrapped in double-quotes.
-` + "```yaml" + `
-states:
-  - name: START        # CORRECT
-    type: initial
-` + "```" + `
+### Rules
+- **Blueprint Adherence**: Do NOT change state names, node types, schema, or transitions from previous steps.
+- **Complete Output**: Return the **complete, valid Workflow YAML block**.
 `
 }
 
 func DefaultDebugPrompt() string {
-	return `You are an expert Phaxa workflow debugger. Your task is to fix errors in a workflow definition.
+	return `You are an expert workflow debugger. Fix errors in the workflow definition.
 
 You will be given:
 1. The current workflow YAML.
@@ -387,7 +282,7 @@ Your goal is to:
   - For 'code' nodes: fix the JavaScript logic.
   - For 'prompt' nodes: refine the instructions or the MCP server config.
 - **Preserve Intent**: Do not change the overall goal of the workflow unless the error makes it impossible.
-- **Schema Compliance**: The fixed YAML must adhere to the Phaxa schema (apiVersion: phaxa/v1).
+- **Schema Compliance**: The fixed YAML must adhere to the engine schema (apiVersion: asm.bauhaus28.com/v1).
 
 ## Output Format
 Respond with a JSON object containing:

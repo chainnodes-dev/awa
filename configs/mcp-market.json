@@ -2,225 +2,217 @@
   {
     "id": "brave-search",
     "name": "Brave Search",
-    "description": "Web search and local results via Brave's Search API.",
-    "icon": "https://brave.com/static-assets/images/brave-logo-sans-text.svg",
+    "description": "Real-time web search. Tools: search(query).",
+    "icon": "search",
+    "category": "Search & Knowledge",
+    "transport": "stdio",
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-    "envVars": ["BRAVE_API_KEY"],
-    "category": "Search"
-  },
-  {
-    "id": "github",
-    "name": "GitHub",
-    "description": "Interact with repositories, issues, and pull requests.",
-    "icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-github"],
-    "envVars": ["GITHUB_PERSONAL_ACCESS_TOKEN"],
-    "category": "Development"
-  },
-  {
-    "id": "notion",
-    "name": "Notion",
-    "description": "Access and manage Notion pages, databases, and blocks.",
-    "icon": "https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-notion"],
-    "envVars": ["NOTION_API_KEY"],
-    "category": "Productivity"
-  },
-  {
-    "id": "sap-hana",
-    "name": "SAP HANA",
-    "description": "Query and manage SAP HANA / HANA Cloud databases.",
-    "icon": "https://www.sap.com/dam/application/shared/logos/sap-logo-svg.svg",
-    "command": "npx",
-    "args": ["-y", "hana-mcp-server"],
-    "envVars": ["HANA_HOST", "HANA_USER", "HANA_PASSWORD"],
-    "category": "Enterprise"
-  },
-  {
-    "id": "sap-fiori",
-    "name": "SAP Fiori / UI5",
-    "description": "Tooling for developing and modifying SAP Fiori applications.",
-    "icon": "https://www.sap.com/dam/application/shared/logos/sap-logo-svg.svg",
-    "command": "npx",
-    "args": ["-y", "@sap-ux/fiori-mcp-server"],
-    "category": "Enterprise"
-  },
-  {
-    "id": "gmail",
-    "name": "Gmail",
-    "description": "Read, search, and send emails via the Gmail API.",
-    "icon": "https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-google-mail"],
-    "envVars": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
-    "category": "Communication"
-  },
-  {
-    "id": "hubspot",
-    "name": "HubSpot",
-    "description": "Manage CRM contacts, companies, and deals.",
-    "icon": "https://upload.wikimedia.org/wikipedia/commons/3/3f/HubSpot_Logo.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-hubspot"],
-    "envVars": ["HUBSPOT_ACCESS_TOKEN"],
-    "category": "CRM"
-  },
-  {
-    "id": "stripe",
-    "name": "Stripe",
-    "description": "Interact with Stripe payments, customers, and invoices.",
-    "icon": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-stripe"],
-    "envVars": ["STRIPE_API_KEY"],
-    "category": "Finance"
-  },
-  {
-    "id": "google-sheets",
-    "name": "Google Sheets",
-    "description": "Read and write data to Google Sheets.",
-    "icon": "https://upload.wikimedia.org/wikipedia/commons/3/30/Google_Sheets_logo_%282014-2020%29.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-google-sheets"],
-    "envVars": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
-    "category": "Productivity"
-  },
-  {
-    "id": "postgres",
-    "name": "Postgres",
-    "description": "Read and write data to PostgreSQL databases.",
-    "icon": "https://upload.wikimedia.org/wikipedia/commons/2/29/Postgresql_elephant.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-postgres"],
-    "envVars": ["POSTGRES_URL"],
-    "category": "Database"
-  },
-  {
-    "id": "mysql",
-    "name": "MySQL",
-    "description": "Execute queries and manage MySQL databases.",
-    "icon": "https://www.mysql.com/common/logos/logo-mysql-170x115.png",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-mysql"],
-    "envVars": ["MYSQL_HOST", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE"],
-    "category": "Database"
-  },
-  {
-    "id": "redis",
-    "name": "Redis",
-    "description": "Interact with Redis key-value stores.",
-    "icon": "https://upload.wikimedia.org/wikipedia/en/6/6b/Redis_Logo.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-redis"],
-    "envVars": ["REDIS_URL"],
-    "category": "Database"
-  },
-  {
-    "id": "slack",
-    "name": "Slack",
-    "description": "Send messages and interact with Slack channels.",
-    "icon": "https://upload.wikimedia.org/wikipedia/commons/d/d5/Slack_icon_2019.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-slack"],
-    "envVars": ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"],
-    "category": "Communication"
-  },
-  {
-    "id": "discord",
-    "name": "Discord",
-    "description": "Manage channels and send messages to Discord.",
-    "icon": "https://assets-global.website-files.com/6257ade0c7432f3707c24f29/636e0a6a49f12775f0ad3455_full_logo_blurple_RGB.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-discord"],
-    "envVars": ["DISCORD_BOT_TOKEN"],
-    "category": "Communication"
-  },
-  {
-    "id": "linear",
-    "name": "Linear",
-    "description": "Manage issues and projects in Linear.",
-    "icon": "https://linear.app/static/images/logo.png",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-linear"],
-    "envVars": ["LINEAR_API_KEY"],
-    "category": "Productivity"
-  },
-  {
-    "id": "airtable",
-    "name": "Airtable",
-    "description": "Read and write data to Airtable bases.",
-    "icon": "https://upload.wikimedia.org/wikipedia/commons/4/4b/Airtable_Logo.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-airtable"],
-    "envVars": ["AIRTABLE_API_KEY"],
-    "category": "Productivity"
-  },
-  {
-    "id": "puppeteer",
-    "name": "Puppeteer",
-    "description": "Browser automation, web scraping, and screenshots.",
-    "icon": "https://user-images.githubusercontent.com/10370191/44003636-33c064e6-9e22-11e8-9588-51f046942488.png",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
-    "category": "Utilities"
-  },
-  {
-    "id": "fetch",
-    "name": "Fetch",
-    "description": "Download web content and convert it to Markdown.",
-    "icon": "🌐",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-fetch"],
-    "category": "Utilities"
-  },
-  {
-    "id": "sentry",
-    "name": "Sentry",
-    "description": "Retrieve error logs and issues from Sentry.",
-    "icon": "https://sentry-brand.storage.googleapis.com/sentry-glyph-black.svg",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-sentry"],
-    "envVars": ["SENTRY_AUTH_TOKEN", "SENTRY_ORG"],
-    "category": "Development"
-  },
-  {
-    "id": "deepl",
-    "name": "DeepL",
-    "description": "High-quality machine translation via DeepL API.",
-    "icon": "https://www.deepl.com/img/logo/DeepL_Logo_darkBlue_v2.svg",
-    "command": "npx",
-    "args": ["-y", "mcp-server-deepl"],
-    "envVars": ["DEEPL_AUTH_KEY"],
-    "category": "Utilities"
+    "env_vars": [{ "name": "BRAVE_API_KEY", "required": true }]
   },
   {
     "id": "wikipedia",
     "name": "Wikipedia",
-    "description": "Search and retrieve summaries from Wikipedia.",
-    "icon": "https://upload.wikimedia.org/wikipedia/en/8/80/Wikipedia-logo-v2.svg",
+    "description": "Search and retrieve Wikipedia articles. Tools: search_wikipedia(query), get_article(title).",
+    "icon": "book",
+    "category": "Search & Knowledge",
+    "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-wikipedia"],
-    "category": "Knowledge"
+    "args": ["-y", "@modelcontextprotocol/server-wikipedia"]
+  },
+  {
+    "id": "google-sheets",
+    "name": "Google Sheets",
+    "description": "Manage Google Sheets. Tools: read_spreadsheet(id), update_cell(id, range, value).",
+    "icon": "table",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-google-sheets"]
+  },
+  {
+    "id": "google-drive",
+    "name": "Google Drive",
+    "description": "Access Google Drive files. Tools: list_files(), download_file(id).",
+    "icon": "hard-drive",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-google-drive"]
+  },
+  {
+    "id": "google-calendar",
+    "name": "Google Calendar",
+    "description": "Manage calendar events. Tools: list_events(), create_event(data).",
+    "icon": "calendar",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-google-calendar"]
+  },
+  {
+    "id": "microsoft-graph",
+    "name": "Microsoft Graph",
+    "description": "Access M365 (Outlook/Teams/OneDrive). Tools: list_messages(), send_teams_message().",
+    "icon": "mail",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-microsoft-graph"]
+  },
+  {
+    "id": "aws-s3",
+    "name": "AWS S3",
+    "description": "Manage Amazon S3 buckets. Tools: list_buckets(), upload_object(bucket, key, body).",
+    "icon": "box",
+    "category": "Infrastructure",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-aws-s3"]
+  },
+  {
+    "id": "github",
+    "name": "GitHub",
+    "description": "Automate GitHub tasks. Tools: create_issue(repo, title), list_pull_requests(repo).",
+    "icon": "github",
+    "category": "Infrastructure",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env_vars": [{ "name": "GITHUB_PERSONAL_ACCESS_TOKEN", "required": true }]
+  },
+  {
+    "id": "postgres",
+    "name": "Postgres",
+    "description": "Query PostgreSQL databases. Tools: query(sql), list_tables().",
+    "icon": "database",
+    "category": "Databases",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-postgres"],
+    "env_vars": [{ "name": "DATABASE_URL", "required": true }]
+  },
+  {
+    "id": "mysql",
+    "name": "MySQL",
+    "description": "Query MySQL/MariaDB databases. Tools: query(sql), describe_table(name).",
+    "icon": "database",
+    "category": "Databases",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-mysql"]
+  },
+  {
+    "id": "slack",
+    "name": "Slack",
+    "description": "Interact with Slack. Tools: post_message(channel, text), list_channels().",
+    "icon": "message-square",
+    "category": "Communication",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-slack"],
+    "env_vars": [{ "name": "SLACK_BOT_TOKEN", "required": true }]
+  },
+  {
+    "id": "send-mail",
+    "name": "Send Mail",
+    "description": "Sends transactional emails via Resend. Tools: send_email(to, subject, html_body).",
+    "icon": "send",
+    "category": "Communication",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-resend"],
+    "env_vars": [{ "name": "RESEND_API_KEY", "required": true }]
+  },
+  {
+    "id": "fetch",
+    "name": "Fetch",
+    "description": "Fetches and cleans web content for LLMs. Tools: fetch(url).",
+    "icon": "globe",
+    "category": "Utilities",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-fetch"]
+  },
+  {
+    "id": "filesystem",
+    "name": "Filesystem",
+    "description": "Access local files (restricted to ./data). Tools: read_file(path), write_file(path, content).",
+    "icon": "file-text",
+    "category": "Utilities",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem"]
+  },
+  {
+    "id": "gleif",
+    "name": "GLEIF",
+    "description": "Verified legal entity lookups. Tools: gleif_search(query).",
+    "icon": "shield-check",
+    "category": "Business & Data",
+    "transport": "sse",
+    "url": "https://mcp.gleif.org/sse",
+    "env_vars": [{ "name": "MCP_GLEIF_URL", "required": true }]
+  },
+  {
+    "id": "exchange-rates",
+    "name": "Exchange Rates",
+    "description": "Currency conversion via Frankfurter. Tools: get_exchange_rate(amount, from, to).",
+    "icon": "refresh-cw",
+    "category": "Business & Data",
+    "transport": "sse",
+    "url": "https://mcp.frankfurter.app/sse",
+    "env_vars": [{ "name": "MCP_EXCHANGE_URL", "required": true }]
+  },
+  {
+    "id": "openfigi",
+    "name": "OpenFIGI",
+    "description": "Financial instrument lookups. Tools: figi_lookup(ticker).",
+    "icon": "trending-up",
+    "category": "Business & Data",
+    "transport": "sse",
+    "url": "https://mcp.openfigi.com/sse",
+    "env_vars": [{ "name": "MCP_OPENFIGI_URL", "required": true }]
   },
   {
     "id": "yahoo-finance",
     "name": "Yahoo Finance",
-    "description": "Real-time stock prices, analyst ratings, and historical market data.",
-    "icon": "https://s.yimg.com/rz/p/yahoo_finance_en-US_h_p_finance_v2.png",
+    "description": "Real-time market data, stock prices, and analyst ratings. Tools: get_stock_price(ticker), get_analyst_ratings(ticker).",
+    "icon": "bar-chart-2",
+    "category": "Business & Data",
+    "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "-p", "yahoo-finance-mcp-server", "yahoo-finance-mcp"],
-    "category": "Finance"
+    "args": ["-y", "@modelcontextprotocol/server-yfinance"]
   },
   {
     "id": "sec-edgar",
-    "name": "SEC EDGAR",
-    "description": "Access official SEC filings (10-K, 10-Q) for public companies.",
-    "icon": "https://www.sec.gov/themes/custom/sec/logo.svg",
+    "name": "SEC Edgar",
+    "description": "Official SEC filings database. Tools: search_filings(ticker, form_type), get_latest_10k(ticker).",
+    "icon": "file-search",
+    "category": "Business & Data",
+    "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "mcp-edgar"],
-    "category": "Finance"
+    "args": ["-y", "@modelcontextprotocol/server-sec-edgar"]
+  },
+  {
+    "id": "weather",
+    "name": "Weather",
+    "description": "Global weather data and forecasts. Tools: get_forecast(lat, lon).",
+    "icon": "sun",
+    "category": "Environment & Energy",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-weather"],
+    "env_vars": [{ "name": "OPENWEATHERMAP_API_KEY", "required": true }]
+  },
+  {
+    "id": "solar-wind-prognosis",
+    "name": "Solar & Wind",
+    "description": "Specialized forecasts for PV (sun intensity) and wind turbines. Tools: get_solar_yield(lat, lon), get_wind_prognosis(lat, lon).",
+    "icon": "wind",
+    "category": "Environment & Energy",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-solar-wind"]
   }
 ]

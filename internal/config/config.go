@@ -41,7 +41,6 @@ type Config struct {
 	AdminPassword    string // seed admin password on first boot
 	LicensePublicKey  string // PEM-encoded RSA public key for verification
 	LicensePrivateKey string // PEM-encoded RSA private key for signing (optional)
-	AllowStdioMCP     bool   // If true, allow starting local stdio MCP servers
 	MCPMarketSource   string // URL or local file path for MCP Marketplace data
 
 	// Logging
@@ -76,8 +75,7 @@ func Load() *Config {
 		LogLevel:          getEnv("LOG_LEVEL", "info"),
 		LicensePublicKey:  getEnv("LICENSE_PUBLIC_KEY", ""),
 		LicensePrivateKey: getEnv("LICENSE_PRIVATE_KEY", ""),
-		AllowStdioMCP:     getEnv("PHAXA_ALLOW_STDIO_MCP", "false") == "true",
-		MCPMarketSource:   getEnv("MCP_MARKET_SOURCE", "configs/mcp-market.json"),
+		MCPMarketSource:   getEnv("MCP_MARKET_SOURCE", "mcp_registry.yaml"),
 		EnableTelemetry:   getEnv("ENABLE_TELEMETRY", "false") == "true",
 	}
 }

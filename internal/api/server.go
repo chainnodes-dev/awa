@@ -70,9 +70,8 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 		}
 	}
 
-	mcpMgr := mcp.NewManager(s, cfg.AllowStdioMCP)
-	allowStdio := cfg.AllowStdioMCP // Assume this exists in config
-	handlers := NewHandlers(cfg, engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr, allowStdio)
+	mcpMgr := mcp.NewManager(s)
+	handlers := NewHandlers(cfg, engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr)
 
 	router := gin.New()
 	router.MaxMultipartMemory = 64 << 20 // 64 MiB

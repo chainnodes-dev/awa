@@ -111,8 +111,43 @@ func (g *Generator) SetPrompt(id, content string) {
 //
 // If the LLM returns invalid YAML, it is automatically retried once with the
 // validation error appended. If the retry also fails, the error is returned.
+func (g *Generator) getFullRegistry(ctx context.Context) []MCPServerEntry {
+	full := make([]MCPServerEntry, len(g.registry))
+	copy(full, g.registry)
+
+	if g.wfStore != nil {
+		if s, ok := g.wfStore.(store.Store); ok {
+			if dynamic, err := s.ListMCPServers(ctx); err == nil {
+				for _, d := range dynamic {
+					exists := false
+					for _, existing := range g.registry {
+						if existing.Name == d.Name {
+							exists = true
+							break
+						}
+					}
+					if exists {
+						continue
+					}
+					entry := MCPServerEntry{
+						Name:        d.Name,
+						Description: d.Description,
+						EnvVar:      strings.ToUpper(strings.ReplaceAll(d.Name, "-", "_")) + "_URL",
+						URL:         d.URL,
+						Command:     d.Command,
+						Args:        d.Args,
+					}
+					full = append(full, entry)
+				}
+			}
+		}
+	}
+	return full
+}
+
 func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*GenerateResult, error) {
 	isRefinement := req.ExistingYAML != ""
+	
 	system := g.buildSystemPrompt(req.MCPServers)
 	if isRefinement {
 		system += g.refinementAddendum()
@@ -285,109 +320,112 @@ func (g *Generator) extractAndValidate(content string) (string, *asmtypes.Workfl
 // buildSystemPrompt produces the system prompt that teaches the LLM the YAML schema
 // and lists the available MCP servers.
 func (g *Generator) buildCoreRules() string {
-	return g.prompts.Get(PromptIDBase, `You are an expert workflow designer for the Phaxa (Phaxa) platform.
-Produce a valid Phaxa workflow YAML based on the user's description.
+	return DefaultBasePrompt() + "\n\n" + DefaultSkillPrompt() + `
 
-## YAML Schema & Node Types
-`+"```yaml"+`
-apiVersion: phaxa/v1
+### YAML Schema Overview
+` + "```yaml" + `
+apiVersion: asm.bauhaus28.com/v1
 kind: Workflow
 metadata:
-  name: kebab-case-unique-name
+  name: kebab-case-name
   version: "1"
-  description: "Concise 1-sentence abstract"
-  process_description: "Detailed natural language description of the business process"
-  labels: { env: production, category: finance }
-  system_prompt: "Global persona/rules for LLM agents"
+  description: "1-sentence summary"
 blackboard:
-  schema: { input_field: { type: string, required: true } } # ONLY required inputs or defaults
+  schema:
+    input_field: { type: string, required: true }
 states:
-  - name: START        # initial: exactly one required
+  - name: START
     type: initial
-    agent: primary-agent
-    instructions: "Concise node description. Task: verify input; triggers: [ok, error]"
-  - name: CALC_TAX     # script: deterministic expr-lang math/mapping only
-    type: script
-    script: { trigger: 'amount > 1000 ? "review" : "approve"', updates: { vat: "amount * 0.19" } }
-  - name: CALC_JS      # code: JavaScript executed via goja
+  - name: CALC_LOGIC
     type: code
-    instructions: "Concise node description. Task: verify input; triggers: [ok, error]"
-    timeout: "1h"       # Optional duration (e.g. 10m, 1h, 2d)
-    on_timeout: timeout_occurred # Required if timeout is set
-  - name: MANUAL_STEP  # hitl: human-in-the-loop approval
+    code: { code: "return {trigger: 'done'};" }
+  - name: HUMAN_REVIEW
     type: hitl
     assignee: "team-name"
-    instructions: "Description of the human task."
-    form_schema: { type: object, properties: { lei: { type: string } } } # Optional UI schema
-# ... other states: wait, terminal, prompt ...
-
-# GLOBAL block: transitions must be outside the states list
+    form_schema: { type: object, properties: { approved: { type: boolean } } }
 transitions:
   - from: START
-    to: NEXT           # Single target
-    trigger: go
-    guard: "amount > 0" # Optional logic
-  - from: MANUAL_STEP
-    to: SUCCESS
-    trigger: approved
-  - from: MANUAL_STEP
-    to: REJECTED
-    trigger: rejected
-  - from: BRANCH
-    to_nodes: [A, B]   # Parallel fan-out
-    trigger: split
-
+    to: CALC_LOGIC
+    trigger: done
 agents:
-  - name: agent-name
-    model: "" # optional; leave empty to use platform default
-    config: { mcp_servers: "{{ env.URL }}" } # config values must be STRINGS
-`+"```"+`
+  - name: primary-agent
+    config: { mcp_servers: ["server-name"] }
+` + "```" + `
 
-## Core Rules
-1. **Integrity**: Exactly one 'initial' and at least one 'terminal' state.
-2. **Global Transitions**: Transitions MUST be in the top-level 'transitions:' block. NEVER place a 'transitions' list inside a state.
-3. **Efficiency**: Be concise. Avoid redundant prompt states. Consolidate logic into scripts/code where possible. 
-4. **Code Nodes**: The 'code' block MUST be an object with BOTH 'language' (always 'javascript') and 'code' fields. Example: ` + "`" + `code: { language: javascript, code: "bb.total = bb.amount * 1.19; return {trigger: 'done'};" }` + "`" + ` . NEVER use a plain string.
-5. **Expressions**: NEVER use literal placeholders like "expr". Provide valid expr-lang logic.
-6. **Instructions**: Start each 'instructions' field with a concise 1-sentence node description for the human designer, followed by the specific task and available triggers for the agent.
-7. **Blackboard Minimalist**: Only define fields in 'blackboard.schema' that are required as initial input or need a specific default value. NEVER include fields that are produced or updated during workflow runtime (agents/scripts handle these dynamically).
-8. **Config**: Every value in 'agents.config' MUST be a string. Use '` + "`" + `{{ env.VAR }}` + "`" + `' for env vars.
-9. **Abstracts**: Always generate/preserve a professional 1-sentence 'metadata.description'.
-10. **States Format**: The 'states' field MUST be a YAML list (array), NOT a map.
-11. **Versioning**: Use simple increasing integers for 'metadata.version' (e.g., "1", "2", "3"). NEVER use semantic versioning like "1.0.0".
-12. **CRITICAL**: Every 'instructions' field MUST be wrapped in double-quotes to prevent YAML parsing errors (e.g. ` + "`" + `instructions: "Task: verify invoice"` + "`" + `).
-13. **Process Description**: Always include 'metadata.process_description' with a professional 2-3 sentence summary of the business logic.
-14. **Script Nodes**: The 'script' block MUST be an object with BOTH 'trigger' (a valid expr string evaluating to a trigger name) and 'updates' (an object mapping fields to expr strings). Example: script: { trigger: "'ok'", updates: { status: "'processed'" } }. NEVER leave 'trigger' empty.
-`)
+### Efficiency Rules
+1. **Deterministic Logic**: Use 'code' (JavaScript) or 'script' (expr-lang) for math, string manipulation, and branching.
+2. **LLM Usage**: Use 'prompt' (Agent) nodes ONLY for reasoning or MCP tool calling.
+3. **Subprocesses**: Always check the Reusable Process Catalog before implementing logic.
+`
 }
 
 func (g *Generator) buildSystemPrompt(requestedServers []string) string {
+	return g.AssembleSystemPrompt(context.Background(), requestedServers, nil, "")
+}
+
+// AssembleSystemPrompt is the unified entry point for building generation system prompts.
+func (g *Generator) AssembleSystemPrompt(ctx context.Context, requestedServers []string, registeredProcesses []*asmtypes.WorkflowDef, specificPrompt string) string {
 	var sb strings.Builder
-	sb.WriteString(g.buildCoreRules())
 
-	// Add MCP server context if any servers were requested or all are listed.
-	relevantServers := g.registry
-	if len(requestedServers) > 0 {
-		relevantServers = filterServers(g.registry, requestedServers)
-	}
+	// 1. Base persona and Mental Model
+	sb.WriteString(DefaultBasePrompt())
+	sb.WriteString("\n\n")
+	sb.WriteString(DefaultSkillPrompt())
+	sb.WriteString("\n\n")
 
-	if len(relevantServers) > 0 {
-		sb.WriteString("## Available MCP Servers\n\n")
-		sb.WriteString("The following MCP servers are registered and can be assigned to agents via `config.mcp_servers`.\n")
-		sb.WriteString("Reference them as `{{ env.ENV_VAR_KEY }}` in the YAML. Choose servers whose capabilities match the agent's role.\n\n")
-		for _, s := range relevantServers {
-			sb.WriteString(fmt.Sprintf("- **%s** (`{{ env.%s }}`): %s\n", s.Name, s.EnvVar, s.Description))
+	// 2. YAML Schema Overview
+	sb.WriteString("### YAML Schema Overview\n")
+	sb.WriteString("```yaml\n")
+	sb.WriteString("apiVersion: asm.bauhaus28.com/v1\n")
+	sb.WriteString("kind: Workflow\n")
+	sb.WriteString("metadata:\n")
+	sb.WriteString("  name: kebab-case-name\n")
+	sb.WriteString("  version: \"1\"\n")
+	sb.WriteString("  description: \"1-sentence summary\"\n")
+	sb.WriteString("blackboard:\n")
+	sb.WriteString("  schema:\n")
+	sb.WriteString("    input_field: { type: string, required: true }\n")
+	sb.WriteString("states:\n")
+	sb.WriteString("  - name: START\n")
+	sb.WriteString("    type: initial\n")
+	sb.WriteString("  - name: CALC_LOGIC\n")
+	sb.WriteString("    type: code\n")
+	sb.WriteString("    code: { code: \"return {trigger: 'done'};\" }\n")
+	sb.WriteString("  - name: HUMAN_REVIEW\n")
+	sb.WriteString("    type: hitl\n")
+	sb.WriteString("    assignee: \"team-name\"\n")
+	sb.WriteString("    form_schema: { type: object, properties: { approved: { type: boolean } } }\n")
+	sb.WriteString("transitions:\n")
+	sb.WriteString("  - from: START\n")
+	sb.WriteString("    to: CALC_LOGIC\n")
+	sb.WriteString("    trigger: done\n")
+	sb.WriteString("agents:\n")
+	sb.WriteString("  - name: primary-agent\n")
+	sb.WriteString("    config: { mcp_servers: [\"server-name\"] }\n")
+	sb.WriteString("```\n\n")
+
+	// 3. Reusable Process Catalog
+	if len(registeredProcesses) > 0 {
+		sb.WriteString(g.buildProcessCatalogSection(registeredProcesses))
+		sb.WriteString("\n\n")
+	} else if g.wfStore != nil {
+		processes, err := g.wfStore.ListDefinitions(ctx, store.DefinitionFilter{ReusableOnly: true})
+		if err == nil && len(processes) > 0 {
+			sb.WriteString(g.buildProcessCatalogSection(processes))
+			sb.WriteString("\n\n")
 		}
-		sb.WriteString("\n")
 	}
 
-	sb.WriteString(`## Output Format
+	// 4. MCP Servers
+	registry := g.getFullRegistry(ctx)
+	sb.WriteString(g.buildMCPSection(requestedServers, registry))
+	sb.WriteString("\n\n")
 
-1. Respond with the updated workflow YAML wrapped in a ` + "```yaml" + ` code block.
-2. AFTER the code block, provide a brief (1-2 sentence) explanation of the changes you made and why.
-3. Do not include any text before the code block.
-4. The YAML must be complete and valid according to the schema above.
-`)
+	// 5. Step Specific Instructions
+	if specificPrompt != "" {
+		sb.WriteString(specificPrompt)
+		sb.WriteString("\n\n")
+	}
 
 	return sb.String()
 }

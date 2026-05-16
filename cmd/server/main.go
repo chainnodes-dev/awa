@@ -117,7 +117,6 @@ func main() {
 	mcpEntries, _ := designer.LoadMCPRegistry(registryPath)
 
 	api.SeedWorkflows(s, defaultTenant.ID)
-	api.SeedMCPServers(s, defaultTenant.ID, mcpEntries)
 
 	llmRegistry, activeLLMProvider, _ := llm.BuildRegistryFromDB(tenantCtx, s)
 	var gen *designer.Generator

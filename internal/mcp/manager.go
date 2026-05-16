@@ -19,17 +19,15 @@ import (
 
 // Manager handles the lifecycle of stdio-based MCP servers.
 type Manager struct {
-	store         store.Store
-	allowStdioMCP bool
-	procs         map[string]*stdioProcess
-	mu            sync.Mutex
+	store store.Store
+	procs map[string]*stdioProcess
+	mu    sync.Mutex
 }
 
-func NewManager(s store.Store, allowStdio bool) *Manager {
+func NewManager(s store.Store) *Manager {
 	return &Manager{
-		store:         s,
-		allowStdioMCP: allowStdio,
-		procs:         make(map[string]*stdioProcess),
+		store: s,
+		procs: make(map[string]*stdioProcess),
 	}
 }
 
@@ -48,10 +46,6 @@ func (m *Manager) GetClient(ctx context.Context, name string) (Client, error) {
 
 	if srv.Transport != "stdio" {
 		return NewSSEClient(srv.URL), nil
-	}
-
-	if !m.allowStdioMCP {
-		return nil, fmt.Errorf("local stdio MCP servers are disabled")
 	}
 
 	p, _, err := m.startStdioClient(srv)

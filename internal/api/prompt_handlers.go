@@ -13,12 +13,10 @@ func (h *Handlers) GetPrompts(c *gin.Context) {
 	prompts := make(map[string]string)
 	
 	keys := []string{
-		"workflow_generation",
-		"workflow_scaffold",
-		"workflow_scaffold_mcp",
-		"workflow_codegen",
-		"workflow_analyse",
-		"workflow_summarise",
+		"workflow_generator_base",
+		"skill_analyser_preamble",
+		"workflow_refinement_addendum",
+		"workflow_decompose",
 		"workflow_categorise",
 		"workflow_wire",
 		"workflow_implement_finish",
@@ -27,21 +25,18 @@ func (h *Handlers) GetPrompts(c *gin.Context) {
 
 	// Internal mapping from frontend keys to designer constants
 	mapping := map[string]string{
-		"workflow_generation":       designer.PromptIDBase,
-		"workflow_scaffold":         designer.PromptIDSkill,
-		"workflow_analyse":          designer.PromptIDDecompose,
-		"workflow_categorise":       designer.PromptIDCategorise,
-		"workflow_wire":             designer.PromptIDWire,
-		"workflow_implement_finish": designer.PromptIDImplFinish,
-		"workflow_debugger":         designer.PromptIDDebug,
+		"workflow_generator_base":      designer.PromptIDBase,
+		"skill_analyser_preamble":      designer.PromptIDSkill,
+		"workflow_refinement_addendum": designer.PromptIDRefine,
+		"workflow_decompose":           designer.PromptIDDecompose,
+		"workflow_categorise":          designer.PromptIDCategorise,
+		"workflow_wire":                designer.PromptIDWire,
+		"workflow_implement_finish":    designer.PromptIDImplFinish,
+		"workflow_debugger":            designer.PromptIDDebug,
 	}
 
 	for _, k := range keys {
-		internalID := k
-		if mapped, ok := mapping[k]; ok {
-			internalID = mapped
-		}
-
+		internalID := mapping[k]
 		if h.generator != nil {
 			prompts[k] = h.generator.GetPrompt(internalID)
 		} else {
@@ -61,6 +56,24 @@ func (h *Handlers) UpdatePrompt(c *gin.Context) {
 	}
 
 	id := c.Param("id")
+	
+	// Map frontend key to internal designer ID
+	mapping := map[string]string{
+		"workflow_generator_base":      designer.PromptIDBase,
+		"skill_analyser_preamble":      designer.PromptIDSkill,
+		"workflow_refinement_addendum": designer.PromptIDRefine,
+		"workflow_decompose":           designer.PromptIDDecompose,
+		"workflow_categorise":          designer.PromptIDCategorise,
+		"workflow_wire":                designer.PromptIDWire,
+		"workflow_implement_finish":    designer.PromptIDImplFinish,
+		"workflow_debugger":            designer.PromptIDDebug,
+	}
+
+	internalID := id
+	if mapped, ok := mapping[id]; ok {
+		internalID = mapped
+	}
+
 	var body struct {
 		Content string `json:"content" binding:"required"`
 	}
@@ -69,8 +82,8 @@ func (h *Handlers) UpdatePrompt(c *gin.Context) {
 		return
 	}
 
-	h.generator.SetPrompt(id, body.Content)
-	c.JSON(http.StatusOK, gin.H{"status": "updated", "id": id})
+	h.generator.SetPrompt(internalID, body.Content)
+	c.JSON(http.StatusOK, gin.H{"status": "updated", "id": internalID})
 }
 
 // Note: I need to add GetPrompt and SetPrompt methods to Generator in generator.go

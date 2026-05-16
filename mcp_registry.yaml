@@ -8,87 +8,229 @@
 mcp_servers:
   # ── Search & Knowledge ──────────────────────────────────────────────
   - name: brave-search
+    category: Search
+    icon: search
+    author: Model Context Protocol
     env_var: BRAVE_API_KEY
-    description: "Real-time web search. Tools: search(query)."
+    description: "High-quality, private web search for real-time information."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search"
 
   - name: wikipedia
-    description: "Search and retrieve Wikipedia articles. Tools: search_wikipedia(query), get_article(title)."
+    category: Knowledge
+    icon: book
+    author: Model Context Protocol
+    description: "Search and retrieve full-text articles from Wikipedia."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/wikipedia"
 
   # ── Productivity ────────────────────────────────────────────────────
   - name: google-sheets
-    description: "Manage Google Sheets. Tools: read_spreadsheet(id), update_cell(id, range, value)."
+    category: Productivity
+    icon: table
+    author: Model Context Protocol
+    description: "Read, write, and manage Google Sheets spreadsheets."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/google-sheets"
 
   - name: google-drive
-    description: "Access Google Drive files. Tools: list_files(), download_file(id)."
+    category: Productivity
+    icon: hard-drive
+    author: Model Context Protocol
+    description: "Access and manage files in Google Drive."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/google-drive"
 
   - name: google-calendar
-    description: "Manage calendar events. Tools: list_events(), create_event(data)."
+    category: Productivity
+    icon: calendar
+    author: Model Context Protocol
+    description: "Full access to Google Calendar events and scheduling."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/google-calendar"
 
-  - name: microsoft-graph
-    description: "Access M365 (Outlook/Teams/OneDrive). Tools: list_messages(), send_teams_message()."
+  - name: notion
+    category: Productivity
+    icon: book-open
+    author: Model Context Protocol
+    env_var: NOTION_API_KEY
+    description: "Access and manage Notion pages, databases, and blocks."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/notion"
 
-  # ── Infrastructure ──────────────────────────────────────────────────
-  - name: aws-s3
-    description: "Manage Amazon S3 buckets. Tools: list_buckets(), upload_object(bucket, key, body)."
+  - name: linear
+    category: Productivity
+    icon: check-square
+    author: Linear
+    env_var: LINEAR_API_KEY
+    description: "Manage issues and projects in Linear."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/linear"
 
+  - name: airtable
+    category: Productivity
+    icon: grid
+    author: Model Context Protocol
+    env_var: AIRTABLE_API_KEY
+    description: "Read and write data to Airtable bases."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/airtable"
+
+  # ── Development ─────────────────────────────────────────────────────
   - name: github
+    category: Development
+    icon: github
+    author: Model Context Protocol
     env_var: GITHUB_PERSONAL_ACCESS_TOKEN
-    description: "Automate GitHub tasks. Tools: create_issue(repo, title), list_pull_requests(repo)."
+    description: "Automate GitHub tasks: PRs, issues, and code search."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/github"
 
-  # ── Databases ──────────────────────────────────────────────────────
+  - name: sentry
+    category: Development
+    icon: activity
+    author: Sentry
+    env_vars: ["SENTRY_AUTH_TOKEN", "SENTRY_ORG"]
+    description: "Retrieve error logs and issues from Sentry."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/sentry"
+
+  # ── Infrastructure & Databases ──────────────────────────────────────
+  - name: aws-s3
+    category: Infrastructure
+    icon: box
+    author: Model Context Protocol
+    description: "Manage objects and buckets in Amazon S3."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/aws-s3"
+
   - name: postgres
+    category: Databases
+    icon: database
+    author: Model Context Protocol
     env_var: DATABASE_URL
-    description: "Query PostgreSQL databases. Tools: query(sql), list_tables()."
+    description: "Connect to and query PostgreSQL databases."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/postgres"
 
   - name: mysql
-    description: "Query MySQL/MariaDB databases. Tools: query(sql), describe_table(name)."
+    category: Databases
+    icon: database
+    author: Model Context Protocol
+    env_vars: ["MYSQL_HOST", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE"]
+    description: "Connect to and query MySQL or MariaDB databases."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/mysql"
 
-  # ── Communication ──────────────────────────────────────────────────
+  - name: redis
+    category: Databases
+    icon: database
+    author: Model Context Protocol
+    env_var: REDIS_URL
+    description: "Interact with Redis key-value stores."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/redis"
+
+  # ── Communication & CRM ─────────────────────────────────────────────
   - name: slack
+    category: Communication
+    icon: message-square
+    author: Model Context Protocol
     env_var: SLACK_BOT_TOKEN
-    description: "Interact with Slack. Tools: post_message(channel, text), list_channels()."
+    description: "Send messages, list channels, and interact with Slack workspaces."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/slack"
 
-  - name: send-mail
-    env_var: RESEND_API_KEY
-    description: "Sends transactional emails via Resend. Tools: send_email(to, subject, html_body)."
+  - name: discord
+    category: Communication
+    icon: message-circle
+    author: Model Context Protocol
+    env_var: DISCORD_BOT_TOKEN
+    description: "Manage channels and send messages to Discord."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/discord"
+
+  - name: gmail
+    category: Communication
+    icon: mail
+    author: Model Context Protocol
+    env_vars: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
+    description: "Read, search, and send emails via the Gmail API."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/google-mail"
+
+  - name: hubspot
+    category: CRM
+    icon: users
+    author: Model Context Protocol
+    env_var: HUBSPOT_ACCESS_TOKEN
+    description: "Manage CRM contacts, companies, and deals."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/hubspot"
+
+  # ── Finance ─────────────────────────────────────────────────────────
+  - name: stripe
+    category: Finance
+    icon: credit-card
+    author: Stripe
+    env_var: STRIPE_API_KEY
+    description: "Interact with Stripe payments, customers, and invoices."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/stripe"
+
+  - name: yahoo-finance
+    category: Finance
+    icon: trending-up
+    author: Model Context Protocol
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-yfinance"]
+    description: "Real-time stock prices, analyst ratings, and historical market data."
+
+  - name: sec-edgar
+    category: Finance
+    icon: file-search
+    author: Model Context Protocol
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-sec-edgar"]
+    description: "Official SEC filings database for US public companies."
 
   # ── Utilities ──────────────────────────────────────────────────────
   - name: fetch
-    description: "Fetches and cleans web content for LLMs. Tools: fetch(url)."
+    category: Utilities
+    icon: globe
+    author: Model Context Protocol
+    description: "Download web content and convert it to Markdown."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch"
+
+  - name: puppeteer
+    category: Utilities
+    icon: chrome
+    author: Model Context Protocol
+    description: "Browser automation, web scraping, and screenshots."
+    doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/puppeteer"
+
+  - name: deepl
+    category: Utilities
+    icon: languages
+    author: DeepL
+    env_var: DEEPL_AUTH_KEY
+    description: "High-quality machine translation via DeepL API."
 
   - name: filesystem
-    description: "Access local files (restricted to ./data). Tools: read_file(path), write_file(path, content)."
-
-  # ── Business & Data ────────────────────────────────────────────────
-  - name: gleif
-    transport: sse
-    env_var: MCP_GLEIF_URL
-    description: "Verified legal entity lookups. Tools: gleif_search(query)."
-
-  - name: exchange-rates
-    transport: sse
-    env_var: MCP_EXCHANGE_URL
-    description: "Currency conversion via Frankfurter. Tools: get_exchange_rate(amount, from, to)."
-
-  - name: openfigi
-    transport: sse
-    env_var: MCP_OPENFIGI_URL
-    description: "Financial instrument lookups. Tools: figi_lookup(ticker)."
-
-  - name: yahoo-finance
+    category: Utilities
+    icon: file-text
+    author: Model Context Protocol
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-yfinance"]
-    description: "Real-time market data, stock prices, and analyst ratings. Tools: get_stock_price(ticker), get_analyst_ratings(ticker)."
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "./data"]
+    description: "Access local files (restricted to ./data)."
 
-  - name: sec-edgar
+  # ── Enterprise ──────────────────────────────────────────────────────
+  - name: sap-hana
+    category: Enterprise
+    icon: database
+    author: SAP
+    env_vars: ["HANA_HOST", "HANA_USER", "HANA_PASSWORD"]
+    description: "Query and manage SAP HANA / HANA Cloud databases."
+
+  - name: sap-fiori
+    category: Enterprise
+    icon: layout
+    author: SAP
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-sec-edgar"]
-    description: "Official SEC filings database. Tools: search_filings(ticker, form_type), get_latest_10k(ticker)."
+    args: ["-y", "@sap-ux/fiori-mcp-server"]
+    description: "Tooling for developing and modifying SAP Fiori applications."
 
   # ── Environment & Energy ──────────────────────────────────────────
   - name: weather
+    category: Environment & Energy
+    icon: cloud-sun
+    author: Model Context Protocol
     env_var: OPENWEATHERMAP_API_KEY
-    description: "Global weather data and forecasts. Tools: get_forecast(lat, lon)."
+    description: "Global weather data and forecasts."
 
   - name: solar-wind-prognosis
-    description: "Specialized forecasts for PV (sun intensity) and wind turbines. Tools: get_solar_yield(lat, lon), get_wind_prognosis(lat, lon)."
+    category: Environment & Energy
+    icon: wind
+    author: Specialized
+    description: "Specialized forecasts for PV (sun intensity) and wind turbines."

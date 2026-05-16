@@ -82,7 +82,7 @@
         </div>
       </section>
 
-      <!-- Marketplace Governance -->
+      <!-- Platform Governance -->
       <section class="card p-5 space-y-6">
         <div class="flex items-center justify-between">
           <div>

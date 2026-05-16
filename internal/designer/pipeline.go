@@ -75,26 +75,21 @@ type scriptJobResult struct {
 // description.  All states are typed as 'prompt' so the canvas can render
 // them immediately.  No transitions, code, or expressions are generated yet.
 func (g *Generator) DecomposeWorkflow(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
-	system := g.prompts.Get(PromptIDDecompose, DefaultDecomposePrompt())
-	system += g.buildMCPSection(req.MCPServers)
-	system += pipelineOutputFormat()
-
+	system := g.assemblePipelineSystemPrompt(ctx, PromptIDDecompose, DefaultDecomposePrompt(), req.MCPServers)
 	userMsg := fmt.Sprintf("Process description:\n\n%s", req.ProcessDescription)
 	return g.runPipelineStep(ctx, req, system, userMsg, true)
 }
 
 // ── Step 2: Categorise ───────────────────────────────────────────────────────
 
-// CategoriseNodes assigns the correct Phaxa node type to every state produced by
+// CategoriseNodes assigns the correct node type to every state produced by
 // DecomposeWorkflow.  Placeholder implementations are injected for code/script
 // nodes so the YAML remains loadable throughout the pipeline.
 func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
 	if req.CurrentYAML == "" {
 		return nil, fmt.Errorf("current_yaml is required for the categorise step")
 	}
-	system := g.prompts.Get(PromptIDCategorise, DefaultCategorisePrompt())
-	system += g.buildMCPSection(req.MCPServers)
-	system += pipelineOutputFormat()
+	system := g.assemblePipelineSystemPrompt(ctx, PromptIDCategorise, DefaultCategorisePrompt(), req.MCPServers)
 
 	userMsg := fmt.Sprintf(
 		"Process description:\n\n%s\n\nSkeleton workflow YAML (all nodes currently typed as 'prompt'):\n\n```yaml\n%s\n```",
@@ -112,9 +107,7 @@ func (g *Generator) WireWorkflow(ctx context.Context, req PipelineRequest) (*Pip
 	if req.CurrentYAML == "" {
 		return nil, fmt.Errorf("current_yaml is required for the wire step")
 	}
-	system := g.prompts.Get(PromptIDWire, DefaultWirePrompt())
-	system += g.buildMCPSection(req.MCPServers)
-	system += pipelineOutputFormat()
+	system := g.assemblePipelineSystemPrompt(ctx, PromptIDWire, DefaultWirePrompt(), req.MCPServers)
 
 	userMsg := fmt.Sprintf(
 		"Process description:\n\n%s\n\nCategorised workflow YAML (types assigned, needs transitions and blackboard schema):\n\n```yaml\n%s\n```",
@@ -197,14 +190,12 @@ func (g *Generator) ImplementNodes(ctx context.Context, req PipelineRequest) (*P
 		patchedYAML = req.CurrentYAML
 	}
 
-	finishSystem := g.prompts.Get(PromptIDImplFinish, DefaultImplementFinishPrompt())
-	finishSystem += g.buildMCPSection(req.MCPServers)
-	finishSystem += pipelineOutputFormat()
+	system := g.assemblePipelineSystemPrompt(ctx, PromptIDImplFinish, DefaultImplementFinishPrompt(), req.MCPServers)
 	finishMsg := fmt.Sprintf(
 		"Original process description:\n\n%s\n\nWorkflow with code and script nodes already implemented (remaining nodes need finalising):\n\n```yaml\n%s\n```",
 		req.ProcessDescription, patchedYAML,
 	)
-	return g.runPipelineStep(ctx, req, finishSystem, finishMsg, false)
+	return g.runPipelineStep(ctx, req, system, finishMsg, false)
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -339,7 +330,7 @@ func repairNodeStructures(y string) string {
 // implementFallback runs a single refinement LLM call when the wired YAML cannot
 // be structurally parsed for the parallel code-generation fanout.
 func (g *Generator) implementFallback(ctx context.Context, req PipelineRequest) (*PipelineStepResult, error) {
-	system := g.buildSystemPrompt(req.MCPServers) + g.refinementAddendum()
+	system := g.AssembleSystemPrompt(ctx, req.MCPServers, nil, g.refinementAddendum())
 	userMsg := fmt.Sprintf(
 		"Here is the current workflow YAML:\n\n```yaml\n%s\n```\n\nProcess context: %s\n\nPlease apply the following change:\n\nImplement all placeholder nodes. Replace any TODO code with working JavaScript. Replace placeholder script triggers with real expr-lang expressions. Finalise hitl assignees, wait conditions, and emit_event definitions. Produce a complete runnable workflow.",
 		req.CurrentYAML, req.ProcessDescription,
@@ -348,10 +339,10 @@ func (g *Generator) implementFallback(ctx context.Context, req PipelineRequest) 
 }
 
 // buildMCPSection builds the MCP server context block for a pipeline step prompt.
-func (g *Generator) buildMCPSection(requestedServers []string) string {
-	relevantServers := g.registry
+func (g *Generator) buildMCPSection(requestedServers []string, registry []MCPServerEntry) string {
+	relevantServers := registry
 	if len(requestedServers) > 0 {
-		relevantServers = filterServers(g.registry, requestedServers)
+		relevantServers = filterServers(registry, requestedServers)
 	}
 	if len(relevantServers) == 0 {
 		return ""
@@ -460,13 +451,7 @@ func patchImplementations(yamlStr string, codeJobs []codeJobResult, scriptJobs [
 	return string(out), nil
 }
 
-func pipelineOutputFormat() string {
-	return `
-## Output Format
-
-Respond with ONLY the workflow YAML, wrapped in a ` + "```yaml" + ` code block.
-Do not include any explanation before or after the code block.
-The YAML must be complete and valid according to the Phaxa schema.
-`
+func (g *Generator) assemblePipelineSystemPrompt(ctx context.Context, promptID, defaultContent string, mcpServers []string) string {
+	return g.AssembleSystemPrompt(ctx, mcpServers, nil, g.prompts.Get(promptID, defaultContent))
 }
 
