@@ -71,6 +71,8 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:80}
     ports:
       - "8080:8080"
+    volumes:
+      - ./data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,6 +89,7 @@ services:
       - DATABASE_URL=postgres://${DB_USER:-phaxa}:${DB_PASSWORD:-phaxa_secret}@postgres:5432/${DB_NAME:-phaxa}?sslmode=disable
       - TEMPORAL_ADDRESS=temporal:7233
     volumes:
+      - ./data:/app/data
       - npm_cache:/root/.npm
       - pip_cache:/root/.cache/pip
     depends_on:
