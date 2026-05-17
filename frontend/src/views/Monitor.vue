@@ -32,7 +32,7 @@
       </div>
 
       <!-- HITL controls (only for hitl-type states, not wait/join nodes) -->
-      <template v-if="currentStateType === 'hitl'">
+      <template v-if="currentStateType === 'hitl' && !hitlResolved">
         <button @click="resolve('approved')" class="btn bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs">✓ Approve</button>
         <button @click="resolve('rejected')" class="btn bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs">✕ Reject</button>
       </template>
@@ -176,14 +176,38 @@
                 <span class="text-accent">{{ isLive ? 'Current' : 'Step ' + (scrubIndex + 1) }}</span>
                 <span>End</span>
               </div>
-              <input 
-                type="range" 
-                min="0" 
-                :max="history.length" 
-                v-model.number="scrubIndex"
-                @input="isLive = false"
-                class="w-full h-1.5 bg-surface-2 rounded-lg appearance-none cursor-pointer accent-accent"
-              />
+              <div class="flex items-center gap-2">
+                <button 
+                  @click="stepBack" 
+                  :disabled="isLive || scrubIndex <= 0"
+                  class="p-1 rounded bg-surface-2 border border-border text-text-muted hover:text-text disabled:opacity-30 disabled:hover:text-text-muted cursor-pointer disabled:cursor-not-allowed transition-all"
+                  title="Step Back"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="15 18 9 12 15 6"/>
+                  </svg>
+                </button>
+                
+                <input 
+                  type="range" 
+                  min="0" 
+                  :max="history.length" 
+                  v-model.number="scrubIndex"
+                  @input="isLive = false"
+                  class="flex-1 h-1.5 bg-surface-2 rounded-lg appearance-none cursor-pointer accent-accent"
+                />
+
+                <button 
+                  @click="stepForward" 
+                  :disabled="isLive || scrubIndex >= history.length"
+                  class="p-1 rounded bg-surface-2 border border-border text-text-muted hover:text-text disabled:opacity-30 disabled:hover:text-text-muted cursor-pointer disabled:cursor-not-allowed transition-all"
+                  title="Step Forward"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div class="text-[10px] font-mono text-text-muted bg-surface-2 px-2 py-1 rounded-md border border-border">
@@ -496,7 +520,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, shallowRef, watch, markRaw } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { VueFlow, EdgeLabelRenderer } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -534,12 +558,13 @@ const showDebugModal = ref(false)
 const triggerName  = ref('')
 const workflowDef  = ref(null)
 const workflowYAML = ref('')
-const nodeTypes    = shallowRef({ stateNode: StateNode })
+const nodeTypes    = shallowRef({ stateNode: markRaw(StateNode) })
 const hitlForm     = ref(null)
 const showBlackboardTweak = ref(true)
 const tweakView = ref('form')
 const editedBlackboard = ref({})
 const resolveError = ref('')
+const hitlResolved = ref(false)
 const selectedTransition = ref(null)
 
 const scrubIndex = ref(0)
@@ -598,6 +623,7 @@ const currentStateDef = computed(() => {
 
 const canTerminate = computed(() => {
   if (!run.value) return false
+  if (currentStateType.value === 'terminal') return false
   return ['pending', 'running', 'waiting'].includes(run.value.status)
 })
 
@@ -641,10 +667,15 @@ const visibleTabs  = computed(() => {
 
 // Auto-switch to Task tab when waiting at a HITL node
 watch([() => run.value?.status, () => currentStateType.value], ([status, type]) => {
-  if (status === 'waiting' && type === 'hitl') {
+  if (status === 'waiting' && type === 'hitl' && !hitlResolved.value) {
     activeTab.value = 'task'
   }
 }, { immediate: true })
+
+// Reset HITL resolved state when switching to a different state
+watch(() => displayCurrentState.value, () => {
+  hitlResolved.value = false
+})
 
 // Capture blackboard when HITL is active
 watch([() => run.value?.blackboard, () => run.value?.status], ([bb, status]) => {
@@ -835,6 +866,7 @@ async function resolve(resolution) {
       ...editedBlackboard.value,
       ...formPayload
     }
+    hitlResolved.value = true
     await execStore.resolveHITL(route.params.id, resolution, 'user', finalPayload)
     
     // Switch tab and clean up before refetching to ensure smooth transition
@@ -843,6 +875,7 @@ async function resolve(resolution) {
     
     await loadRun()
   } catch (err) {
+    hitlResolved.value = false
     const msg = err?.response?.data?.error ?? err?.message ?? 'Unknown error'
     resolveError.value = msg
     await loadRun()
@@ -880,6 +913,22 @@ function inspectTransition(t) {
     activeTab.value = 'snapshot'
   }
 }
+
+function stepBack() {
+  if (isLive.value || scrubIndex.value <= 0) return
+  scrubIndex.value--
+}
+
+function stepForward() {
+  if (isLive.value || scrubIndex.value >= history.value.length) return
+  scrubIndex.value++
+}
+
+watch(isLive, (live) => {
+  if (live) {
+    scrubIndex.value = history.value.length
+  }
+})
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 

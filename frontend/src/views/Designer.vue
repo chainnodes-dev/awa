@@ -341,7 +341,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, nextTick, shallowRef } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick, shallowRef, markRaw } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background }  from '@vue-flow/background'
@@ -440,8 +440,8 @@ const generateProvider     = ref('')
 const generatePipelineStep    = ref(0)
 const generatePipelineWarning = ref('')
 
-const nodeTypes = shallowRef({ stateNode: StateNode })
-const edgeTypes = shallowRef({ transitionEdge: TransitionEdge })
+const nodeTypes = shallowRef({ stateNode: markRaw(StateNode) })
+const edgeTypes = shallowRef({ transitionEdge: markRaw(TransitionEdge) })
 
 const availableTriggers = computed(() => {
   let sourceId = null

@@ -250,6 +250,19 @@ A failure banner appears below the bar when the run status is `failed`, showing 
 
 The lower portion of the Monitor mirrors the Designer canvas with nodes colour-coded by their execution state (pending, running, completed, failed). An event log lists every state transition in chronological order, allowing you to trace exactly how the workflow progressed and inspect the blackboard data at each step.
 
+### Time Travel Scrubber
+
+Phaxa features a state-of-the-art **Time Travel Scrubber** situated at the bottom of the execution Monitor canvas. This allows operators to inspect and debug workflows retrospectively:
+
+- **Live vs. Travel Mode**: Toggle between **Live** (real-time state updates) and **Travel** modes. Switching to Travel mode freezes the view, letting you inspect exactly what happened during prior transitions.
+- **Interactive Scrubber Slider**: Drag the slider backwards or forwards to scrub through historical execution steps.
+- **Incremental Navigation**: Click the **Step Back (`<`)** and **Step Forward (`>`)** buttons on either side of the slider to walk through transitions step-by-step.
+- **Intelligent Boundaries**: 
+  - Both step buttons are automatically grayed out and disabled when in **Live** mode.
+  - The **Step Back** button is grayed out at Step 1 (the start).
+  - The **Step Forward** button is grayed out at the final step (the current state).
+- **Reactive Blackboard Snapshot**: As you scrub through time, the Blackboard values and Visual Canvas reactively update to display the historical snapshot at that specific point in time.
+
 ---
 
 ## Settings
