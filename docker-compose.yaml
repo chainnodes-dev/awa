@@ -63,10 +63,11 @@ services:
       args:
         CMD: server
     container_name: phaxa-server
+    restart: on-failure
     environment:
       - DATABASE_URL=postgres://${DB_USER:-phaxa}:${DB_PASSWORD:-phaxa_secret}@postgres:5432/${DB_NAME:-phaxa}?sslmode=disable
       - TEMPORAL_ADDRESS=temporal:7233
-      - REDIS_URL=redis:6379
+      - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET:-dev-insecure-secret-change-in-prod}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:80}
     ports:
@@ -85,10 +86,11 @@ services:
       args:
         CMD: worker
     container_name: phaxa-worker
+    restart: on-failure
     environment:
       - DATABASE_URL=postgres://${DB_USER:-phaxa}:${DB_PASSWORD:-phaxa_secret}@postgres:5432/${DB_NAME:-phaxa}?sslmode=disable
       - TEMPORAL_ADDRESS=temporal:7233
-      - REDIS_URL=redis:6379
+      - REDIS_URL=redis://redis:6379
     volumes:
       - ./data:/app/data
       - npm_cache:/root/.npm

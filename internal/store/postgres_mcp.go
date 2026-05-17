@@ -28,11 +28,20 @@ func (s *PostgresStore) CreateMCPServer(ctx context.Context, srv *MCPServer) err
 
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO mcp_servers (id, tenant_id, name, transport, url, command, args, env_vars, description, created_by, created_at, doc_url, tools)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, $13)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, $13)
+         ON CONFLICT (tenant_id, name) DO UPDATE SET
+             transport = EXCLUDED.transport,
+             url = EXCLUDED.url,
+             command = EXCLUDED.command,
+             args = EXCLUDED.args,
+             env_vars = EXCLUDED.env_vars,
+             description = EXCLUDED.description,
+             doc_url = EXCLUDED.doc_url,
+             tools = EXCLUDED.tools`,
 		srv.ID, srv.TenantID, srv.Name, srv.Transport, srv.URL, srv.Command, srv.Args, envVars, srv.Description, srv.CreatedBy, srv.CreatedAt, srv.DocURL, tools,
 	)
 	if err != nil {
-		return fmt.Errorf("create MCP server: %w", err)
+		return fmt.Errorf("create/upsert MCP server: %w", err)
 	}
 	return nil
 }

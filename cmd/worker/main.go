@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"go.temporal.io/sdk/client"
 
 	"github.com/asm-platform/asm/internal/config"
 	"github.com/asm-platform/asm/internal/enterprise"
@@ -109,9 +110,18 @@ func main() {
 	}()
 
 	// -- Temporal client --
-	temporalClient, err := temporalpkg.NewClient(cfg.TemporalAddress, cfg.TemporalNamespace)
+	var temporalClient client.Client
+	var err error
+	for i := 0; i < 24; i++ { // retry for up to 2 minutes
+		temporalClient, err = temporalpkg.NewClient(cfg.TemporalAddress, cfg.TemporalNamespace)
+		if err == nil {
+			break
+		}
+		slog.Warn("Temporal not ready or namespace default not found yet, retrying...", "attempt", i+1, "error", err)
+		time.Sleep(5 * time.Second)
+	}
 	if err != nil {
-		slog.Error("Failed to connect to Temporal", "error", err)
+		slog.Error("Failed to connect to Temporal after multiple attempts", "error", err)
 		os.Exit(1)
 	}
 	defer temporalClient.Close()

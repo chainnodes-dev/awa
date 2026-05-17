@@ -20,11 +20,19 @@ func (s *MemoryStore) CreateMCPServer(_ context.Context, srv *MCPServer) error {
 	if srv.CreatedAt.IsZero() {
 		srv.CreatedAt = time.Now()
 	}
-	// Check unique name within tenant
-	for _, existing := range s.mcpServers {
+	// Check unique name within tenant and upsert if exists
+	var existingID string
+	for id, existing := range s.mcpServers {
 		if existing.TenantID == srv.TenantID && existing.Name == srv.Name {
-			return fmt.Errorf("MCP server with name %q already exists", srv.Name)
+			existingID = id
+			break
 		}
+	}
+	if existingID != "" {
+		srv.ID = existingID
+		cp := *srv
+		s.mcpServers[existingID] = &cp
+		return nil
 	}
 	cp := *srv
 	s.mcpServers[srv.ID] = &cp
