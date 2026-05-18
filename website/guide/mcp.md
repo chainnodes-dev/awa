@@ -17,8 +17,8 @@ Add your server to `mcp_registry.yaml`:
 ```
 
 ## Supported Transports
-- **Stdio**: Local processes (npx, python, etc.). Enabled via `PHAXA_ALLOW_STDIO_MCP=true`.
+- **Stdio**: Local processes (node, python, npx, etc.). Supported natively by default.
 - **SSE**: Remote servers over HTTP.
 
 ## The Marketplace
-Use the **Marketplace** in the Phaxa dashboard to discover and "Install" community servers with one click.
+Use the **Marketplace** in the Phaxa dashboard to discover and install community servers with one click. You can also customize your own server settings directly from the UI registry screen.

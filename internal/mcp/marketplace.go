@@ -85,6 +85,7 @@ func FetchMarketplace(ctx context.Context, source string) ([]MarketEntry, error)
 				Transport   string   `yaml:"transport"`
 				Command     string   `yaml:"command"`
 				Args        []string `yaml:"args"`
+				URL         string   `yaml:"url"`
 				Icon        string   `yaml:"icon"`
 				Category    string   `yaml:"category"`
 				DocURL      string   `yaml:"doc_url"`
@@ -103,6 +104,7 @@ func FetchMarketplace(ctx context.Context, source string) ([]MarketEntry, error)
 				Transport:   e.Transport,
 				Command:     e.Command,
 				Args:        e.Args,
+				URL:         e.URL,
 				Icon:        e.Icon,
 				Category:    e.Category,
 				DocURL:      e.DocURL,

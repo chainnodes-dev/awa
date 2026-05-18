@@ -93,7 +93,7 @@ states:
     agent: validator
 
   - name: APPROVE
-    type: intermediate
+    type: prompt
     agent: approver
 
   - name: AUTO_APPROVE
@@ -143,7 +143,7 @@ agents:
 |---|---|
 | `initial` | Entry point of the workflow |
 | `terminal` | End state — workflow completes here |
-| `intermediate` | LLM agent reasons and fires a trigger |
+| `prompt` | LLM agent reasons and fires a trigger |
 | `code` | JavaScript runs in a sandboxed goja VM; `bb` is mutable |
 | `script` | Deterministic expr-lang expressions; zero latency |
 | `hitl` | Pauses and waits for a human signal via the API or UI |

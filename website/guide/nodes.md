@@ -1,61 +1,135 @@
 # State Nodes: The Building Blocks of Reasoning
 
-Workflows in Phaxa are composed of specialized nodes, each handling a different aspect of the "Durable Reasoning" chain. These nodes are deterministic units of logic that can be linked together to form complex, non-deterministic processes.
-
-## 1. Prompt Nodes
-The **Prompt Node** is the workhorse of the platform. It is designed to transform unstructured or semi-structured data into structured blackboard state by interfacing with Large Language Models (LLMs).
-
-### Deep Configuration
-- **Model Selection**: Choose from various providers (OpenAI, Anthropic, local models) with specific parameters like temperature, top-p, and max tokens.
-- **Advanced Templating**: Uses a sophisticated template engine that allows you to inject any variable from the Blackboard. For example: `&#123;&#123; user.name &#125;&#125;`.
-- **JSON Mode & Schemas**: Enforce structured outputs by providing a JSON Schema. Phaxa will automatically retry or repair responses that do not comply with the schema.
-- **Output Mapping**: Map specific parts of the LLM response to Blackboard keys. You can store the raw completion, the token usage, or specific extracted fields.
-
-### Use Case: Sentiment Analysis
-A Prompt Node can be configured to analyze customer feedback. It takes the "comment" from the blackboard, sends it to a model with a "System: You are a sentiment classifier" prompt, and stores the result as "sentiment: positive/negative".
+Workflows in Phaxa are composed of specialized state nodes, each representing a distinct step in the "Durable Reasoning" chain. These nodes are executing blocks of logic tied together by a state machine.
 
 ---
 
-## 2. Agent Nodes (Autonomous Tool-Use)
-The **Agent Node** is a long-running, autonomous state that has access to specific **MCP Tools**. Unlike a prompt node, which is a single "thought," an agent node is a "loop" that can reason, act, and observe until a goal is met.
-
-### Core Capabilities
-- **MCP Tool Binding**: Dynamically bind servers from the **MCP Marketplace**. An agent can have access to "Slack", "PostgreSQL", and "GitHub" simultaneously.
-- **Reasoning Loop**: The agent operates in a "Think-Act-Observe" cycle. It decides which tool to use, executes it via the worker, observes the result, and repeats until the task is complete.
-- **Context Management**: Phaxa manages the cognitive load of the agent. As the conversation history grows, the platform automatically summarizes past tool calls to keep the model focused on the objective.
-- **Safety Rails**: Define a "Max Loops" or "Max Tokens" budget to prevent runaway agentic loops and ensure cost predictability.
-
-### Use Case: Automated Research
-An agent is tasked with "Find the latest news on MCP and summarize it in Slack." It uses a "Web Search" tool to find articles, a "Browser" tool to read them, and finally a "Slack" tool to post the summary.
-
----
-
-## 3. HITL (Human-in-the-Loop Validation)
-The **HITL Node** represents a pause in the automated flow, waiting for an external human signal. This is critical for enterprise workflows that require oversight or expert judgment.
-
-### Enterprise Features
-- **Dynamic Form Engine**: Define exactly what fields a human should interact with using standard JSON Schema. The Phaxa Inbox will render these forms automatically.
-- **Durable Suspension**: Thanks to Temporal, a workflow can wait for weeks for a human response without consuming any active compute or memory resources on the server.
-- **Expert Routing**: Assign tasks to specific users, departments, or "Expert" roles. For example, a "Legal Approval" step can be routed specifically to the legal department group.
-- **Blackboard Injection**: Data entered by the human is merged back into the Blackboard, allowing the next automated node to use that data immediately.
-
-### Use Case: Expense Approval
-A workflow processes an invoice. If the amount is > $1000, it enters a HITL state. A manager receives a notification in their Phaxa Inbox, reviews the data, and clicks "Approve" or "Reject," providing a reason that is then used in the next step.
+## 1. Initial State (`initial`)
+The entry point of every workflow run. When a run starts, it begins at the `initial` state, evaluates its entry logic, and automatically launches the transitions.
+- **Usage**: Used to process starting inputs or setup default blackboard state keys.
+- **Example**:
+  ```yaml
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"start"'
+  ```
 
 ---
 
-## 4. Control Flow & Logic Nodes
-These nodes provide the "glue" that binds reasoning steps together into a coherent business process.
+## 2. Prompt State (`prompt`)
+The core reasoning unit. Executes an AI Agent on your worker task queues. It takes plain-text instructions (with optional Blackboard templating) and parses the agent's LLM response back into blackboard variables.
+- **Capabilities**:
+  - **Tool Binding**: Connects agents to registered **MCP servers** (SSE or stdio).
+  - **Templating**: Direct double-brace substitution (e.g. `{{ ticket_id }}`) to inject current blackboard data.
+  - **Provider Assignment**: Configurable per state to target specific active LLM providers (e.g. OpenAI vs Ollama).
+- **Example**:
+  ```yaml
+  - name: ANALYZE
+    type: prompt
+    agent: classifier-bot
+    instructions: "Evaluate the sentiment of {{ customer_message }}. Set sentiment: positive/negative."
+  ```
 
-### Switch Node (Conditional Branching)
-The **Switch Node** evaluates a logical expression (using the `expr` engine) against the Blackboard.
-- **Example**: `blackboard.amount > 5000` -> Path A, else -> Path B.
-- Supports complex logic, including string manipulation and array operations.
+---
 
-### Parallel Node (Concurrency)
-Execute multiple branches simultaneously.
-- **Fan-out**: Trigger "Legal Review" and "Risk Analysis" at the same time.
-- **Join/Sync**: The workflow waits for both branches to complete before moving to the final "Contract Generation" step.
+## 3. Human-in-the-Loop State (`hitl`)
+Suspends automated execution and creates an interactive task in the collaborative **Social Inbox**.
+- **Features**:
+  - **Zero Compute Idle**: Powered by Temporal, the process completely sleeps (requiring zero memory/CPU) until a human responds.
+  - **Interactive Forms**: Captures input schema fields defined in the workflow's input registry.
+  - **Assignees**: Assign tasks to specific roles (e.g. `billing-managers`).
+- **Example**:
+  ```yaml
+  - name: MANAGER_APPROVAL
+    type: hitl
+    assignee: billing-managers
+    instructions: "Review mathematical mismatch on invoice total."
+  ```
 
-### Terminal Node
-The final state of any workflow. It cleans up ephemeral resources, records the final outcome, and can trigger downstream webhooks or notifications.
+---
+
+## 4. Script State (`script`)
+An ultra-fast, zero-latency execution node designed for mathematical evaluations and fast routing decisions. It evaluates expressions using Go's `expr` package.
+- **Usage**: Modifying variable values or checking conditions instantly.
+- **Example**:
+  ```yaml
+  - name: ASSIGN_QUEUE
+    type: script
+    script:
+      trigger: "urgency == 'critical' ? 'route_priority' : 'route_standard'"
+      updates:
+        assigned_team: "urgency == 'critical' ? 'tier_3' : 'tier_1'"
+  ```
+
+---
+
+## 5. Code State (`code`)
+Executes custom Javascript (ES6) inside a secure, fully isolated Goja VM sandbox. Ideal for parsing complex JSON, array manipulation, and advanced math.
+- **Features**:
+  - **Direct Mutation**: Mutate the global `bb` object directly.
+  - **Execution Rules**: No `fetch`, `require`, or timers are exposed, keeping execution safe and sandboxed.
+- **Example**:
+  ```yaml
+  - name: CALCULATE_TAX
+    type: code
+    code:
+      language: javascript
+      code: |
+        bb.tax = bb.subtotal * 0.19;
+        bb.total = bb.subtotal + bb.tax;
+        return { trigger: 'done', reasoning: 'Tax computed successfully' };
+  ```
+
+---
+
+## 6. Wait State (`wait`)
+Halts execution at a gate until a specific logical condition expression evaluates to `true` or an optional timeout occurs.
+- **Example**:
+  ```yaml
+  - name: WAIT_FOR_PAYMENT
+    type: wait
+    condition: "blackboard.payment_received == true"
+    on_condition: "continue_fulfillment"
+    timeout: "24h"
+    on_timeout: "cancel_order"
+  ```
+
+---
+
+## 7. Sub-Process State (`subprocess`)
+Invokes another workflow as a durable child process, allowing you to compose modular, reusable workflows (Skills) together.
+- **Example**:
+  ```yaml
+  - name: RUN_AUDIT
+    type: subprocess
+    subprocess:
+      name: invoice-auditor
+      version: 1
+      inputs:
+        invoice_id: "blackboard.invoice_id"
+  ```
+
+---
+
+## 8. Emit Event State (`emit_event`)
+Broadcasts a named platform event to the Redis event bus, waking up or signaling other active/waiting workflow runs in the workspace.
+- **Example**:
+  ```yaml
+  - name: SIGNAL_COMPLETED
+    type: emit_event
+    emit_event:
+      name: "order.shipped"
+      payload:
+        order_id: "blackboard.order_id"
+  ```
+
+---
+
+## 9. Terminal State (`terminal`)
+Ends execution of the workflow run. The status is set to completed and clean-up operations are executed.
+- **Example**:
+  ```yaml
+  - name: SUCCESS
+    type: terminal
+  ```

@@ -1,36 +1,52 @@
 # Workflow DSL
 
-Phaxa workflows are defined using a declarative YAML schema. This allows for version control, portability, and readability.
+Phaxa workflows are defined using a declarative YAML schema. This allows for full version control, portability, and human readability.
 
 ## Basic Structure
 
 ```yaml
-name: "Financial Analysis"
-description: "Extracts metrics from a report"
+apiVersion: phaxa/v1
+kind: Workflow
 metadata:
-  reusable: true
+  name: financial-analysis
+  version: 1
+  description: "Extracts metrics from a financial report and performs validation"
+
+inputs:
+  - name: ticker
+    type: string
+  - name: report
+    type: file
 
 blackboard:
   schema:
-    ticker: "string"
-    revenue: "number"
-    report: "file"
+    ticker: { type: string, required: true }
+    revenue: { type: number }
+    report: { type: file }
+    approved: { type: bool }
 
 states:
-  START:
-    type: "prompt"
-    agent: "analyst"
-    prompt: "Read the report and extract revenue for {{ blackboard.ticker }}."
-    transitions:
-      success: "REVIEW"
-      
-  REVIEW:
-    type: "hitl"
-    assignee: "finance_team"
-    form_schema:
-      approved: "boolean"
-    transitions:
-      success: "TERMINAL"
+  - name: START
+    type: initial
+    agent: analyst
+    instructions: "Read the report and extract the revenue for {{ ticker }}. Store in revenue."
+
+  - name: REVIEW
+    type: hitl
+    assignee: finance-team
+    instructions: "Verify the extracted revenue total."
+
+  - name: TERMINAL
+    type: terminal
+
+transitions:
+  - from: START
+    to: REVIEW
+    trigger: success
+
+  - from: REVIEW
+    to: TERMINAL
+    trigger: approved
 ```
 
 ## Node Types
