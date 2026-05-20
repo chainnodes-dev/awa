@@ -1,9 +1,11 @@
 package temporal
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +17,7 @@ import (
 	"github.com/asm-platform/asm/internal/executor/code"
 	"github.com/asm-platform/asm/internal/metrics"
 	"github.com/asm-platform/asm/internal/orchestrator"
+	"github.com/asm-platform/asm/internal/secrets"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
@@ -22,15 +25,16 @@ import (
 // Activities holds all dependencies needed by Temporal activity functions.
 // Register an instance with the Temporal worker via worker.RegisterActivity(acts).
 type Activities struct {
-	Store    store.Store
-	Bus      events.Bus
-	Executor orchestrator.Executor
-	Client   client.Client // used by EmitWorkflowEvent to signal waiting workflows
-	Verifier *enterprise.Verifier
+	Store     store.Store
+	Bus       events.Bus
+	Executor  orchestrator.Executor
+	Client    client.Client // used by EmitWorkflowEvent to signal waiting workflows
+	Verifier  *enterprise.Verifier
+	SecretMgr secrets.SecretManager
 }
 
-func NewActivities(s store.Store, bus events.Bus, exec orchestrator.Executor, c client.Client, v *enterprise.Verifier) *Activities {
-	return &Activities{Store: s, Bus: bus, Executor: exec, Client: c, Verifier: v}
+func NewActivities(s store.Store, bus events.Bus, exec orchestrator.Executor, c client.Client, v *enterprise.Verifier, secretMgr secrets.SecretManager) *Activities {
+	return &Activities{Store: s, Bus: bus, Executor: exec, Client: c, Verifier: v, SecretMgr: secretMgr}
 }
 
 // UpdateRun persists run state changes to the store.
@@ -129,6 +133,21 @@ func (a *Activities) ExecuteCode(ctx context.Context, p ExecuteCodeParams) (*asm
 // ExecuteAgent runs an LLM agent and returns its structured output.
 // This activity has a longer timeout than the others (10 min vs 10 s).
 func (a *Activities) ExecuteAgent(ctx context.Context, p ExecuteAgentParams) (*asmtypes.AgentOutput, error) {
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				temporalactivity.RecordHeartbeat(ctx, "agent running")
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	return a.Executor.Execute(ctx, orchestrator.AgentTask{
 		RunID:      p.RunID,
 		TenantID:   p.TenantID,
@@ -238,3 +257,76 @@ func (a *Activities) GetLicenseClaims(ctx context.Context, tenantID string) (*en
 
 	return a.Verifier.Verify(tenant.LicenseToken)
 }
+
+// SendTelegramMessage resolves Telegram Bot Token, Chat ID and sends message text.
+func (a *Activities) SendTelegramMessage(ctx context.Context, p SendTelegramMessageParams) (string, error) {
+	token, err := a.SecretMgr.GetSecret(ctx, p.TenantID, "TELEGRAM_BOT_TOKEN")
+	if err != nil || token == "" {
+		return "", fmt.Errorf("telegram token not configured for tenant %s: %w", p.TenantID, err)
+	}
+
+	payload := map[string]string{
+		"chat_id": p.ChatID,
+		"text":    p.MessageText,
+	}
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send telegram request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("telegram api returned status code %d", resp.StatusCode)
+	}
+
+	return "sent", nil
+}
+
+// SendDiscordMessage resolves Discord Bot Token, Channel ID and sends message text.
+func (a *Activities) SendDiscordMessage(ctx context.Context, p SendDiscordMessageParams) (string, error) {
+	token, err := a.SecretMgr.GetSecret(ctx, p.TenantID, "DISCORD_BOT_TOKEN")
+	if err != nil || token == "" {
+		return "", fmt.Errorf("discord token not configured for tenant %s: %w", p.TenantID, err)
+	}
+
+	payload := map[string]string{
+		"content": p.MessageText,
+	}
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	url := fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages", p.ChannelID)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bot %s", token))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send discord request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("discord api returned status code %d", resp.StatusCode)
+	}
+
+	return "sent", nil
+}
+

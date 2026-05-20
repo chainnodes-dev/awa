@@ -10,6 +10,7 @@ import (
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/orchestrator"
+	"github.com/asm-platform/asm/internal/secrets"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/internal/tools"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -120,7 +121,7 @@ func (p *ctxCheckProvider) Stream(ctx context.Context, _ llm.CompletionRequest, 
 func newExecutorWithProvider(providerName string, prov llm.Provider) *Executor {
 	reg := llm.NewRegistry()
 	reg.Register(prov)
-	return NewExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), providerName, nil)
+	return NewExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), providerName, nil, nil, secrets.NewMemorySecretManager())
 }
 
 // makeTask builds a minimal AgentTask targeting the given provider name.
@@ -332,7 +333,7 @@ func TestExecute_InvalidJSONFallback(t *testing.T) {
 // provider is registered.
 func TestExecute_UnknownProvider(t *testing.T) {
 	reg := llm.NewRegistry()
-	exec := NewExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), "anthropic", nil)
+	exec := NewExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), "anthropic", nil, nil, secrets.NewMemorySecretManager())
 
 	task := makeTask("missing-provider")
 	_, err := exec.Execute(context.Background(), task)
@@ -408,7 +409,7 @@ func TestExecute_ContextCancellation(t *testing.T) {
 
 	reg := llm.NewRegistry()
 	reg.Register(&ctxCheckProvider{name: "mock"})
-	exec := NewExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), "mock-llm", nil)
+	exec := NewExecutor(reg, events.NewLocalBus(), store.NewMemoryStore(), "mock-llm", nil, nil, secrets.NewMemorySecretManager())
 
 	_, err := exec.Execute(ctx, makeTask("mock"))
 	if err == nil {

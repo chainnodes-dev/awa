@@ -49,4 +49,8 @@ func (m *MockTemporalClient) TerminateWorkflow(ctx context.Context, temporalID s
 	return nil
 }
 
+func (m *MockTemporalClient) AwaitWorkflowCompletion(ctx context.Context, temporalID string) error {
+	return nil
+}
+
 func (m *MockTemporalClient) Close() {}

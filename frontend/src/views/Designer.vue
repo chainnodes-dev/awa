@@ -122,8 +122,75 @@
       <!-- Canvas or Split view -->
       <template v-else>
 
+        <!-- Left Node Palette Sidebar -->
+        <aside class="w-56 border-r border-border flex flex-col bg-surface-1 shrink-0 select-none overflow-y-auto">
+          <div class="px-4 py-3 border-b border-border flex items-center justify-between bg-surface-1 shrink-0">
+            <span class="text-xs font-semibold text-text-muted uppercase tracking-wider">Node Palette</span>
+          </div>
+          <div class="p-3 space-y-4">
+            <!-- reasoning & logic -->
+            <div class="space-y-1.5">
+              <div class="text-[10px] text-text-muted font-bold uppercase tracking-wider px-1">AI & Logic</div>
+              <div class="grid grid-cols-1 gap-1.5">
+                <div
+                  v-for="node in paletteLogic"
+                  :key="node.type"
+                  :draggable="!(node.type === 'subprocess' && !entStore.hasFeature('subprocesses'))"
+                  @dragstart="node.type === 'subprocess' && !entStore.hasFeature('subprocesses') ? $event.preventDefault() : onDragStart($event, node)"
+                  class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface-0 transition-colors group text-xs text-text"
+                  :class="[
+                    (node.type === 'subprocess' && !entStore.hasFeature('subprocesses'))
+                      ? 'opacity-40 grayscale cursor-not-allowed select-none'
+                      : 'hover:bg-surface-2 cursor-grab active:cursor-grabbing'
+                  ]"
+                >
+                  <div :class="['w-2 h-2 rounded-full shrink-0', node.dot]"/>
+                  <span class="truncate flex-1">{{ node.label }}</span>
+                  <span v-if="node.type === 'subprocess' && !entStore.hasFeature('subprocesses')" class="text-[9px] text-amber-500 font-bold uppercase shrink-0">Pro</span>
+                </div>
+              </div>
+            </div>
+            <!-- triggers (low code) -->
+            <div class="space-y-1.5">
+              <div class="text-[10px] text-text-muted font-bold uppercase tracking-wider px-1">Triggers (Low-Code)</div>
+              <div class="grid grid-cols-1 gap-1.5">
+                <div
+                  v-for="node in paletteTriggers"
+                  :key="node.triggerType"
+                  draggable="true"
+                  @dragstart="onDragStart($event, node)"
+                  class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface-0 hover:bg-surface-2 cursor-grab active:cursor-grabbing text-xs text-text transition-colors group"
+                >
+                  <div :class="['w-2 h-2 rounded-full shrink-0 bg-emerald-400']"/>
+                  <span class="truncate flex-1">{{ node.label }}</span>
+                </div>
+              </div>
+            </div>
+            <!-- actions (low code) -->
+            <div class="space-y-1.5">
+              <div class="text-[10px] text-text-muted font-bold uppercase tracking-wider px-1">Actions (Low-Code)</div>
+              <div class="grid grid-cols-1 gap-1.5">
+                <div
+                  v-for="node in paletteActions"
+                  :key="node.type"
+                  draggable="true"
+                  @dragstart="onDragStart($event, node)"
+                  class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface-0 hover:bg-surface-2 cursor-grab active:cursor-grabbing text-xs text-text transition-colors group"
+                >
+                  <div :class="['w-2 h-2 rounded-full shrink-0 bg-blue-400']"/>
+                  <span class="truncate flex-1">{{ node.label }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
         <!-- Canvas pane -->
-        <div :class="['relative overflow-hidden', view === 'split' ? 'flex-[3]' : 'flex-1']">
+        <div 
+          :class="['relative overflow-hidden', view === 'split' ? 'flex-[3]' : 'flex-1']"
+          @dragover.prevent
+          @drop="onDrop"
+        >
           <VueFlow
             :key="flowKey"
             v-model:nodes="nodes"
@@ -377,7 +444,7 @@ const route   = useRoute()
 const router  = useRouter()
 const wfStore = useWorkflowStore()
 const entStore = useEnterpriseStore()
-const { fitView } = useVueFlow()
+const { fitView, project } = useVueFlow()
 const { layout }  = useLayout()
 
 // ── Shared reactive state ────────────────────────────────────────────────────
@@ -442,6 +509,134 @@ const generatePipelineWarning = ref('')
 
 const nodeTypes = shallowRef({ stateNode: markRaw(StateNode) })
 const edgeTypes = shallowRef({ transitionEdge: markRaw(TransitionEdge) })
+
+const paletteLogic = [
+  { type: 'initial', label: 'Initial (Start)', dot: 'bg-indigo-400' },
+  { type: 'prompt', label: 'Prompt (Agent)', dot: 'bg-indigo-500' },
+  { type: 'script', label: 'Script (Expr)', dot: 'bg-amber-400' },
+  { type: 'code', label: 'Code (JS)', dot: 'bg-teal-400' },
+  { type: 'hitl', label: 'HITL (Human)', dot: 'bg-amber-500' },
+  { type: 'wait', label: 'Wait Node', dot: 'bg-slate-500' },
+  { type: 'subprocess', label: 'Subprocess', dot: 'bg-violet-400' },
+  { type: 'emit_event', label: 'Emit Event', dot: 'bg-blue-400' },
+  { type: 'timeout_node', label: 'Timeout Node', dot: 'bg-red-500' },
+  { type: 'terminal', label: 'Terminal (End)', dot: 'bg-indigo-400' },
+]
+
+const paletteTriggers = [
+  { isTrigger: true, triggerType: 'telegram', label: 'Telegram Trigger' },
+  { isTrigger: true, triggerType: 'discord', label: 'Discord Trigger' },
+  { isTrigger: true, triggerType: 'cron', label: 'Cron Trigger' },
+  { isTrigger: true, triggerType: 'webhook', label: 'Webhook Trigger' },
+]
+
+const paletteActions = [
+  { type: 'telegram_output', label: 'Send Telegram' },
+  { type: 'discord_output', label: 'Send Discord' },
+]
+
+function onDragStart(event, node) {
+  event.dataTransfer.setData('application/vueflow', JSON.stringify(node))
+  event.dataTransfer.effectAllowed = 'move'
+}
+
+function onDrop(event) {
+  event.preventDefault()
+
+  const nodeStr = event.dataTransfer.getData('application/vueflow')
+  if (!nodeStr) return
+
+  const paletteNode = JSON.parse(nodeStr)
+  
+  // Get bounds of the VueFlow container element
+  const container = event.currentTarget.getBoundingClientRect()
+  
+  // Calculate client coordinates relative to container
+  const position = project({
+    x: event.clientX - container.left,
+    y: event.clientY - container.top,
+  })
+
+  // Generate a unique name / id for the node
+  let name = ''
+  let type = paletteNode.type || 'prompt'
+
+  if (type === 'subprocess' && !entStore.hasFeature('subprocesses')) {
+    alert('Subprocess node is a Pro Feature and is locked in the Community Edition.')
+    return
+  }
+
+  if (paletteNode.isTrigger) {
+    type = 'initial'
+    name = `trigger_${paletteNode.triggerType}`
+  } else if (type === 'timeout_node') {
+    name = 'timeout_node'
+  } else {
+    name = `${type}_${Math.random().toString(36).substring(2, 7)}`
+  }
+
+  // Ensure unique name
+  let suffix = 1
+  let finalName = name
+  while (nodes.value.some(n => n.id === finalName)) {
+    finalName = `${name}_${suffix++}`
+  }
+
+  const newNode = {
+    id: finalName,
+    type: 'stateNode',
+    position,
+    data: {
+      name: finalName,
+      type: type,
+      instructions: '',
+    }
+  }
+
+  if (paletteNode.isTrigger) {
+    newNode.data.type = 'initial'
+    newNode.data.triggerType = paletteNode.triggerType
+    newNode.data.triggerConfig = {}
+  } else if (type === 'telegram_output') {
+    newNode.data.type = 'telegram_output'
+    newNode.data.telegram_output = {
+      chat_id: '{{bb.chat_id}}',
+      message_text: 'Hello from Phaxa!',
+    }
+  } else if (type === 'discord_output') {
+    newNode.data.type = 'discord_output'
+    newNode.data.discord_output = {
+      channel_id: '{{bb.channel_id}}',
+      message_text: 'Hello from Phaxa!',
+    }
+  } else if (type === 'timeout_node') {
+    newNode.data.type = 'timeout_node'
+    newNode.data.is_timeout_node = true
+    newNode.data.default_timeout = '10s'
+  }
+
+  // Auto-connect to Timeout Node if it exists
+  const timeoutNode = nodes.value.find(n => n.data.type === 'timeout_node')
+  if (timeoutNode && type !== 'initial' && type !== 'terminal' && type !== 'timeout_node') {
+    newNode.data.timeout = timeoutNode.data.default_timeout || '10s'
+    newNode.data.on_timeout = 'timeout'
+    
+    edges.value.push({
+      id: `${finalName}__timeout__${timeoutNode.id}`,
+      source: finalName,
+      target: timeoutNode.id,
+      sourceHandle: 'timeout',
+      type: 'transitionEdge',
+      label: 'timeout',
+      class: 'timeout-edge',
+      data: { guard: '', isTimeout: true }
+    })
+  }
+
+  nodes.value.push(newNode)
+  selected.value = { type: 'node', id: newNode.id, data: newNode.data }
+  isDirty.value = true
+}
 
 const availableTriggers = computed(() => {
   let sourceId = null
@@ -544,6 +739,12 @@ watch(isDirty, (newVal) => {
   if (newVal && !isRestoring) takeSnapshot()
 })
 
+watch(selected, (newSel) => {
+  if (newSel) {
+    rightTab.value = 'properties'
+  }
+})
+
 function handleKeydown(e) {
   const isTyping = ['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable
   
@@ -638,6 +839,25 @@ onMounted(async () => {
       console.error('Failed to load workflow:', e)
       alert(`Could not load workflow "${name}@${version}". It may have been saved with an older version format. Try deleting and re-creating it.`)
     }
+  } else {
+    nodes.value = [
+      {
+        id: 'start',
+        type: 'stateNode',
+        position: { x: 250, y: 150 },
+        data: { name: 'start', type: 'initial', instructions: '' }
+      },
+      {
+        id: 'end',
+        type: 'stateNode',
+        position: { x: 250, y: 400 },
+        data: { name: 'end', type: 'terminal', instructions: '' }
+      }
+    ]
+    edges.value = []
+    isDirty.value = false
+    await nextTick()
+    flowKey.value++
   }
   
   // Initialize history with initial state

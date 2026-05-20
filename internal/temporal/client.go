@@ -98,6 +98,12 @@ func (e *EngineClient) TerminateWorkflow(ctx context.Context, temporalID string)
 	return e.client.TerminateWorkflow(ctx, temporalID, "", "User terminated workflow")
 }
 
+// AwaitWorkflowCompletion blocks until the specified temporal workflow finishes execution.
+func (e *EngineClient) AwaitWorkflowCompletion(ctx context.Context, temporalID string) error {
+	run := e.client.GetWorkflow(ctx, temporalID, "")
+	return run.Get(ctx, nil)
+}
+
 // Close releases the underlying Temporal client connection.
 func (e *EngineClient) Close() {
 	e.client.Close()

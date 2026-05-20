@@ -18,6 +18,8 @@ import (
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/logger"
 	"github.com/asm-platform/asm/internal/mcp"
+	"github.com/asm-platform/asm/internal/orchestrator"
+	"github.com/asm-platform/asm/internal/secrets"
 	"github.com/asm-platform/asm/internal/store"
 	temporalpkg "github.com/asm-platform/asm/internal/temporal"
 )
@@ -91,9 +93,6 @@ func main() {
 	mcpManager := mcp.NewManager(s)
 	defer mcpManager.Shutdown()
 
-	// -- Executor (runs LLM calls inside Temporal activities) --
-	exec := executor.NewExecutor(llmRegistry, bus, s, activeLLMProvider, mcpManager)
-
 	// Reload LLM registry from DB periodically to pick up UI config changes.
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)
@@ -137,7 +136,27 @@ func main() {
 		}
 	}
 
-	acts := temporalpkg.NewActivities(s, bus, exec, temporalClient, verifier)
+	var secretMgr secrets.SecretManager
+	if pgs, ok := s.(*store.PostgresStore); ok {
+		masterKey, err := secrets.GenerateOrLoadMasterKey()
+		if err != nil {
+			slog.Error("Failed to load master key in worker", "error", err)
+			os.Exit(1)
+		}
+		secretMgr, err = secrets.NewAESSecretManager(pgs.Pool(), masterKey)
+		if err != nil {
+			slog.Error("Failed to initialize secret manager in worker", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		secretMgr = secrets.NewMemorySecretManager()
+	}
+
+	temporalEngine := temporalpkg.NewEngineClient(temporalClient, cfg.TemporalTaskQueue)
+	engine := orchestrator.NewEngine(s, bus, temporalEngine)
+	exec := executor.NewExecutor(llmRegistry, bus, s, activeLLMProvider, mcpManager, engine, secretMgr)
+
+	acts := temporalpkg.NewActivities(s, bus, exec, temporalClient, verifier, secretMgr)
 	w := temporalpkg.NewWorker(temporalClient, cfg.TemporalTaskQueue, acts)
 
 	// Graceful shutdown on SIGINT / SIGTERM.

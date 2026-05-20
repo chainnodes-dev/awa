@@ -61,6 +61,9 @@ func (s *stubTemporalClient) SendChatSignal(_ context.Context, _, _, _ string) e
 func (s *stubTemporalClient) TerminateWorkflow(_ context.Context, _ string) error {
 	return nil
 }
+func (s *stubTemporalClient) AwaitWorkflowCompletion(_ context.Context, _ string) error {
+	return nil
+}
 func (s *stubTemporalClient) Close() {}
 
 // testEnv bundles all test dependencies together.
@@ -87,7 +90,7 @@ func testRouter(t *testing.T) testEnv {
 	}
 
 	mcpMgr := mcp.NewManager(s)
-	handlers := NewHandlers(&config.Config{}, eng, s, jwtSvc, nil, nil, nil, nil, nil, nil, mcpMgr) // nil generator, etc.
+	handlers := NewHandlers(&config.Config{}, eng, s, jwtSvc, nil, nil, nil, nil, nil, nil, mcpMgr, nil, nil) // nil generator, etc.
 	router := gin.New()
 	registerRoutes(router, handlers, NewHub(bus), jwtSvc, health.New())
 

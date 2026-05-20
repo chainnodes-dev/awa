@@ -34,6 +34,10 @@ func (s *PostgresStore) Close() error {
 	return nil
 }
 
+func (s *PostgresStore) Pool() *pgxpool.Pool {
+	return s.pool
+}
+
 // -- TenantStore --
 
 func (s *PostgresStore) CreateTenant(ctx context.Context, t *Tenant) error {
@@ -53,10 +57,9 @@ func (s *PostgresStore) CreateTenant(ctx context.Context, t *Tenant) error {
 func (s *PostgresStore) GetTenant(ctx context.Context, id string) (*Tenant, error) {
 	var t Tenant
 	var logoURL, licenseToken *string
-	var secretsBytes []byte
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, name, slug, logo_url, secrets, license_token, created_at FROM tenants WHERE id=$1`, id,
-	).Scan(&t.ID, &t.Name, &t.Slug, &logoURL, &secretsBytes, &licenseToken, &t.CreatedAt)
+		`SELECT id, name, slug, logo_url, license_token, created_at FROM tenants WHERE id=$1`, id,
+	).Scan(&t.ID, &t.Name, &t.Slug, &logoURL, &licenseToken, &t.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("tenant '%s' not found: %w", id, err)
 	}
@@ -66,19 +69,15 @@ func (s *PostgresStore) GetTenant(ctx context.Context, id string) (*Tenant, erro
 	if licenseToken != nil {
 		t.LicenseToken = *licenseToken
 	}
-	if len(secretsBytes) > 0 {
-		_ = json.Unmarshal(secretsBytes, &t.Secrets)
-	}
 	return &t, nil
 }
 
 func (s *PostgresStore) GetTenantBySlug(ctx context.Context, slug string) (*Tenant, error) {
 	var t Tenant
 	var logoURL, licenseToken *string
-	var secretsBytes []byte
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, name, slug, logo_url, secrets, license_token, created_at FROM tenants WHERE slug=$1`, slug,
-	).Scan(&t.ID, &t.Name, &t.Slug, &logoURL, &secretsBytes, &licenseToken, &t.CreatedAt)
+		`SELECT id, name, slug, logo_url, license_token, created_at FROM tenants WHERE slug=$1`, slug,
+	).Scan(&t.ID, &t.Name, &t.Slug, &logoURL, &licenseToken, &t.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("tenant '%s' not found: %w", slug, err)
 	}
@@ -88,15 +87,12 @@ func (s *PostgresStore) GetTenantBySlug(ctx context.Context, slug string) (*Tena
 	if licenseToken != nil {
 		t.LicenseToken = *licenseToken
 	}
-	if len(secretsBytes) > 0 {
-		_ = json.Unmarshal(secretsBytes, &t.Secrets)
-	}
 	return &t, nil
 }
 
 func (s *PostgresStore) ListTenants(ctx context.Context) ([]*Tenant, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, name, slug, logo_url, secrets, license_token, created_at FROM tenants ORDER BY created_at ASC`)
+		`SELECT id, name, slug, logo_url, license_token, created_at FROM tenants ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +101,7 @@ func (s *PostgresStore) ListTenants(ctx context.Context) ([]*Tenant, error) {
 	for rows.Next() {
 		var t Tenant
 		var logoURL, licenseToken *string
-		var secretsBytes []byte
-		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &logoURL, &secretsBytes, &licenseToken, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &logoURL, &licenseToken, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		if logoURL != nil {
@@ -114,9 +109,6 @@ func (s *PostgresStore) ListTenants(ctx context.Context) ([]*Tenant, error) {
 		}
 		if licenseToken != nil {
 			t.LicenseToken = *licenseToken
-		}
-		if len(secretsBytes) > 0 {
-			_ = json.Unmarshal(secretsBytes, &t.Secrets)
 		}
 		out = append(out, &t)
 	}
@@ -134,10 +126,6 @@ func (s *PostgresStore) UpdateTenantBranding(ctx context.Context, id, name, logo
 	return err
 }
 
-func (s *PostgresStore) UpdateTenantSecrets(ctx context.Context, id string, secrets map[string]string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE tenants SET secrets=$2 WHERE id=$1`, id, secrets)
-	return err
-}
 
 func (s *PostgresStore) UpdateTenantLicense(ctx context.Context, id, token string) error {
 	_, err := s.pool.Exec(ctx, `UPDATE tenants SET license_token=$2 WHERE id=$1`, id, token)

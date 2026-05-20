@@ -17,6 +17,7 @@ import (
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/orchestrator"
+	"github.com/asm-platform/asm/internal/secrets"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
@@ -28,6 +29,12 @@ type SchedulerAdder interface {
 	RemoveWorkflow(name, version string)
 }
 
+type TriggerManagerAdder interface {
+	AddWorkflow(ctx context.Context, tenantID string, def *asmtypes.WorkflowDef) error
+	RemoveWorkflow(ctx context.Context, tenantID, workflowName, version string)
+	HandleWebhook(ctx context.Context, tenantID, workflowName, version, triggerName string, payload map[string]interface{}) (*asmtypes.WorkflowRun, error)
+}
+
 type Handlers struct {
 	engine      *orchestrator.Engine
 	store       store.Store
@@ -35,12 +42,14 @@ type Handlers struct {
 	// generator is nil when no LLM key is configured.
 	generator   *designer.Generator
 	scheduler       SchedulerAdder
+	triggerManager  TriggerManagerAdder
 	llmRegistry     *llm.Registry
 	licenseVerifier *enterprise.Verifier
 	licenseSigner   *enterprise.Signer
 	mcpManager      *mcp.Manager
 	mcpEntries      []designer.MCPServerEntry
 	cfg             *config.Config
+	secretMgr       secrets.SecretManager
 }
 
 func (h *Handlers) ReloadLicenseKeys(ctx context.Context) error {
@@ -69,7 +78,7 @@ func (h *Handlers) ReloadLicenseKeys(ctx context.Context) error {
 	return nil
 }
 
-func NewHandlers(cfg *config.Config, engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer, mcpMgr *mcp.Manager) *Handlers {
+func NewHandlers(cfg *config.Config, engine *orchestrator.Engine, s store.Store, jwtSvc *auth.JWTService, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, sched SchedulerAdder, llmReg *llm.Registry, verifier *enterprise.Verifier, signer *enterprise.Signer, mcpMgr *mcp.Manager, trigMgr TriggerManagerAdder, secretMgr secrets.SecretManager) *Handlers {
 	return &Handlers{
 		cfg:             cfg,
 		engine:          engine,
@@ -78,10 +87,12 @@ func NewHandlers(cfg *config.Config, engine *orchestrator.Engine, s store.Store,
 		generator:       gen,
 		mcpEntries:      mcpEntries,
 		scheduler:       sched,
+		triggerManager:  trigMgr,
 		llmRegistry:     llmReg,
 		licenseVerifier: verifier,
 		licenseSigner:   signer,
 		mcpManager:      mcpMgr,
+		secretMgr:       secretMgr,
 	}
 }
 
@@ -139,6 +150,13 @@ func (h *Handlers) CreateWorkflow(c *gin.Context) {
 		}
 	}
 
+	// Register dynamic triggers.
+	if h.triggerManager != nil {
+		if err := h.triggerManager.AddWorkflow(c.Request.Context(), store.TenantIDFromContext(c.Request.Context()), def); err != nil {
+			slog.Warn("Failed to register workflow triggers", "workflow", def.Metadata.Name, "error", err)
+		}
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"definition":     def,
 		"version_number": def.Metadata.VersionNumber,
@@ -180,6 +198,10 @@ func (h *Handlers) DeleteWorkflow(c *gin.Context) {
 	// Deregister any cron schedule for this workflow.
 	if h.scheduler != nil {
 		h.scheduler.RemoveWorkflow(name, version)
+	}
+	// Deregister dynamic triggers.
+	if h.triggerManager != nil {
+		h.triggerManager.RemoveWorkflow(c.Request.Context(), store.TenantIDFromContext(c.Request.Context()), name, version)
 	}
 	c.Status(http.StatusNoContent)
 }
@@ -287,6 +309,32 @@ func (h *Handlers) TriggerRun(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handlers) HandleWebhook(c *gin.Context) {
+	tenantID := c.Param("tenant_id")
+	workflowName := c.Param("workflow_name")
+	version := c.Param("version")
+	triggerName := c.Param("trigger_name")
+
+	var payload map[string]interface{}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		// If it's not JSON, we could try to bind form or query, but let's stick to JSON for now.
+		payload = map[string]interface{}{}
+	}
+
+	if h.triggerManager == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "trigger manager not enabled"})
+		return
+	}
+
+	run, err := h.triggerManager.HandleWebhook(c.Request.Context(), tenantID, workflowName, version, triggerName, payload)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, run)
 }
 
 func (h *Handlers) SendChat(c *gin.Context) {

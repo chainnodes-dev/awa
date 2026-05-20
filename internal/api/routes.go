@@ -35,6 +35,9 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			authGroup.GET("/oidc/callback", h.OIDCCallback)
 		}
 
+		// Webhook Triggers
+		v1.POST("/triggers/webhook/:tenant_id/:workflow_name/:version/:trigger_name", h.HandleWebhook)
+
 		// 2. PROTECTED API (Requires JWT)
 		protected := v1.Group("", auth.RequireAuth(jwtSvc))
 		{

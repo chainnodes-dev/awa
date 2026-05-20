@@ -9,6 +9,7 @@ type WorkflowDef struct {
 	APIVersion   string           `yaml:"apiVersion"   json:"apiVersion"`
 	Kind         string           `yaml:"kind"         json:"kind"`
 	Metadata     WorkflowMeta     `yaml:"metadata"     json:"metadata"`
+	Triggers     []TriggerDef     `yaml:"triggers,omitempty" json:"triggers,omitempty"`
 	Inputs       []PortDef        `yaml:"inputs,omitempty" json:"inputs,omitempty"`
 	Outputs      []PortDef        `yaml:"outputs,omitempty" json:"outputs,omitempty"`
 	Capabilities []CapabilityDecl `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
@@ -34,6 +35,13 @@ type WorkflowMeta struct {
 	ProcessDescription string `yaml:"process_description,omitempty" json:"process_description,omitempty"`
 	// Reusable indicates if this workflow can be invoked as a sub-process (Skill) by other workflows.
 	Reusable bool `yaml:"reusable,omitempty" json:"reusable,omitempty"`
+}
+
+// TriggerDef defines an external event source that automatically starts a workflow run.
+type TriggerDef struct {
+	Name   string                 `yaml:"name"   json:"name"`
+	Type   string                 `yaml:"type"   json:"type"` // e.g. "webhook", "telegram", "cron"
+	Config map[string]interface{} `yaml:"config" json:"config"`
 }
 
 // BlackboardDef defines the typed schema of the shared blackboard.
@@ -74,6 +82,8 @@ const (
 	StateCode         StateType = "code"       // User-defined JavaScript executed via goja
 	StateSubProcess   StateType = "subprocess" // Invokes another process as a child workflow
 	StateEmitEvent    StateType = "emit_event" // Fires a named platform event to the bus
+	StateTelegramOutput StateType = "telegram_output"
+	StateDiscordOutput  StateType = "discord_output"
 )
 
 type StateDef struct {
@@ -98,6 +108,10 @@ type StateDef struct {
 	SubProcess *SubProcessDef `yaml:"subprocess,omitempty" json:"subprocess,omitempty"`
 	// EmitEvent is set when type == "emit_event".
 	EmitEvent *EmitEventDef `yaml:"emit_event,omitempty" json:"emit_event,omitempty"`
+	// TelegramOutput is set when type == "telegram_output".
+	TelegramOutput *TelegramOutputDef `yaml:"telegram_output,omitempty" json:"telegram_output,omitempty"`
+	// DiscordOutput is set when type == "discord_output".
+	DiscordOutput *DiscordOutputDef `yaml:"discord_output,omitempty" json:"discord_output,omitempty"`
 	// OnEvent names a platform event that will wake this wait state.
 	// Only effective when type == "wait". When the named event fires in
 	// the same tenant, the run receives the on_event_match trigger.
@@ -129,6 +143,18 @@ type EmitEventDef struct {
 	PayloadFields []string `yaml:"payload_fields,omitempty" json:"payload_fields,omitempty"`
 	// CompletionTrigger is the transition trigger fired after the event is emitted.
 	// Defaults to "emitted".
+	CompletionTrigger string `yaml:"completion_trigger,omitempty" json:"completion_trigger,omitempty"`
+}
+
+type TelegramOutputDef struct {
+	ChatID            string `yaml:"chat_id" json:"chat_id"`
+	MessageText       string `yaml:"message_text" json:"message_text"`
+	CompletionTrigger string `yaml:"completion_trigger,omitempty" json:"completion_trigger,omitempty"`
+}
+
+type DiscordOutputDef struct {
+	ChannelID         string `yaml:"channel_id" json:"channel_id"`
+	MessageText       string `yaml:"message_text" json:"message_text"`
 	CompletionTrigger string `yaml:"completion_trigger,omitempty" json:"completion_trigger,omitempty"`
 }
 

@@ -36,17 +36,59 @@ export function useCanvasActions({ nodes, edges, agents, isDirty, selected, pend
   }
 
   function onConnect(params) {
-    pendingConnection.value = { source: params.source, target: params.target }
+    const targetNode = nodes.value.find(n => n.id === params.target)
+    if (targetNode && (targetNode.data?.type === 'timeout_node' || targetNode.data?.is_timeout_node)) {
+      const source = params.source
+      const target = params.target
+      
+      const sourceNode = nodes.value.find(n => n.id === source)
+      if (sourceNode && sourceNode.data.type !== 'initial' && sourceNode.data.type !== 'terminal' && sourceNode.data.type !== 'timeout_node') {
+        sourceNode.data.timeout = targetNode.data.default_timeout || '10s'
+        sourceNode.data.on_timeout = 'timeout'
+      }
+
+      const exists = edges.value.some(e => e.source === source && e.target === target)
+      if (!exists) {
+        edges.value.push({
+          id: `${source}__timeout__${target}`,
+          source,
+          target,
+          sourceHandle: 'timeout',
+          type: 'transitionEdge',
+          label: 'timeout',
+          class: 'timeout-edge',
+          data: { guard: '', isTimeout: true }
+        })
+      }
+      pendingConnection.value = null
+      isDirty.value = true
+      return
+    }
+
+    pendingConnection.value = { source: params.source, target: params.target, sourceHandle: params.sourceHandle }
     selected.value = null
   }
 
   function confirmConnection({ trigger, guard }) {
-    const { source, target } = pendingConnection.value
-    const isTimeout = trigger === 'timeout'
+    const { source, target, sourceHandle } = pendingConnection.value
+    const targetNode = nodes.value.find(n => n.id === target)
+    const isTimeout = trigger === 'timeout' || (targetNode && (targetNode.data?.type === 'timeout_node' || targetNode.data?.is_timeout_node))
+    const finalTrigger = isTimeout ? 'timeout' : trigger
+
+    if (isTimeout) {
+      const sourceNode = nodes.value.find(n => n.id === source)
+      if (sourceNode && sourceNode.data.type !== 'initial' && sourceNode.data.type !== 'terminal' && sourceNode.data.type !== 'timeout_node') {
+        sourceNode.data.timeout = (targetNode && targetNode.data?.default_timeout) || '10s'
+        sourceNode.data.on_timeout = 'timeout'
+      }
+    }
+
     edges.value.push({
-      id: `${source}__${trigger}__${target}`,
+      id: `${source}__${finalTrigger}__${target}`,
       source, target,
-      type: 'transitionEdge', label: trigger,
+      sourceHandle: isTimeout ? 'timeout' : undefined,
+      type: 'transitionEdge', label: finalTrigger,
+      class: isTimeout ? 'timeout-edge' : '',
       data: { guard: guard || '', isTimeout },
     })
     pendingConnection.value = null
@@ -88,19 +130,85 @@ export function useCanvasActions({ nodes, edges, agents, isDirty, selected, pend
 
     if (newId === oldId) {
       nodes.value[idx] = { ...nodes.value[idx], data: { ...node } }
+      nodes.value = [...nodes.value]
       isDirty.value = true
     } else {
-      nodes.value[idx] = { ...nodes.value[idx], id: newId, data: { ...node }, selected: true }
+      const oldNode = nodes.value[idx]
+      const updatedNode = { ...oldNode, id: newId, data: { ...node }, selected: true }
+      
+      nodes.value = [
+        ...nodes.value.filter(n => n.id !== oldId),
+        updatedNode
+      ]
+
       edges.value = edges.value.map(e => {
         if (e.source === oldId || e.target === oldId) {
+          const newSource = e.source === oldId ? newId : e.source
+          const newTarget = e.target === oldId ? newId : e.target
           return {
             ...e,
-            id:     `${e.source === oldId ? newId : e.source}__${e.label}__${e.target === oldId ? newId : e.target}`,
-            source: e.source === oldId ? newId : e.source,
-            target: e.target === oldId ? newId : e.target,
+            id:     `${newSource}__${e.label}__${newTarget}`,
+            source: newSource,
+            target: newTarget,
           }
         }
         return e
+      })
+    }
+
+    // Cascading default timeout distribution
+    if (node.type === 'timeout_node' || node.is_timeout_node) {
+      const timeoutVal = node.default_timeout || node.defaultTimeout || '10s'
+      nodes.value = nodes.value.map(n => {
+        if (
+          n.id !== newId &&
+          n.data.type !== 'initial' &&
+          n.data.type !== 'terminal' &&
+          n.data.type !== 'timeout_node'
+        ) {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              timeout: timeoutVal,
+              on_timeout: 'timeout'
+            }
+          }
+        }
+        return n
+      })
+
+      // Add/update timeout edges
+      const eligibleNodes = nodes.value.filter(n =>
+        n.id !== newId &&
+        n.data.type !== 'initial' &&
+        n.data.type !== 'terminal' &&
+        n.data.type !== 'timeout_node'
+      )
+
+      eligibleNodes.forEach(en => {
+        const existingIdx = edges.value.findIndex(e => e.source === en.id && e.label === 'timeout')
+        if (existingIdx !== -1) {
+          edges.value[existingIdx] = {
+            ...edges.value[existingIdx],
+            id: `${en.id}__timeout__${newId}`,
+            target: newId,
+            sourceHandle: 'timeout',
+            class: 'timeout-edge',
+            data: { ...edges.value[existingIdx].data, isTimeout: true }
+          }
+        } else {
+          edges.value.push({
+            id: `${en.id}__timeout__${newId}`,
+            source: en.id,
+            target: newId,
+            sourceHandle: 'timeout',
+            type: 'transitionEdge',
+            label: 'timeout',
+            class: 'timeout-edge',
+            data: { guard: '', isTimeout: true }
+          })
+        }
       })
     }
 
@@ -123,6 +231,7 @@ export function useCanvasActions({ nodes, edges, agents, isDirty, selected, pend
     edges.value[idx] = {
       ...edges.value[idx],
       id: newId, label: data.label,
+      sourceHandle: isTimeout ? 'timeout' : undefined,
       data: { ...edges.value[idx].data, guard: data.guard, isTimeout },
       selected: true,
     }
@@ -139,8 +248,27 @@ export function useCanvasActions({ nodes, edges, agents, isDirty, selected, pend
     if (!selected.value) return
     if (selected.value.type === 'node') {
       const id = selected.value.id
+      const deletedNode = nodes.value.find(n => n.id === id)
       nodes.value = nodes.value.filter(n => n.id !== id)
       edges.value = edges.value.filter(e => e.source !== id && e.target !== id)
+
+      // If Timeout Node is deleted, clear other node timeouts and transitions
+      if (deletedNode && (deletedNode.data.type === 'timeout_node' || deletedNode.data.is_timeout_node)) {
+        nodes.value = nodes.value.map(n => {
+          if (n.data.timeout || n.data.on_timeout) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                timeout: undefined,
+                on_timeout: undefined,
+              }
+            }
+          }
+          return n
+        })
+        edges.value = edges.value.filter(e => e.label !== 'timeout')
+      }
     } else {
       edges.value = edges.value.filter(e => e.id !== selected.value.id)
     }
@@ -154,7 +282,28 @@ export function useCanvasActions({ nodes, edges, agents, isDirty, selected, pend
   function onAddState(stateData) {
     const existingX = nodes.value.map(n => n.position.x)
     const x = existingX.length ? Math.max(...existingX) + 200 : 200
-    nodes.value.push({ id: stateData.name, type: 'stateNode', position: { x, y: 200 }, data: { ...stateData } })
+
+    // Auto-apply default timeout if Timeout Node exists
+    const timeoutNode = nodes.value.find(n => n.data.type === 'timeout_node')
+    if (timeoutNode && stateData.type !== 'initial' && stateData.type !== 'terminal' && stateData.type !== 'timeout_node') {
+      stateData.timeout = timeoutNode.data.default_timeout || '10s'
+      stateData.on_timeout = 'timeout'
+      
+      edges.value.push({
+        id: `${stateData.name}__timeout__${timeoutNode.id}`,
+        source: stateData.name,
+        target: timeoutNode.id,
+        sourceHandle: 'timeout',
+        type: 'transitionEdge',
+        label: 'timeout',
+        class: 'timeout-edge',
+        data: { guard: '', isTimeout: true }
+      })
+    }
+
+    const newNodeObj = { id: stateData.name, type: 'stateNode', position: { x, y: 200 }, data: { ...stateData } }
+    nodes.value.push(newNodeObj)
+    selected.value = { type: 'node', id: stateData.name, data: newNodeObj.data }
     showAddState.value = false
     isDirty.value = true
   }

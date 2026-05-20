@@ -14,11 +14,12 @@ import (
 
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor/llm"
+	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/metrics"
 	"github.com/asm-platform/asm/internal/orchestrator"
+	"github.com/asm-platform/asm/internal/secrets"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/internal/tools"
-	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
@@ -27,22 +28,26 @@ const maxToolIterations = 10
 
 // Executor runs agent activities.
 type Executor struct {
-	llmRegistry  *llm.Registry
-	bus          events.Bus
-	store        store.Store
-	defaultProv  string
-	globalTools  *tools.Registry // tools available to every agent
-	mcpManager   *mcp.Manager
+	llmRegistry *llm.Registry
+	bus         events.Bus
+	store       store.Store
+	engine      *orchestrator.Engine
+	defaultProv string
+	globalTools *tools.Registry // tools available to every agent
+	mcpManager  *mcp.Manager
+	secretMgr   secrets.SecretManager
 }
 
-func NewExecutor(registry *llm.Registry, bus events.Bus, s store.Store, defaultProvider string, mcpManager *mcp.Manager) *Executor {
+func NewExecutor(registry *llm.Registry, bus events.Bus, s store.Store, defaultProvider string, mcpManager *mcp.Manager, engine *orchestrator.Engine, secretMgr secrets.SecretManager) *Executor {
 	e := &Executor{
 		llmRegistry: registry,
 		bus:         bus,
 		store:       s,
+		engine:      engine,
 		defaultProv: defaultProvider,
 		globalTools: tools.NewRegistry(),
 		mcpManager:  mcpManager,
+		secretMgr:   secretMgr,
 	}
 	e.RegisterTool(&tools.ReadUploadedFileTool{})
 	return e
@@ -69,9 +74,15 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 	}
 
 	// Load tenant secrets for tool/prompt use.
+	// Retrieve all keys and their values for the prompt/system context
 	var secrets map[string]string
-	if tenant, err := e.store.GetTenant(ctx, task.TenantID); err == nil {
-		secrets = tenant.Secrets
+	keys, _ := e.secretMgr.ListSecrets(ctx, task.TenantID)
+	if len(keys) > 0 {
+		secrets = make(map[string]string)
+		for _, k := range keys {
+			val, _ := e.secretMgr.GetSecret(ctx, task.TenantID, k)
+			secrets[k] = val
+		}
 	}
 
 	// Resolve LLM provider: per-agent config → registry default → env default → ollama fallback.
@@ -119,6 +130,19 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 		slog.Warn("Failed to load MCP tools", "agent", agent.Name, "error", err)
 		agentRegistry = tools.NewRegistry()
 	}
+
+	// 3. Load Reusable Workflows (Skills)
+	if e.store != nil {
+		if defs, err := e.store.ListDefinitions(ctx, store.DefinitionFilter{ReusableOnly: true}); err == nil {
+			for _, d := range defs {
+				// Don't register the workflow itself as a skill to avoid infinite recursion
+				if d.Metadata.Name != task.Def.Metadata.Name {
+					agentRegistry.Register(newSkillTool(e.engine, task.TenantID, d))
+				}
+			}
+		}
+	}
+
 	activeRegistry := e.globalTools.Merge(agentRegistry)
 
 	// Convert registry to LLM tool definitions.
@@ -218,6 +242,27 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 				Reasoning: output.Reasoning,
 			}))
 			output.Content = resp.Content
+
+			// Build the LLM call history for observability/persistence
+			msgSlice := make([]interface{}, len(messages))
+			for i, m := range messages {
+				msgSlice[i] = m
+			}
+			output.LLMCalls = []asmtypes.LLMCallLog{
+				{
+					StateName: task.StateDef.Name,
+					AgentName: agent.Name,
+					System:    system,
+					Messages:  msgSlice,
+					Response: &asmtypes.LLMCallResponse{
+						Content:   resp.Content,
+						Trigger:   output.Trigger,
+						Reasoning: output.Reasoning,
+					},
+					Timestamp: time.Now(),
+				},
+			}
+
 			result(nil)
 			return output, nil
 		}
@@ -245,7 +290,8 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 				slog.Debug("Tool call cache hit", "tool", tc.Name)
 				resultJSON = cached
 			} else {
-				raw, toolErr := e.executeTool(ctx, activeRegistry, tc.Name, inputJSON)
+				// We pass tc.ID so sub-workflows can generate a deterministic temporalID.
+				raw, toolErr := e.executeTool(ctx, activeRegistry, tc.Name, inputJSON, task.RunID, tc.ID)
 				if toolErr != nil {
 					slog.Warn("Tool error", "tool", tc.Name, "error", toolErr)
 					raw, _ = json.Marshal(fmt.Sprintf("error: %v", toolErr))
@@ -489,12 +535,126 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 	return reg, nil
 }
 
-func (e *Executor) executeTool(ctx context.Context, reg *tools.Registry, name string, inputJSON json.RawMessage) (json.RawMessage, error) {
+func (e *Executor) executeTool(ctx context.Context, reg *tools.Registry, name string, inputJSON json.RawMessage, runID, toolCallID string) (json.RawMessage, error) {
 	t, err := reg.Get(name)
 	if err != nil {
 		return nil, fmt.Errorf("tool '%s' not available: %w", name, err)
 	}
+
+	// If the tool is a skillTool, inject the temporal execution IDs
+	if st, ok := t.(*skillTool); ok {
+		st.parentRunID = runID
+		st.toolCallID = toolCallID
+	}
+
 	return t.Execute(ctx, inputJSON)
+}
+
+// -- Skill Tool (SubWorkflow) --
+
+type skillTool struct {
+	engine      *orchestrator.Engine
+	tenantID    string
+	def         *asmtypes.WorkflowDef
+	schema      json.RawMessage
+	parentRunID string
+	toolCallID  string
+}
+
+func newSkillTool(engine *orchestrator.Engine, tenantID string, def *asmtypes.WorkflowDef) tools.Tool {
+	props := make(map[string]interface{})
+	var required []string
+	for _, in := range def.Inputs {
+		props[in.Name] = map[string]interface{}{
+			"type":        in.Type,
+			"description": in.Description,
+		}
+		if in.Required {
+			required = append(required, in.Name)
+		}
+	}
+	schemaMap := map[string]interface{}{
+		"type":       "object",
+		"properties": props,
+	}
+	if len(required) > 0 {
+		schemaMap["required"] = required
+	}
+	b, _ := json.Marshal(schemaMap)
+
+	return &skillTool{
+		engine:   engine,
+		tenantID: tenantID,
+		def:      def,
+		schema:   json.RawMessage(b),
+	}
+}
+
+func (s *skillTool) Name() string {
+	return strings.ReplaceAll(s.def.Metadata.Name, "-", "_") // LLM tools often require underscores
+}
+
+func (s *skillTool) Description() string {
+	desc := s.def.Metadata.Description
+	if s.def.Metadata.ProcessDescription != "" {
+		desc += "\n" + s.def.Metadata.ProcessDescription
+	}
+	if desc == "" {
+		desc = "Executes the " + s.def.Metadata.Name + " skill."
+	}
+	return desc
+}
+
+func (s *skillTool) InputSchema() json.RawMessage {
+	return s.schema
+}
+
+func (s *skillTool) Execute(ctx context.Context, input json.RawMessage) (json.RawMessage, error) {
+	if s.engine == nil {
+		return nil, fmt.Errorf("orchestrator engine not available for skill execution")
+	}
+
+	var inMap map[string]interface{}
+	if len(input) > 0 && string(input) != "{}" {
+		if err := json.Unmarshal(input, &inMap); err != nil {
+			return nil, fmt.Errorf("invalid input json: %w", err)
+		}
+	} else {
+		inMap = make(map[string]interface{})
+	}
+
+	// We create a deterministic Temporal ID based on the parent Run ID and the Tool Call ID.
+	// This means if the LLM activity retries (or crashes), Temporal will return a 
+	// WorkflowExecutionAlreadyStartedError.
+	run, err := s.engine.StartRun(ctx, s.def.Metadata.Name, s.def.Metadata.Version, inMap)
+	if err != nil {
+		return nil, fmt.Errorf("start sub-workflow failed: %w", err)
+	}
+
+	if err := s.engine.AwaitWorkflowCompletion(ctx, run.TemporalID); err != nil {
+		return nil, fmt.Errorf("sub-workflow failed: %w", err)
+	}
+
+	// Fetch the completed run to get the outputs
+	completedRun, err := s.engine.GetRun(ctx, run.ID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch completed sub-workflow run: %w", err)
+	}
+
+	// Map outputs
+	outMap := make(map[string]interface{})
+	if len(s.def.Outputs) > 0 {
+		for _, out := range s.def.Outputs {
+			if val, ok := completedRun.Blackboard[out.Name]; ok {
+				outMap[out.Name] = val
+			}
+		}
+	} else {
+		// If no outputs defined, return the whole blackboard
+		outMap = completedRun.Blackboard
+	}
+
+	return json.Marshal(outMap)
 }
 
 // buildAssistantBlocks converts a CompletionResponse into the content-block

@@ -71,6 +71,24 @@ type AgentOutput struct {
 	Reasoning         string                 `json:"reasoning,omitempty"`
 	Error             string                 `json:"error,omitempty"`
 	StackTrace        string                 `json:"stack_trace,omitempty"`
+	LLMCalls          []LLMCallLog           `json:"llm_calls,omitempty"`
+}
+
+// LLMCallResponse captures the final decision from the LLM for the observability panel.
+type LLMCallResponse struct {
+	Content   string `json:"content"`
+	Trigger   string `json:"trigger"`
+	Reasoning string `json:"reasoning"`
+}
+
+// LLMCallLog records the raw LLM prompt and response for observability.
+type LLMCallLog struct {
+	StateName string           `json:"stateName"`
+	AgentName string           `json:"agentName"`
+	System    string           `json:"system"`
+	Messages  []interface{}    `json:"messages"`
+	Response  *LLMCallResponse `json:"response,omitempty"`
+	Timestamp time.Time        `json:"timestamp"`
 }
 
 // TriggerRequest asks the engine to fire a named trigger on a run.

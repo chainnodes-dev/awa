@@ -10,10 +10,9 @@ type Tenant struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`
 	Slug         string            `json:"slug"` // URL-safe identifier, e.g. "acme-corp"
-	LogoURL      string            `json:"logo_url,omitempty"`
-	Secrets      map[string]string `json:"-"` // never serialise secrets to JSON
-	LicenseToken string            `json:"license_token,omitempty"`
-	CreatedAt    time.Time         `json:"created_at"`
+	LogoURL      string    `json:"logo_url,omitempty"`
+	LicenseToken string    `json:"license_token,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // IDPConfig represents external auth settings for a tenant.
@@ -70,7 +69,6 @@ type TenantStore interface {
 	DeleteTenant(ctx context.Context, id string) error
 	HasAnyTenant(ctx context.Context) (bool, error)
 	UpdateTenantBranding(ctx context.Context, id, name, logoURL string) error
-	UpdateTenantSecrets(ctx context.Context, id string, secrets map[string]string) error
 
 	RecordAuditLog(ctx context.Context, entry *AuditLog) error
 	ListAuditLogs(ctx context.Context, tenantID string, limit, offset int) ([]*AuditLog, error)

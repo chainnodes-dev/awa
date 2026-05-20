@@ -189,9 +189,28 @@ func (h *Handlers) UpdateSecrets(c *gin.Context) {
 		return
 	}
 
-	if err := h.store.UpdateTenantSecrets(c.Request.Context(), tenantID, secrets); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	// Delete all existing secrets and set the new ones
+	// Or maybe just upsert all keys passed. 
+	// The frontend usually sends the entire set of secrets for UpdateSecrets.
+	existingKeys, err := h.secretMgr.ListSecrets(c.Request.Context(), tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list existing secrets"})
 		return
+	}
+	
+	// Delete any keys that are no longer in the provided map
+	for _, key := range existingKeys {
+		if _, ok := secrets[key]; !ok {
+			_ = h.secretMgr.DeleteSecret(c.Request.Context(), tenantID, key)
+		}
+	}
+	
+	// Set/Update provided keys
+	for k, v := range secrets {
+		if err := h.secretMgr.SetSecret(c.Request.Context(), tenantID, k, v); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update secrets"})
+			return
+		}
 	}
 
 	_ = enterprise.RecordAction(c.Request.Context(), h.store, enterprise.ActionSecretsUpdated, map[string]interface{}{
@@ -214,15 +233,15 @@ func (h *Handlers) GetSecrets(c *gin.Context) {
 		return
 	}
 
-	tenant, err := h.store.GetTenant(c.Request.Context(), tenantID)
+	keys, err := h.secretMgr.ListSecrets(c.Request.Context(), tenantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load secrets"})
 		return
 	}
 
 	masked := make(map[string]string)
-	for k := range tenant.Secrets {
-		masked[k] = "****"
+	for _, k := range keys {
+		masked[k] = "********"
 	}
 
 	c.JSON(http.StatusOK, masked)

@@ -2,6 +2,8 @@ package temporal
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	temporalsdk "go.temporal.io/sdk/temporal"
@@ -540,6 +542,80 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				continue
 			}
 
+			// ── Telegram Output ───────────────────────────────────────────────────
+			if state.Type == asmtypes.StateTelegramOutput && state.TelegramOutput != nil {
+				to := state.TelegramOutput
+				chatID := resolveTemplate(to.ChatID, bb)
+				msgText := resolveTemplate(to.MessageText, bb)
+
+				var trigger string
+				err := workflow.ExecuteActivity(shortOpts, (*Activities).SendTelegramMessage, SendTelegramMessageParams{
+					TenantID:    p.TenantID,
+					ChatID:      chatID,
+					MessageText: msgText,
+				}).Get(bCtx, &trigger)
+				if err != nil {
+					workflowErr = fmt.Errorf("failed to send Telegram message in state '%s': %w", currentState, err)
+					return
+				}
+
+				nextStates, err := applyTransition(p.Def, currentState, trigger, bb)
+				if err != nil {
+					workflowErr = err
+					return
+				}
+				if len(nextStates) == 0 {
+					return
+				}
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+					workflowErr = err
+					return
+				}
+				for i := 1; i < len(nextStates); i++ {
+					target := nextStates[i]
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+				}
+				currentState = nextStates[0]
+				continue
+			}
+
+			// ── Discord Output ────────────────────────────────────────────────────
+			if state.Type == asmtypes.StateDiscordOutput && state.DiscordOutput != nil {
+				do := state.DiscordOutput
+				channelID := resolveTemplate(do.ChannelID, bb)
+				msgText := resolveTemplate(do.MessageText, bb)
+
+				var trigger string
+				err := workflow.ExecuteActivity(shortOpts, (*Activities).SendDiscordMessage, SendDiscordMessageParams{
+					TenantID:    p.TenantID,
+					ChannelID:   channelID,
+					MessageText: msgText,
+				}).Get(bCtx, &trigger)
+				if err != nil {
+					workflowErr = fmt.Errorf("failed to send Discord message in state '%s': %w", currentState, err)
+					return
+				}
+
+				nextStates, err := applyTransition(p.Def, currentState, trigger, bb)
+				if err != nil {
+					workflowErr = err
+					return
+				}
+				if len(nextStates) == 0 {
+					return
+				}
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+					workflowErr = err
+					return
+				}
+				for i := 1; i < len(nextStates); i++ {
+					target := nextStates[i]
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+				}
+				currentState = nextStates[0]
+				continue
+			}
+
 			// ── SubProcess Call ──────────────────────────────────────────────────────
 			if state.Type == asmtypes.StateSubProcess && state.SubProcess != nil {
 				sc := state.SubProcess
@@ -812,3 +888,25 @@ func applyDefaults(def *asmtypes.WorkflowDef, initial map[string]interface{}) ma
 	}
 	return bb
 }
+
+var templateRegex = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_\.]+)\s*\}\}`)
+
+func resolveTemplate(tmpl string, bb map[string]interface{}) string {
+	return templateRegex.ReplaceAllStringFunc(tmpl, func(match string) string {
+		sub := templateRegex.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		path := sub[1]
+		// Trim optional "bb." or "blackboard." prefixes
+		path = strings.TrimPrefix(path, "bb.")
+		path = strings.TrimPrefix(path, "blackboard.")
+
+		val, ok := bb[path]
+		if !ok {
+			return ""
+		}
+		return fmt.Sprintf("%v", val)
+	})
+}
+

@@ -130,3 +130,18 @@ type EmitWorkflowEventParams struct {
 	EventName string
 	Payload   map[string]interface{}
 }
+
+// SendTelegramMessageParams is the activity input for sending a Telegram message.
+type SendTelegramMessageParams struct {
+	TenantID    string
+	ChatID      string
+	MessageText string
+}
+
+// SendDiscordMessageParams is the activity input for sending a Discord message.
+type SendDiscordMessageParams struct {
+	TenantID    string
+	ChannelID   string
+	MessageText string
+}
+

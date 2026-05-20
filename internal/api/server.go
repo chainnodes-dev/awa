@@ -19,16 +19,21 @@ import (
 	"github.com/asm-platform/asm/internal/health"
 	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/orchestrator"
+	"github.com/asm-platform/asm/internal/secrets"
 	"github.com/asm-platform/asm/internal/store"
+	"github.com/asm-platform/asm/internal/triggers"
+	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
 type Server struct {
 	httpServer *http.Server
 	hub        *Hub
 	mcpMgr     *mcp.Manager
+	triggerMgr *triggers.Manager
+	secretMgr  secrets.SecretManager
 }
 
-func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, bus events.Bus, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, checker *health.Checker, sched SchedulerAdder, llmReg *llm.Registry) *Server {
+func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, bus events.Bus, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, checker *health.Checker, sched SchedulerAdder, llmReg *llm.Registry, secretMgr secrets.SecretManager) *Server {
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
 
 	hub := NewHub(bus)
@@ -71,7 +76,11 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 	}
 
 	mcpMgr := mcp.NewManager(s)
-	handlers := NewHandlers(cfg, engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr)
+	triggerMgr := triggers.NewManager(s, func(ctx context.Context, tenantID, workflowName, version string, inputs map[string]interface{}) (*asmtypes.WorkflowRun, error) {
+		return engine.StartRun(store.WithTenantID(ctx, tenantID), workflowName, version, inputs)
+	}, secretMgr)
+
+	handlers := NewHandlers(cfg, engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr, triggerMgr, secretMgr)
 
 	router := gin.New()
 	router.MaxMultipartMemory = 64 << 20 // 64 MiB
@@ -97,8 +106,9 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 			Addr:    fmt.Sprintf(":%s", cfg.Port),
 			Handler: router,
 		},
-		hub: hub,
-		mcpMgr: mcpMgr,
+		hub:        hub,
+		mcpMgr:     mcpMgr,
+		triggerMgr: triggerMgr,
 	}
 }
 

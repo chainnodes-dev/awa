@@ -24,7 +24,7 @@ mcp_servers:
     author: Model Context Protocol
     transport: stdio
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-wikipedia"]
+    args: ["-y", "wikipedia-mcp"]
     description: "Search and retrieve full-text articles from Wikipedia."
     doc_url: "https://github.com/modelcontextprotocol/servers/tree/main/src/wikipedia"
 

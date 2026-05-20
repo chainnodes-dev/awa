@@ -16,6 +16,12 @@
                     style="background-color: activeTab === 'general' ? 'var(--color-accent)' : 'transparent'">
               General
             </button>
+            <button @click="activeTab = 'secrets'" 
+                    :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
+                             activeTab === 'secrets' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
+                    style="background-color: activeTab === 'secrets' ? 'var(--color-accent)' : 'transparent'">
+              Secrets
+            </button>
             <button @click="activeTab = 'prompts'" 
                     :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
                              activeTab === 'prompts' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
@@ -87,28 +93,6 @@
             </div>
         </section>
 
-        <!-- Environment Secrets -->
-        <section v-if="isAdmin" class="space-y-4">
-           <div class="flex items-center gap-2 px-1">
-             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
-               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-             </svg>
-              <h2 class="text-sm font-bold text-text uppercase tracking-wider">Environment Secrets</h2>
-            </div>
-            <div class="card p-5 space-y-4">
-              <div v-for="(val, idx) in secretsForm" :key="idx" class="flex gap-2 items-center">
-                 <input v-model="secretsForm[idx].name" class="input text-xs w-1/3" placeholder="KEY_NAME" />
-                 <input v-model="secretsForm[idx].value" type="password" class="input text-xs flex-1" placeholder="Value (hidden)" />
-                 <button @click="removeSecret(idx)" class="btn-ghost text-red-400 p-2">✕</button>
-              </div>
-              <div class="flex justify-between items-center pt-2">
-                 <button @click="addSecret" class="btn-ghost text-[10px] font-bold uppercase">+ Add Secret</button>
-                 <button @click="saveSecrets" :disabled="secretsBusy" class="btn-primary text-xs px-4">
-                    {{ secretsBusy ? 'Saving...' : 'Save Secrets' }}
-                 </button>
-              </div>
-           </div>
-        </section>
 
         <!-- LLM Configs -->
         <section v-if="isAdmin" class="space-y-4">
@@ -182,6 +166,39 @@
                 <span :class="['absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform', telemetryEnabled ? 'translate-x-5' : 'translate-x-0']"></span>
               </button>
            </div>
+         </section>
+      </div>
+
+      <!-- Secrets Management (Enterprise Feature) -->
+      <div v-if="activeTab === 'secrets'" class="flex-1 px-6 py-6 max-w-3xl w-full mx-auto space-y-6">
+        <section v-if="isAdmin" class="space-y-4">
+           <div class="flex items-center gap-2 px-1">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+             </svg>
+              <h2 class="text-sm font-bold text-text uppercase tracking-wider">Environment Secrets</h2>
+              <span v-if="!entStore.hasFeature('secrets')" class="badge bg-amber-500/10 text-amber-500 text-[9px] font-bold tracking-widest">Enterprise Feature</span>
+            </div>
+
+            <div class="card p-5 space-y-4" :class="{'opacity-40 grayscale pointer-events-none select-none': !entStore.hasFeature('secrets')}">
+              <div v-for="(val, idx) in secretsForm" :key="idx" class="flex gap-2 items-center">
+                 <input v-model="secretsForm[idx].name" class="input text-xs w-1/3" placeholder="KEY_NAME" />
+                 <input v-model="secretsForm[idx].value" type="password" class="input text-xs flex-1" placeholder="Value (hidden)" />
+                 <button @click="removeSecret(idx)" class="btn-ghost text-red-400 p-2">✕</button>
+              </div>
+              <div class="flex justify-between items-center pt-2">
+                 <button @click="addSecret" class="btn-ghost text-[10px] font-bold uppercase">+ Add Secret</button>
+                 <button @click="saveSecrets" :disabled="secretsBusy" class="btn-primary text-xs px-4">
+                    {{ secretsBusy ? 'Saving...' : 'Save Secrets' }}
+                 </button>
+              </div>
+            </div>
+
+            <div v-if="!entStore.hasFeature('secrets')" class="text-center p-6 bg-surface-2 rounded-xl border border-border">
+              <p class="text-xs text-text-muted">
+                Secrets Management is an Enterprise feature. Please upload an enterprise license token or upgrade your plan to unlock encrypted vault storage for keys and API credentials.
+              </p>
+            </div>
         </section>
       </div>
 

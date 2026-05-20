@@ -39,6 +39,7 @@ type TemporalEngineClient interface {
 	SendHITLSignal(ctx context.Context, temporalID string, sig asmtypes.HITLSignal) error
 	SendChatSignal(ctx context.Context, temporalID, message, sender string) error
 	TerminateWorkflow(ctx context.Context, temporalID string) error
+	AwaitWorkflowCompletion(ctx context.Context, temporalID string) error
 	Close()
 }
 
@@ -104,6 +105,11 @@ func (e *Engine) StartRun(ctx context.Context, workflowName, version string, inp
 	}
 
 	return run, nil
+}
+
+// AwaitWorkflowCompletion blocks until the specified temporal workflow completes.
+func (e *Engine) AwaitWorkflowCompletion(ctx context.Context, temporalID string) error {
+	return e.temporal.AwaitWorkflowCompletion(ctx, temporalID)
 }
 
 // Trigger fires a named trigger on a running workflow in Temporal.

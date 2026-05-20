@@ -150,17 +150,6 @@ func (s *MemoryStore) UpdateTenantBranding(_ context.Context, id, name, logoURL 
 	return nil
 }
 
-func (s *MemoryStore) UpdateTenantSecrets(_ context.Context, id string, secrets map[string]string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	t, ok := s.tenants[id]
-	if !ok {
-		return fmt.Errorf("tenant %s not found", id)
-	}
-	t.Secrets = secrets
-	return nil
-}
-
 func (s *MemoryStore) RecordAuditLog(_ context.Context, entry *AuditLog) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

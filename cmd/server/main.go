@@ -23,6 +23,7 @@ import (
 	"github.com/asm-platform/asm/internal/migrate"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/scheduler"
+	"github.com/asm-platform/asm/internal/secrets"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/internal/telemetry"
 	temporalpkg "github.com/asm-platform/asm/internal/temporal"
@@ -124,9 +125,25 @@ func main() {
 		gen = designer.NewGenerator(llmProv, mcpEntries, s)
 	}
 
+	var secretMgr secrets.SecretManager
+	if pgs, ok := s.(*store.PostgresStore); ok {
+		masterKey, err := secrets.GenerateOrLoadMasterKey()
+		if err != nil {
+			slog.Error("Failed to load master key", "error", err)
+			os.Exit(1)
+		}
+		secretMgr, err = secrets.NewAESSecretManager(pgs.Pool(), masterKey)
+		if err != nil {
+			slog.Error("Failed to initialize secret manager", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		secretMgr = secrets.NewMemorySecretManager()
+	}
+
 	// 6. Server
 	sched := scheduler.New(engine.StartRun)
-	srv := api.NewServer(cfg, engine, s, bus, gen, mcpEntries, checker, sched, llmRegistry)
+	srv := api.NewServer(cfg, engine, s, bus, gen, mcpEntries, checker, sched, llmRegistry, secretMgr)
 	
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -180,6 +197,11 @@ func (l *lazyTemporalExecutor) TerminateWorkflow(ctx context.Context, tid string
 	exec := l.get()
 	if exec == nil { return context.DeadlineExceeded }
 	return exec.TerminateWorkflow(ctx, tid)
+}
+func (l *lazyTemporalExecutor) AwaitWorkflowCompletion(ctx context.Context, tid string) error {
+	exec := l.get()
+	if exec == nil { return context.DeadlineExceeded }
+	return exec.AwaitWorkflowCompletion(ctx, tid)
 }
 func (l *lazyTemporalExecutor) Close() {
 	if exec := l.get(); exec != nil { exec.Close() }

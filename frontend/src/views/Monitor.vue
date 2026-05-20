@@ -217,9 +217,37 @@
         </div>
 
 
-        <!-- Event log -->
-        <div class="h-48 border-t border-border">
-          <EventLog :events="filteredEvents" />
+        <!-- Bottom Log/Debug Tabs -->
+        <div class="h-64 border-t border-border flex flex-col overflow-hidden bg-surface-1">
+          <div class="flex border-b border-border bg-surface-2 shrink-0">
+            <button
+              v-for="tab in bottomTabs" :key="tab.id"
+              @click="bottomTab = tab.id"
+              :class="[
+                'px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors border-r border-border',
+                bottomTab === tab.id ? 'text-accent bg-surface-1' : 'text-text-muted hover:text-text bg-surface-2',
+              ]"
+            >
+              {{ tab.label }}
+              <span
+                v-if="tab.count"
+                class="text-[9px] bg-accent/20 text-accent px-1 rounded-full ml-1"
+              >{{ tab.count }}</span>
+            </button>
+          </div>
+          <div class="flex-1 overflow-hidden">
+            <EventLog v-if="bottomTab === 'events'" :events="filteredEvents" />
+            <LLMDebugPanel
+              v-else-if="bottomTab === 'llm'"
+              :calls="displayLLMCalls"
+              class="h-full"
+            />
+            <MCPAuditLogPanel
+              v-else-if="bottomTab === 'mcp'"
+              :logs="runMCPLogs"
+              class="h-full"
+            />
+          </div>
         </div>
       </div>
 
@@ -328,19 +356,7 @@
            />
         </div>
 
-        <!-- Debug tabs (admin only) -->
-        <LLMDebugPanel
-          v-else-if="activeTab === 'debug'"
-          :calls="runLLMCalls"
-          class="flex-1 overflow-hidden"
-        />
 
-        <MCPAuditLogPanel
-          v-else-if="activeTab === 'mcp'"
-          :logs="runMCPLogs"
-          class="flex-1 overflow-hidden"
-        />
-        
         <!-- Task tab (HITL) -->
         <div v-else-if="activeTab === 'task'" class="flex-1 flex flex-col overflow-hidden bg-surface-2/30">
           <div class="p-4 space-y-4 flex-1 overflow-y-auto">
@@ -655,14 +671,51 @@ const visibleTabs  = computed(() => {
   if (currentStateType.value === 'hitl') {
     tabs.push({ id: 'task', label: 'Task' })
   }
-  if (authStore.hasRole('admin') && showDebugTabs.value) {
-    tabs.push({ id: 'debug', label: 'LLM Debug' })
-    tabs.push({ id: 'mcp',   label: 'MCP Debug' })
-  }
   if (selectedTransition.value) {
     tabs.push({ id: 'snapshot', label: 'Snapshot' })
   }
   return tabs
+})
+
+const bottomTab = ref('events')
+const displayLLMCalls = computed(() => {
+  const historicalCalls = []
+  for (const t of displayHistory.value) {
+    if (t.agent_output?.llm_calls) {
+      for (const call of t.agent_output.llm_calls) {
+        historicalCalls.push({
+          id: `${call.stateName}-${call.agentName}-${call.timestamp}`,
+          stateName: call.stateName,
+          agentName: call.agentName,
+          system: call.system,
+          messages: call.messages,
+          response: call.response,
+          timestamp: call.timestamp,
+        })
+      }
+    }
+  }
+
+  if (isLive.value && run.value?.status === 'running') {
+    const liveCalls = runLLMCalls.value
+    for (const lc of liveCalls) {
+      const exists = historicalCalls.some(
+        hc => hc.stateName === lc.stateName && hc.agentName === lc.agentName && hc.timestamp === lc.timestamp
+      )
+      if (!exists) {
+        historicalCalls.push(lc)
+      }
+    }
+  }
+  return historicalCalls
+})
+
+const bottomTabs = computed(() => {
+  return [
+    { id: 'events', label: 'Event Log' },
+    { id: 'llm', label: 'LLM Debug', count: displayLLMCalls.value.length },
+    { id: 'mcp', label: 'MCP Debug', count: runMCPLogs.value.length },
+  ]
 })
 
 // Auto-switch to Task tab when waiting at a HITL node

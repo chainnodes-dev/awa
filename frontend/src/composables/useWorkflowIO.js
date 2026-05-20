@@ -35,12 +35,23 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
     for (const k in bbSchema) delete bbSchema[k]
     if (def.blackboard?.schema) Object.assign(bbSchema, def.blackboard.schema)
 
-    nodes.value = (def.states ?? []).map(s => ({
-      id:       s.name,
-      type:     'stateNode',
-      position: s.position ?? { x: 200, y: 100 },
-      data:     { ...s },
-    }))
+    const activeTrigger = def.triggers?.find(t => ['telegram', 'discord', 'cron', 'webhook'].includes(t.type))
+
+    nodes.value = (def.states ?? []).map(s => {
+      const isInitial = s.type === 'initial'
+      const type = s.is_timeout_node ? 'timeout_node' : (s.type ?? 'prompt')
+      return {
+        id:       s.name,
+        type:     'stateNode',
+        position: s.position ?? { x: 200, y: 100 },
+        data:     { 
+          ...s,
+          type,
+          triggerType: (isInitial && activeTrigger) ? activeTrigger.type : undefined,
+          triggerConfig: (isInitial && activeTrigger) ? activeTrigger.config : undefined,
+        },
+      }
+    })
 
     // Build the set of triggers that correspond to timeout / condition exception paths.
     // Used to tag edges so the canvas can style and toggle them independently.
@@ -70,13 +81,23 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
         return t.to_nodes.map(target => ({
           id: `${t.from}__${t.trigger}__${target}`,
           source: t.from, target,
+          sourceHandle: isTimeout ? 'timeout' : undefined,
           type: 'transitionEdge', label: t.trigger,
           class: isTimeout ? 'timeout-edge' : '',
           data: { guard: t.guard ?? '', isTimeout },
         }))
       }
       const target = t.to || t.target || ''
-      return [{ id: `${t.from}__${t.trigger}__${target}`, source: t.from, target, type: 'transitionEdge', label: t.trigger, class: isTimeout ? 'timeout-edge' : '', data: { guard: t.guard ?? '', isTimeout } }]
+      return [{
+        id: `${t.from}__${t.trigger}__${target}`,
+        source: t.from,
+        target,
+        sourceHandle: isTimeout ? 'timeout' : undefined,
+        type: 'transitionEdge',
+        label: t.trigger,
+        class: isTimeout ? 'timeout-edge' : '',
+        data: { guard: t.guard ?? '', isTimeout }
+      }]
     })
 
     agents.value  = def.agents ?? []
@@ -132,19 +153,31 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
       outputs:      meta.outputs?.length      ? meta.outputs      : undefined,
       capabilities: meta.capabilities?.length ? meta.capabilities : undefined,
       blackboard: { schema: { ...bbSchema } },
+      triggers: (() => {
+        const triggerNodes = nodes.value.filter(n => n.data.type === 'initial' && n.data.triggerType)
+        return triggerNodes.length > 0 ? triggerNodes.map(n => ({
+          name: `${n.data.triggerType}_trigger`,
+          type: n.data.triggerType,
+          config: n.data.triggerConfig || {},
+        })) : undefined
+      })(),
       states: nodes.value.map(n => ({
-        name:         n.id,
-        type:         n.data.type         ?? 'prompt',
-        instructions: n.data.instructions || undefined,
-        agent:        n.data.agent        || undefined,
-        script:       n.data.script       || undefined,
-        code:         n.data.code         || undefined,
-        condition:    n.data.condition    || undefined,
-        timeout:      n.data.timeout      || undefined,
-        on_timeout:   n.data.on_timeout   || undefined,
-        subprocess:   n.data.subprocess   || undefined,
-        form_schema:  n.data.form_schema  || undefined,
-        position:     n.position,
+        name:            n.id,
+        type:            n.data.type === 'timeout_node' ? 'terminal' : (n.data.type ?? 'prompt'),
+        instructions:    n.data.instructions    || undefined,
+        agent:           n.data.agent           || undefined,
+        script:          n.data.script          || undefined,
+        code:            n.data.code            || undefined,
+        condition:       n.data.condition       || undefined,
+        timeout:         n.data.timeout         || undefined,
+        on_timeout:      n.data.on_timeout      || undefined,
+        subprocess:      n.data.subprocess      || undefined,
+        form_schema:     n.data.form_schema     || undefined,
+        telegram_output: n.data.telegram_output || undefined,
+        discord_output:  n.data.discord_output  || undefined,
+        position:        n.position,
+        is_timeout_node: n.data.type === 'timeout_node' || n.data.is_timeout_node || undefined,
+        default_timeout: n.data.default_timeout || n.data.defaultTimeout || undefined,
       })),
       transitions: Array.from(
         edges.value.reduce((map, e) => {

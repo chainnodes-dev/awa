@@ -10,13 +10,11 @@ export function useCanvasSync({ nodes, edges, meta, isDirty, view, yamlSource, y
   let fromYamlUpdate = false
   let yamlDebounce   = null
 
-  // Canvas → YAML: sync textarea in split view.
+  // Canvas → YAML: sync textarea.
   // isDirty is NOT set here — real mutations set it explicitly.
   watch([nodes, edges], () => {
     if (fromYamlUpdate) return
-    if (view.value === 'split') {
-      yamlSource.value = yaml.dump(buildDefinition(), { lineWidth: 120 })
-    }
+    yamlSource.value = yaml.dump(buildDefinition(), { lineWidth: 120 })
   }, { deep: true })
 
   // meta → YAML + dirty: fires when user edits workflow metadata fields.
@@ -24,9 +22,7 @@ export function useCanvasSync({ nodes, edges, meta, isDirty, view, yamlSource, y
   watch(meta, () => {
     if (fromYamlUpdate || fromLoad.value) return
     isDirty.value = true
-    if (view.value === 'split') {
-      yamlSource.value = yaml.dump(buildDefinition(), { lineWidth: 120 })
-    }
+    yamlSource.value = yaml.dump(buildDefinition(), { lineWidth: 120 })
   }, { deep: true })
 
   // View switch: sync YAML ↔ canvas when changing modes.
