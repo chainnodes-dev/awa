@@ -125,23 +125,40 @@ const formData   = reactive({})
 
 const hasSchema = computed(() => {
   const inputs = props.definition?.inputs || []
-  return inputs.length > 0
+  if (inputs.length > 0) return true
+
+  const schema = props.definition?.blackboard?.schema || {}
+  const outputs = props.definition?.outputs || []
+  const outputNames = new Set(outputs.map(o => o.name))
+
+  return Object.entries(schema).some(([key, field]) => {
+    return !outputNames.has(key) && !field.is_output
+  })
 })
 
 const jsonSchema = computed(() => {
   const schema = props.definition?.blackboard?.schema || {}
   const inputs = props.definition?.inputs || []
+  const outputs = props.definition?.outputs || []
 
-  // Build a sorted, filtered schema of ONLY inputs
   const filtered = {}
 
-  // Inputs first (respecting the order in definition.inputs)
-  for (const port of inputs) {
-    const field = schema[port.name] || { type: port.type }
-    filtered[port.name] = { 
-      ...field, 
-      required: true,
-      title: port.description || field.title || port.name
+  if (inputs.length > 0) {
+    // Inputs first (respecting the order in definition.inputs)
+    for (const port of inputs) {
+      const field = schema[port.name] || { type: port.type }
+      filtered[port.name] = { 
+        ...field, 
+        required: true,
+        title: port.description || field.title || port.name
+      }
+    }
+  } else {
+    // Fallback to blackboard schema fields that are NOT outputs
+    const outputNames = new Set(outputs.map(o => o.name))
+    for (const [key, field] of Object.entries(schema)) {
+      if (outputNames.has(key) || field.is_output) continue
+      filtered[key] = field
     }
   }
 
