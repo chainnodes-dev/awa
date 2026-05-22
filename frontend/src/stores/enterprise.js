@@ -5,7 +5,7 @@ import { api } from './auth'
 export const useEnterpriseStore = defineStore('enterprise', () => {
   const status = ref(null)
   const loading = ref(false)
-  const branding = ref({ name: 'Phaxa', logo_url: '/logo.png' })
+  const branding = ref({ name: 'Chain Nodes', logo_url: '/logo.png' })
   const secrets = ref({})
   const auditLogs = ref([])
   const analytics = ref({})
@@ -26,7 +26,7 @@ export const useEnterpriseStore = defineStore('enterprise', () => {
       if (data.logo_url) {
         branding.value = data
       } else {
-        branding.value = { ...branding.value, name: data.name || 'Phaxa' }
+        branding.value = { ...branding.value, name: data.name || 'Chain Nodes' }
       }
     } catch (e) {
       // Silence 403 (Forbidden) errors as they are expected for Free tier

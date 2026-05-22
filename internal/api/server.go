@@ -53,16 +53,18 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 		privKeyPEM = cfg.LicensePrivateKey
 	}
 
-	if pubKeyPEM != "" {
-		pubKey, err := enterprise.ParseRSAPublicKey(pubKeyPEM)
-		if err != nil {
-			slog.Error("Failed to parse license public key", "error", err)
-		} else {
-			verifier = enterprise.NewVerifier(pubKey)
-			slog.Info("License verification enabled", "key_type", "RSA")
-		}
+	if pubKeyPEM == "" {
+		pubKeyPEM = enterprise.ChainNodesPublicKey
+		slog.Info("License verification enabled using built-in public key", "key_type", "RSA")
 	} else {
-		slog.Warn("License verification disabled: no public key found in DB or env")
+		slog.Info("License verification enabled using configured public key", "key_type", "RSA")
+	}
+
+	pubKey, err := enterprise.ParseRSAPublicKey(pubKeyPEM)
+	if err != nil {
+		slog.Error("Failed to parse license public key", "error", err)
+	} else {
+		verifier = enterprise.NewVerifier(pubKey)
 	}
 
 	if privKeyPEM != "" {
@@ -169,7 +171,7 @@ func EnsureDefaultTenant(ctx context.Context, s store.Store) (*store.Tenant, err
 	// We want to avoid foreign key violations for handlers that rely on DefaultTenantID.
 	t := &store.Tenant{
 		ID:   store.DefaultTenantID,
-		Name: "Phaxa",
+		Name: "Chain Nodes",
 		Slug: "default",
 	}
 	if err := s.CreateTenant(ctx, t); err != nil {

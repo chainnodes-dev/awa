@@ -27,7 +27,7 @@ func init() {
 
 // --- test fixtures ---
 
-const simpleWorkflowYAML = `apiVersion: phaxa/v1
+const simpleWorkflowYAML = `apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: test-wf

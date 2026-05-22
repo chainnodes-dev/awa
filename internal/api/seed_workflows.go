@@ -42,7 +42,7 @@ var builtinWorkflows = []string{
 }
 
 const invoiceProcessingWorkflow = `
-apiVersion: phaxa/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: invoice-processing
@@ -204,7 +204,7 @@ agents:
 `
 
 const securityIncidentWorkflow = `
-apiVersion: phaxa/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: security-incident-triage
@@ -272,7 +272,7 @@ agents:
 `
 
 const supportRouterWorkflow = `
-apiVersion: phaxa/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: support-router

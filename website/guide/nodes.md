@@ -1,6 +1,6 @@
 # State Nodes: The Building Blocks of Reasoning
 
-Workflows in Phaxa are composed of specialized state nodes, each representing a distinct step in the "Durable Reasoning" chain. These nodes are executing blocks of logic tied together by a state machine.
+Workflows in Chain Nodes are composed of specialized state nodes, each representing a distinct step in the "Durable Reasoning" chain. These nodes are executing blocks of logic tied together by a state machine.
 
 ---
 

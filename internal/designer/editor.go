@@ -21,7 +21,7 @@ func NewWorkflowEditor(def *asmtypes.WorkflowDef) *WorkflowEditor {
 		def = &asmtypes.WorkflowDef{}
 	}
 	if def.APIVersion == "" {
-		def.APIVersion = "asm.bauhaus28.com/v1"
+		def.APIVersion = "chainnodes/v1"
 	}
 	if def.Kind == "" {
 		def.Kind = "Workflow"

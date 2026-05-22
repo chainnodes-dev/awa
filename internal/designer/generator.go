@@ -496,7 +496,7 @@ func (g *Generator) buildCoreRules() string {
 
 ### YAML Schema Overview
 ` + "```yaml" + `
-apiVersion: asm.bauhaus28.com/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: kebab-case-name
@@ -548,7 +548,7 @@ func (g *Generator) AssembleSystemPrompt(ctx context.Context, requestedServers [
 	// 2. YAML Schema Overview
 	sb.WriteString("### YAML Schema Overview\n")
 	sb.WriteString("```yaml\n")
-	sb.WriteString("apiVersion: asm.bauhaus28.com/v1\n")
+	sb.WriteString("apiVersion: chainnodes/v1\n")
 	sb.WriteString("kind: Workflow\n")
 	sb.WriteString("metadata:\n")
 	sb.WriteString("  name: kebab-case-name\n")

@@ -5,7 +5,7 @@ title: Global Fleet Dashboard
 
 # Global Fleet Dashboard
 
-This page provides a real-time overview of all Phaxa on-prem installations worldwide. 
+This page provides a real-time overview of all Chain Nodes on-prem installations worldwide. 
 
 <div class="fleet-stats grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
   <div class="premium-card p-6">
@@ -38,7 +38,7 @@ This page provides a real-time overview of all Phaxa on-prem installations world
 
 ## Telemetry Compliance
 
-Phaxa telemetry is **fully GDPR compliant**. No PII or business-sensitive data is ever transmitted. Each installation generates a unique ID that is used solely for aggregate metrics collection.
+Chain Nodes telemetry is **fully GDPR compliant**. No PII or business-sensitive data is ever transmitted. Each installation generates a unique ID that is used solely for aggregate metrics collection.
 
 ::: info AUDIT TRAIL
 You can inspect the exact telemetry payload in your local installation under **Settings > Privacy**.

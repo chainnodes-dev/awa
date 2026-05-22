@@ -159,7 +159,7 @@
               <div class="space-y-1">
                 <h3 class="text-xs font-bold text-text">Anonymized Telemetry</h3>
                 <p class="text-[11px] text-text-muted max-w-sm">
-                  Share platform-wide usage metrics with Phaxa HQ.
+                  Share platform-wide usage metrics with Chain Nodes HQ.
                 </p>
               </div>
               <button @click="toggleTelemetry" :class="['w-10 h-5 rounded-full relative transition-colors duration-200 outline-none', telemetryEnabled ? 'bg-emerald-500' : 'bg-surface-3']">

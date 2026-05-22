@@ -1,9 +1,9 @@
 # YAML Schema
 
-Phaxa workflows are defined in declarative YAML using the following standard structure:
+Chain Nodes workflows are defined in declarative YAML using the following standard structure:
 
 ```yaml
-apiVersion: phaxa/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: support-ticket-handler
@@ -84,7 +84,7 @@ agents:
 
 ## Top-Level Fields
 
-- **apiVersion**: Always `phaxa/v1`
+- **apiVersion**: Always `chainnodes/v1`
 - **kind**: Always `Workflow`
 - **metadata**: Setup info:
   - `name`: Unique, url-friendly process name.

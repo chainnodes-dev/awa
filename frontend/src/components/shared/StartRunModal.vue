@@ -105,7 +105,7 @@
 <script setup>
 import { ref, watch, onMounted, computed, reactive } from 'vue'
 import { useWorkflowStore } from '@/stores/workflows'
-import { convertPhaxaSchemaToJsonSchema } from '@/utils/schema'
+import { convertBlackboardSchemaToJsonSchema } from '@/utils/schema'
 import JsonSchemaForm from '@/components/monitor/JsonSchemaForm.vue'
 
 const props = defineProps({
@@ -145,7 +145,7 @@ const jsonSchema = computed(() => {
     }
   }
 
-  return convertPhaxaSchemaToJsonSchema(filtered, false)
+  return convertBlackboardSchemaToJsonSchema(filtered, false)
 })
 
 function syncFromForm(data) {

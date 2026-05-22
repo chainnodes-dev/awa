@@ -601,13 +601,13 @@ function onDrop(event) {
     newNode.data.type = 'telegram_output'
     newNode.data.telegram_output = {
       chat_id: '{{bb.chat_id}}',
-      message_text: 'Hello from Phaxa!',
+      message_text: 'Hello from Chain Nodes!',
     }
   } else if (type === 'discord_output') {
     newNode.data.type = 'discord_output'
     newNode.data.discord_output = {
       channel_id: '{{bb.channel_id}}',
-      message_text: 'Hello from Phaxa!',
+      message_text: 'Hello from Chain Nodes!',
     }
   } else if (type === 'timeout_node') {
     newNode.data.type = 'timeout_node'
@@ -808,12 +808,12 @@ async function handleImportYAML() {
 
 onMounted(async () => {
   // Check for AI-proposed fix from the Monitor
-  const fixData = sessionStorage.getItem('phaxa_ai_fix')
+  const fixData = sessionStorage.getItem('chainnodes_ai_fix')
   if (fixData) {
     try {
       const { yaml: fixYaml, explanation } = JSON.parse(fixData)
       onAIApply({ yamlStr: fixYaml })
-      sessionStorage.removeItem('phaxa_ai_fix')
+      sessionStorage.removeItem('chainnodes_ai_fix')
       // Show success toast or notification would be nice here
       console.log('AI fix applied:', explanation)
     } catch (e) {

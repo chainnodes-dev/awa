@@ -1,4 +1,4 @@
-apiVersion: phaxa/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 
 metadata:

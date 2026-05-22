@@ -23,7 +23,7 @@ func (m *mockExecutor) Execute(_ context.Context, task AgentTask) (*asmtypes.Age
 
 // twoStateWorkflow: initial -> terminal, no agent, manual trigger.
 const twoStateYAML = `
-apiVersion: phaxa/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: two-state
@@ -41,7 +41,7 @@ transitions:
 
 // hitlWorkflow: initial -> hitl state (waits for human) -> terminal.
 const hitlWorkflowYAML = `
-apiVersion: phaxa/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: hitl-wf

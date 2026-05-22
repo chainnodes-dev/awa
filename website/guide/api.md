@@ -1,6 +1,6 @@
 # API Reference
 
-The Phaxa API is a RESTful interface for managing workflows, runs, and configurations.
+The Chain Nodes API is a RESTful interface for managing workflows, runs, and configurations.
 
 ## Authentication
 All requests (except `/auth/login`) require a Bearer token or an X-API-Key.
@@ -8,7 +8,7 @@ All requests (except `/auth/login`) require a Bearer token or an X-API-Key.
 ```bash
 Authorization: Bearer <token>
 # OR
-X-API-Key: phaxa_sk_...
+X-API-Key: chain nodes_sk_...
 ```
 
 ## Workflows

@@ -1,4 +1,4 @@
-# Phaxa
+# Chain Nodes
 
 **Agentic State Machine** — a workflow orchestration platform for building AI-powered business processes.
 
@@ -35,7 +35,7 @@ docker compose up -d
 Open **[http://localhost:5174](http://localhost:5174)** to access the platform.
 
 ### 🛡 Initial Setup
-On your first visit, Phaxa will automatically detect that the platform is uninitialized and guide you through the **Super Admin Setup**. 
+On your first visit, Chain Nodes will automatically detect that the platform is uninitialized and guide you through the **Super Admin Setup**. 
 1. Create your primary administrator account.
 2. Go to **Settings** to configure your LLM providers (Anthropic, OpenAI, etc.).
 3. You're ready to build!
@@ -49,7 +49,7 @@ docker compose -f docker-compose.prod.yaml up -d
 
 | URL | What |
 |---|---|
-| http://localhost | Phaxa frontend |
+| http://localhost | Chain Nodes frontend |
 | http://localhost:8088 | Temporal UI |
 
 > First startup takes ~60 seconds while Temporal initialises against Postgres.
@@ -58,7 +58,7 @@ docker compose -f docker-compose.prod.yaml up -d
 ---
 
 ### Quick Start (Manual Dev)
-To start infrastructure dependencies (Postgres, Redis, Temporal) in Docker while running the Phaxa services manually for development:
+To start infrastructure dependencies (Postgres, Redis, Temporal) in Docker while running the Chain Nodes services manually for development:
 
 ```bash
 make dev-infra  # Starts DB, Cache, and Temporal
@@ -74,7 +74,7 @@ make frontend   # Vite Dev    →  :5173
 Workflows are YAML manifests. Example:
 
 ```yaml
-apiVersion: phaxa/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: invoice-approval
@@ -180,29 +180,29 @@ Browser
   │  WebSocket (live events)
   │  REST /api/v1
   ▼
-┌─────────────────────────────┐
-│         Phaxa API Server     │
+┌──────────────────────────────┐
+│    Chain Nodes API Server    │
 │  - Workflow CRUD             │
 │  - Run lifecycle             │
 │  - HITL signals              │
 │  - WebSocket hub             │
-└────────────┬────────────────┘
+└────────────┬─────────────────┘
              │ Temporal SDK
              ▼
-┌─────────────────────────────┐
+┌──────────────────────────────┐
 │       Temporal Server        │
 │  (durable workflow engine)   │
-└────────────┬────────────────┘
+└────────────┬─────────────────┘
              │ Task Queue
              ▼
-┌─────────────────────────────┐
+┌──────────────────────────────┐
 │       Temporal Worker        │
-│  - PhaxaWorkflow               │
+│  - Chain Nodes Workflow      │
 │  - ExecuteAgent activity     │
 │  - ExecuteCode activity      │
 │  - ExecuteScript activity    │
 │  - HITL / Wait activities    │
-└─────────────────────────────┘
+└──────────────────────────────┘
 
 Shared infrastructure: Postgres (state), Redis (events pub/sub)
 ```

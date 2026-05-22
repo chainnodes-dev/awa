@@ -1,17 +1,17 @@
 /**
- * Converts an Phaxa Blackboard Schema (map of FieldDefs) to a standard JSON Schema (v7).
+ * Converts a Blackboard Schema (map of FieldDefs) to a standard JSON Schema (v7).
  * This allows the JsonSchemaForm component to render structured inputs for the blackboard.
  * 
- * @param {Object} phaxaSchema - The blackboard schema from the workflow definition.
+ * @param {Object} bbSchema - The blackboard schema from the workflow definition.
  * @returns {Object|null} A standard JSON Schema object, or null if no schema is provided.
  */
-export function convertPhaxaSchemaToJsonSchema(phaxaSchema, onlyRequired = false) {
-  if (!phaxaSchema || Object.keys(phaxaSchema).length === 0) return null
+export function convertBlackboardSchemaToJsonSchema(bbSchema, onlyRequired = false) {
+  if (!bbSchema || Object.keys(bbSchema).length === 0) return null
 
   const properties = {}
   const required = []
 
-  for (const [key, field] of Object.entries(phaxaSchema)) {
+  for (const [key, field] of Object.entries(bbSchema)) {
     if (onlyRequired && !field.required) continue
 
     properties[key] = convertField(field, key)
@@ -49,7 +49,7 @@ function convertField(field, key = '') {
   }
 
   if (type === 'object' && field.properties) {
-    const subSchema = convertPhaxaSchemaToJsonSchema(field.properties)
+    const subSchema = convertBlackboardSchemaToJsonSchema(field.properties)
     if (subSchema) {
       properties = subSchema.properties
       required = subSchema.required

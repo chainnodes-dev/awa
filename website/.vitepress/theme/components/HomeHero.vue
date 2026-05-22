@@ -14,7 +14,7 @@ import { withBase } from 'vitepress'
         </h1>
         
         <p class="text">
-          Phaxa is the industrial-grade autonomous agent platform. 
+          Chain Nodes is the industrial-grade autonomous agent platform. 
           Orchestrate neural workflows, bridge data silos with MCP, 
           and scale with Temporal precision.
         </p>
@@ -31,7 +31,7 @@ import { withBase } from 'vitepress'
         <div class="orb-container animate-float">
           <img 
             :src="withBase('/assets/logos/logo-card.svg')" 
-            alt="Phaxa Logo" 
+            alt="Chain Nodes Logo" 
             class="hero-image" 
           />
         </div>

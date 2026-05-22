@@ -150,7 +150,7 @@ async function runDiagnostic() {
 function applyFix() {
   if (!proposal.value) return
   // We store the fix in session storage so the designer can pick it up
-  sessionStorage.setItem('phaxa_ai_fix', JSON.stringify({
+  sessionStorage.setItem('chainnodes_ai_fix', JSON.stringify({
     yaml: proposal.value.yaml,
     explanation: proposal.value.explanation
   }))

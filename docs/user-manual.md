@@ -112,7 +112,7 @@ Shared infrastructure
 
 ### Workflow Definition
 
-A workflow is a YAML manifest (`apiVersion: phaxa/v1, kind: Workflow`). It declares:
+A workflow is a YAML manifest (`apiVersion: chainnodes/v1, kind: Workflow`). It declares:
 
 - **States** — the nodes of the graph
 - **Transitions** — directed edges labelled by trigger names
@@ -663,7 +663,7 @@ When the operator submits this form, the values are **automatically merged into 
 A complete annotated example:
 
 ```yaml
-apiVersion: phaxa/v1
+apiVersion: chainnodes/v1
 kind: Workflow
 
 metadata:

@@ -558,7 +558,7 @@ import { useExecutionStore } from '@/stores/execution'
 import { useWorkflowStore }  from '@/stores/workflows'
 import { useAuthStore }      from '@/stores/auth'
 import { useLayout }         from '@/composables/useLayout'
-import { convertPhaxaSchemaToJsonSchema } from '@/utils/schema'
+import { convertBlackboardSchemaToJsonSchema } from '@/utils/schema'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -646,7 +646,7 @@ const canTerminate = computed(() => {
 const currentFormSchema = computed(() => currentStateDef.value?.form_schema)
 
 const blackboardSchema = computed(() => {
-  return convertPhaxaSchemaToJsonSchema(workflowDef.value?.blackboard?.schema)
+  return convertBlackboardSchemaToJsonSchema(workflowDef.value?.blackboard?.schema)
 })
 
 const rerunInitialData = computed(() => {

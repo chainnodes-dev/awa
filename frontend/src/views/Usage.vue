@@ -55,8 +55,20 @@
         </div>
         
         <div v-if="updatingLicense" class="space-y-3">
-          <textarea v-model="licenseInput" class="input text-[10px] font-mono h-24 resize-none" placeholder="Paste signed JWT token..."></textarea>
-          <div class="flex justify-end">
+          <textarea v-model="licenseInput" class="input text-[10px] font-mono h-24 resize-none" placeholder="Paste signed JWT token or PEM license content here..."></textarea>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <label class="btn-secondary text-[10px] font-bold uppercase tracking-wider px-3 py-2 cursor-pointer flex items-center gap-1.5 border border-border rounded hover:bg-surface-2 transition-colors">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5-5 5 5m-5-5v12"/>
+                </svg>
+                <span>Upload File</span>
+                <input type="file" @change="handleFileUpload" class="hidden" accept=".pem,.lic" />
+              </label>
+              <span v-if="selectedFileName" class="text-[10px] text-text-muted font-mono truncate max-w-[200px]" :title="selectedFileName">
+                {{ selectedFileName }}
+              </span>
+            </div>
             <button @click="saveLicense" :disabled="licenseBusy || !licenseInput" class="btn-primary text-xs px-6">
               {{ licenseBusy ? 'Applying...' : 'Apply License' }}
             </button>
@@ -100,7 +112,7 @@
               <label class="text-[10px] uppercase font-bold text-text-muted tracking-widest">Marketplace Source (URL or Path)</label>
               <button @click="marketSource = 'configs/mcp-market.json'" class="text-[9px] font-bold text-indigo-500 hover:underline italic">Reset to Default</button>
             </div>
-            <input v-model="marketSource" class="input text-[11px] font-mono" placeholder="https://phaxa.io/registry.json or local path..." />
+            <input v-model="marketSource" class="input text-[11px] font-mono" placeholder="https://chainnodes.io/registry.json or local path..." />
             <p class="text-[9px] text-text-muted leading-relaxed">
               Admins can host a curated list of approved MCP servers to restrict external threats and ensure reliability.
             </p>
@@ -167,9 +179,21 @@ const entStore = useEnterpriseStore()
 const updatingLicense = ref(false)
 const licenseInput = ref('')
 const licenseBusy = ref(false)
+const selectedFileName = ref('')
 
 const marketSource = ref('')
 const marketBusy = ref(false)
+
+function handleFileUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  selectedFileName.value = file.name
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    licenseInput.value = e.target.result
+  }
+  reader.readAsText(file)
+}
 
 async function fetchMarketSource() {
   try {
@@ -197,6 +221,7 @@ async function saveLicense() {
     await entStore.setLicense(licenseInput.value)
     updatingLicense.value = false
     licenseInput.value = ''
+    selectedFileName.value = ''
   } catch (e) {
     alert('License update failed: ' + (e.response?.data?.error ?? e.message))
   } finally {

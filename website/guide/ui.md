@@ -1,6 +1,6 @@
 # UI Reference
 
-The Phaxa platform is organised into specialised pages accessible from the icon sidebar on the left. A live WebSocket indicator at the bottom of the sidebar shows the real-time connection status (green = connected).
+The Chain Nodes platform is organised into specialised pages accessible from the icon sidebar on the left. A live WebSocket indicator at the bottom of the sidebar shows the real-time connection status (green = connected).
 
 ---
 
@@ -129,7 +129,7 @@ The pipeline breaks generation into four sequential steps, each shown as a numbe
 | Step | Name | What it does |
 |------|------|--------------|
 | 1 | **Decompose** | Identifies all states and writes a description for every node. The canvas shows a skeleton workflow with placeholder nodes. |
-| 2 | **Categorise** | Assigns the correct Phaxa node type to every node (`code`, `script`, `hitl`, `wait`, `call`, etc.). No executable logic is generated yet. |
+| 2 | **Categorise** | Assigns the correct Chain Nodes node type to every node (`code`, `script`, `hitl`, `wait`, `call`, etc.). No executable logic is generated yet. |
 | 3 | **Wire** | Defines all transitions between states, sets guard conditions, and produces the Blackboard Schema — the typed data contract shared across all nodes. |
 | 4 | **Implement** | Generates final executable code for every node in parallel using specialised per-type prompts. The result is a fully runnable workflow. |
 
@@ -252,7 +252,7 @@ The lower portion of the Monitor mirrors the Designer canvas with nodes colour-c
 
 ### Time Travel Scrubber
 
-Phaxa features a state-of-the-art **Time Travel Scrubber** situated at the bottom of the execution Monitor canvas. This allows operators to inspect and debug workflows retrospectively:
+Chain Nodes features a state-of-the-art **Time Travel Scrubber** situated at the bottom of the execution Monitor canvas. This allows operators to inspect and debug workflows retrospectively:
 
 - **Live vs. Travel Mode**: Toggle between **Live** (real-time state updates) and **Travel** modes. Switching to Travel mode freezes the view, letting you inspect exactly what happened during prior transitions.
 - **Interactive Scrubber Slider**: Drag the slider backwards or forwards to scrub through historical execution steps.

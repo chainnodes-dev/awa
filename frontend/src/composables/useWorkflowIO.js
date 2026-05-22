@@ -138,7 +138,7 @@ export function useWorkflowIO({ nodes, edges, meta, bbSchema, agents, versions, 
       })
 
     return {
-      apiVersion: 'phaxa/v1',
+      apiVersion: 'chainnodes/v1',
       kind:       'Workflow',
       metadata: {
         name:                meta.name,

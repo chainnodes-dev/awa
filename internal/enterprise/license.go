@@ -1,6 +1,7 @@
 package enterprise
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -25,13 +26,13 @@ const (
 	// ChainNodesPublicKey is the hardcoded public key for Phaxa license verification.
 	// This ensures that only licenses signed by Chain Nodes SRL are accepted.
 	ChainNodesPublicKey = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArebsNAqVY7iTSysWsiWh
-kAqjbe1PEM1z3gOe46nuCEhF/UKUWxBTVxgbGF7BF9pQ3nWWWPWn6E8M23ySYbSJ
-gz3HhCBb1qOLskQ3EDX4fsztjKoz+FD6lk5TsI5D6BHyWcGyQkaqIJl4h1p9FzbR
-XlKU1OQPDPD/HO9GJ/AIpiFtKFx/+lBZUvPBSgkNfBQ4/WyBYU7YoO+48XTy9DgY
-+AFvCGRoyVEjjRBoc9i2qYmw5FlbkogoswUZp/OsM7ueDb/bg+YIwwY1+ubjw9g8
-eoUCavNqgjKmbPbJ0RMC5qhatr5is/kqnAJfUMFxxpNzNBoneoty+vtM3aTtG+3e
-bwIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3QwlqfwEnHKdXXYG1aL/
+dbAO7DsV7InutB6iub+onloy53BWvxmkJY80ZzOsn8IqaxEcqXoo69Iu4r5ooS+A
+0Q/pZ8pab1COhnVq6Bv8ZA63l3ZI12qA10TA/FraHh/VCBkKUyJ1n/PbtJW4TtRr
+PtG1/1pjHAXhGZmr6PrKwKHANNaOgPvZxr6HiizN/IWW1nGKO2OCbJMJAdKx25JA
+VkqF2xXw4bB1uCHBfZ3tsJUqx2KDIt41IqDBgxrhjRery3aNzTlJGCJiTT/h5Jev
+OEkVnz0tVTlgtghkHngwMRjZduvejFo4qZFNCjHgrGRdBtF1Dlfy22+ZI24/Weje
+dQIDAQAB
 -----END PUBLIC KEY-----`
 )
 
@@ -82,13 +83,12 @@ func (v *Verifier) Verify(tokenString string) (*LicenseClaims, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 
-		// ALWAYS prefer the hardcoded Chain Nodes key for verification.
-		// If it fails to parse (should never happen), fall back to the configured key.
-		if hardcoded, err := ParseRSAPublicKey(ChainNodesPublicKey); err == nil {
-			return hardcoded, nil
+		// Use the configured public key if available, otherwise fallback to the hardcoded Chain Nodes key.
+		if v != nil && v.publicKey != nil {
+			return v.publicKey, nil
 		}
 
-		return v.publicKey, nil
+		return ParseRSAPublicKey(ChainNodesPublicKey)
 	})
 
 	if err != nil {
@@ -167,7 +167,7 @@ func ParseRSAPrivateKey(pemStr string) (*rsa.PrivateKey, error) {
 }
 // GenerateRSAKeyPair creates a new 2048-bit RSA key pair and returns them as PEM strings.
 func GenerateRSAKeyPair() (privPEM string, pubPEM string, err error) {
-	priv, err := rsa.GenerateKey(nil, 2048)
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return "", "", err
 	}

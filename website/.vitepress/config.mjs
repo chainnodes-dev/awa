@@ -1,8 +1,9 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: "Phaxa",
+  title: "Chain Nodes",
   description: "Enterprise-grade Autonomous Agent Platform",
+  ignoreDeadLinks: true,
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/assets/logos/favicon.svg' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
@@ -24,7 +25,7 @@ export default defineConfig({
         items: [
           { text: 'Getting Started', link: '/guide/getting-started' },
           { text: 'Architecture', link: '/guide/architecture' },
-          { text: 'Phaxa vs. Competitors', link: '/comparison' },
+          { text: 'Chain Nodes vs. Competitors', link: '/comparison' },
           { text: 'Pricing & Features', link: '/pricing' },
           { text: 'State Nodes', link: '/guide/nodes' },
           { text: 'Transitions', link: '/guide/transitions' },

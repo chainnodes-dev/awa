@@ -470,7 +470,7 @@
 
         <div class="space-y-1">
           <label class="text-xs text-text-muted">Task Queue</label>
-          <input class="input font-mono text-xs" v-model="agentForm.task_queue" placeholder="phaxa-workers" />
+          <input class="input font-mono text-xs" v-model="agentForm.task_queue" placeholder="chainnodes-workers" />
         </div>
 
         <div class="space-y-1">

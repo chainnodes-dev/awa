@@ -1,10 +1,10 @@
 # Getting Started
 
 ::: info LICENSE INFORMATION
-Phaxa is distributed under the **Phaxa Enterprise License**. The core platform is free for individual development and small-scale automation, while advanced features like Multi-Tenancy, SSO, and Fleet Management require a valid Enterprise License Key. By using this software, you agree to the terms of the Phaxa EULA.
+Chain Nodes is distributed under the **Chain Nodes Enterprise License**. The core platform is free for individual development and small-scale automation, while advanced features like Multi-Tenancy, SSO, and Fleet Management require a valid Enterprise License Key. By using this software, you agree to the terms of the Chain Nodes EULA.
 :::
 
-Phaxa is a distributed, high-performance system consisting of a Go Backend, a Vue Frontend, and a set of Workers. It is designed to orchestrate complex, long-running agentic workflows with the reliability of Temporal.io.
+Chain Nodes is a distributed, high-performance system consisting of a Go Backend, a Vue Frontend, and a set of Workers. It is designed to orchestrate complex, long-running agentic workflows with the reliability of Temporal.io.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ Phaxa is a distributed, high-performance system consisting of a Go Backend, a Vu
 
 ## Installation
 
-The easiest way to get Phaxa up and running is via **Docker Compose**. This will start the API server, the worker, the frontend, and all necessary infrastructure (PostgreSQL, Redis, Temporal).
+The easiest way to get Chain Nodes up and running is via **Docker Compose**. This will start the API server, the worker, the frontend, and all necessary infrastructure (PostgreSQL, Redis, Temporal).
 
 1. **Clone the repository**:
    ```bash
@@ -37,7 +37,7 @@ The easiest way to get Phaxa up and running is via **Docker Compose**. This will
 
 Once the platform is running, navigate to `http://localhost:5174`. 
 
-On the first boot, Phaxa will prompt you to initialize the **Super Admin** account. 
+On the first boot, Chain Nodes will prompt you to initialize the **Super Admin** account. 
 1. **Choose a username and a secure password** for the super admin account.
 2. **Download your Recovery Key** (used if you lose access to the database).
 3. **Log in** with the credentials you just created.
@@ -47,9 +47,9 @@ After logging in, you will be taken to the Global Dashboard where you can manage
 ---
 ## ⚙️ Mandatory: Define your first LLM
 
-Before you can create or run your first workflow, you **must** define at least one LLM provider in the UI. While you can pre-configure them via the `.env` file (which Phaxa will automatically seed into the database on first boot), we recommend managing them through the **Settings > LLM Providers** screen for better flexibility.
+Before you can create or run your first workflow, you **must** define at least one LLM provider in the UI. While you can pre-configure them via the `.env` file (which Chain Nodes will automatically seed into the database on first boot), we recommend managing them through the **Settings > LLM Providers** screen for better flexibility.
 
-Phaxa supports a wide range of providers. You will need an API key from at least one of these:
+Chain Nodes supports a wide range of providers. You will need an API key from at least one of these:
 
 | Provider | Best For | Link |
 | :--- | :--- | :--- |

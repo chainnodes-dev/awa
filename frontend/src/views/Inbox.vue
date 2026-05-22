@@ -270,7 +270,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useExecutionStore } from '@/stores/execution'
-import { convertPhaxaSchemaToJsonSchema } from '@/utils/schema'
+import { convertBlackboardSchemaToJsonSchema } from '@/utils/schema'
 import JsonSchemaForm from '@/components/monitor/JsonSchemaForm.vue'
 import BlackboardEditor from '@/components/monitor/BlackboardEditor.vue'
 
@@ -321,7 +321,7 @@ watch(currentChat, () => {
 }, { deep: true })
 
 const blackboardSchema = computed(() => {
-  return convertPhaxaSchemaToJsonSchema(selectedTask.value?.blackboard_schema)
+  return convertBlackboardSchemaToJsonSchema(selectedTask.value?.blackboard_schema)
 })
 
 // When selecting a task, clone its blackboard for editing

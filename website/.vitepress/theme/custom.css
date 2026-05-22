@@ -5,8 +5,8 @@
   --vp-c-brand-dark: #9333ea;
   --vp-c-brand-darker: #7e22ce;
   
-  --phaxa-bg: #02010a;
-  --phaxa-glass: rgba(8, 2, 18, 0.8);
+  --chain-nodes-bg: #02010a;
+  --chain-nodes-glass: rgba(8, 2, 18, 0.8);
   
   --vp-home-hero-name-color: transparent;
   --vp-home-hero-name-background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
@@ -20,7 +20,7 @@
 }
 
 .dark {
-  --vp-c-bg: var(--phaxa-bg);
+  --vp-c-bg: var(--chain-nodes-bg);
   --vp-c-bg-soft: #0a0a0f;
   --vp-c-bg-mute: #12121a;
   
@@ -36,7 +36,7 @@
 }
 
 .dark .premium-card {
-  background: var(--phaxa-glass);
+  background: var(--chain-nodes-glass);
   border: 1px solid rgba(168, 85, 247, 0.15);
 }
 

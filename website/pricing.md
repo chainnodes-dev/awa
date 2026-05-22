@@ -1,6 +1,6 @@
 # Pricing & Features
 
-Phaxa is built for scalability. Whether you are a single developer or a global enterprise, we have a plan that fits your orchestration needs.
+Chain Nodes is built for scalability. Whether you are a single developer or a global enterprise, we have a plan that fits your orchestration needs.
 
 ## Feature Comparison
 
@@ -27,5 +27,5 @@ The **Enterprise Version** is designed for organizations that require high avail
 - **Dedicated Support**: Priority access to the Chain Nodes engineering team for custom integration support.
 
 ::: tip GET A QUOTE
-Interested in Phaxa Enterprise? [Contact our sales team](/) to schedule a personalized demo and discuss your specific requirements.
+Interested in Chain Nodes Enterprise? [Contact our sales team](/) to schedule a personalized demo and discuss your specific requirements.
 :::

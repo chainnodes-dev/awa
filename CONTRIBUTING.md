@@ -1,13 +1,13 @@
-# Contributing to Phaxa
+# Contributing to Chain Nodes
 
-Thank you for your interest in contributing to the Phaxa platform! This document outlines how our repository is structured and how you can get involved.
+Thank you for your interest in contributing to the Chain Nodes platform! This document outlines how our repository is structured and how you can get involved.
 
 ## Codebase Architecture & Boundaries
 
-Phaxa uses a monorepo structure to keep everything coordinated, but we maintain strict boundaries between open-source core components and enterprise extensions.
+Chain Nodes uses a monorepo structure to keep everything coordinated, but we maintain strict boundaries between open-source core components and enterprise extensions.
 
 - **`pkg/`** (Public SDKs and types): This is the public API surface area. Structs, interfaces, and utilities meant to be consumed by custom specialist workers live here. Changes here must be strictly backwards-compatible.
-- **`internal/`** (Private Core Engine): The core Phaxa runtime, API server, executor, and temporal orchestration logic. This code is open for internal commercial use (under Polyform Perimeter) but is *not* a stable API surface. We refactor this heavily.
+- **`internal/`** (Private Core Engine): The core Chain Nodes runtime, API server, executor, and temporal orchestration logic. This code is open for internal commercial use (under Polyform Perimeter) but is *not* a stable API surface. We refactor this heavily.
 - **`internal/enterprise/`** (Enterprise Features): Code gated by license keys (e.g., SSO, advanced RBAC, audit logging). We welcome bug fixes here, but new enterprise features are generally managed by the core team.
 - **`frontend/`**: The Vue/Vite-based Designer and Monitor applications.
 

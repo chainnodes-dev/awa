@@ -2,7 +2,9 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,12 +18,63 @@ type SetLicenseRequest struct {
 	Token string `json:"token" binding:"required"`
 }
 
+// extractLicenseToken removes PEM wrappers, spaces, and newlines from the token.
+func extractLicenseToken(content []byte) string {
+	str := strings.TrimSpace(string(content))
+	if strings.Contains(str, "-----BEGIN") {
+		lines := strings.Split(str, "\n")
+		var tokenParts []string
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "-----BEGIN") || strings.HasPrefix(line, "-----END") || line == "" {
+				continue
+			}
+			tokenParts = append(tokenParts, line)
+		}
+		return strings.Join(tokenParts, "")
+	}
+	return str
+}
+
 // SetLicense updates the license token for the active tenant.
 func (h *Handlers) SetLicense(c *gin.Context) {
-	var req SetLicenseRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	var token string
+
+	contentType := c.GetHeader("Content-Type")
+	if strings.Contains(contentType, "multipart/form-data") {
+		// Handle file upload
+		file, err := c.FormFile("file")
+		if err != nil {
+			// Fallback to "license" field
+			file, err = c.FormFile("license")
+		}
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded (use field 'file' or 'license')"})
+			return
+		}
+
+		src, err := file.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to open file: %v", err)})
+			return
+		}
+		defer src.Close()
+
+		content, err := io.ReadAll(src)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to read file: %v", err)})
+			return
+		}
+
+		token = extractLicenseToken(content)
+	} else {
+		// Default to JSON body
+		var req SetLicenseRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		token = extractLicenseToken([]byte(req.Token))
 	}
 
 	tenantID := store.TenantIDFromContext(c.Request.Context())
@@ -30,23 +83,21 @@ func (h *Handlers) SetLicense(c *gin.Context) {
 		return
 	}
 
-	// 1. Verify the token first if a verifier is configured.
-	if h.licenseVerifier != nil {
-		claims, err := h.licenseVerifier.Verify(req.Token)
-		if err != nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("invalid license: %v", err)})
-			return
-		}
+	// 1. Verify the token first.
+	claims, err := h.licenseVerifier.Verify(token)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("invalid license: %v", err)})
+		return
+	}
 
-		// Ensure the license is actually for THIS tenant.
-		if claims.TenantID != "" && claims.TenantID != tenantID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "license tenant mismatch"})
-			return
-		}
+	// Ensure the license is actually for THIS tenant.
+	if claims.TenantID != "" && claims.TenantID != tenantID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "license tenant mismatch"})
+		return
 	}
 
 	// 2. Persist to DB.
-	if err := h.store.UpdateTenantLicense(c.Request.Context(), tenantID, req.Token); err != nil {
+	if err := h.store.UpdateTenantLicense(c.Request.Context(), tenantID, token); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
