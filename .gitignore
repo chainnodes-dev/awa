@@ -69,3 +69,6 @@ website/.vitepress/cache/
 *.pem
 .asm_master_key
 
+# Firebase
+.firebase/
+

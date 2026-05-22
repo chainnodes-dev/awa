@@ -17,7 +17,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Comparison', link: '/comparison' },
       { text: 'Pricing', link: '/pricing' },
-      { text: 'Dashboard', link: 'http://localhost:5173' }
+      { text: 'GitHub', link: 'https://github.com/chainnodes-dev/awa.git' }
     ],
     sidebar: [
       {
@@ -48,7 +48,7 @@ export default defineConfig({
       }
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/bauhaus28/asm-platform' },
+      { icon: 'github', link: 'https://github.com/chainnodes-dev/awa.git' },
       { icon: 'discord', link: 'https://discord.gg/phaxa' }
     ],
     footer: {
