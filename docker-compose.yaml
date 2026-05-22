@@ -2,24 +2,24 @@ services:
   # ── Infrastructure ─────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: phaxa-postgres
+    container_name: chainnode-postgres
     environment:
-      POSTGRES_USER: ${DB_USER:-phaxa}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-phaxa_secret}
-      POSTGRES_DB: ${DB_NAME:-phaxa}
+      POSTGRES_USER: ${DB_USER:-chainnode}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chainnode_secret}
+      POSTGRES_DB: ${DB_NAME:-chainnode}
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-phaxa} -d ${DB_NAME:-phaxa}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-chainnode} -d ${DB_NAME:-chainnode}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: phaxa-redis
+    container_name: chainnode-redis
     ports:
       - "6379:6379"
     volumes:
@@ -32,12 +32,12 @@ services:
 
   temporal:
     image: temporalio/auto-setup:1.24
-    container_name: phaxa-temporal
+    container_name: chainnode-temporal
     environment:
       DB: postgres12
       DB_PORT: 5432
-      POSTGRES_USER: ${DB_USER:-phaxa}
-      POSTGRES_PWD: ${DB_PASSWORD:-phaxa_secret}
+      POSTGRES_USER: ${DB_USER:-chainnode}
+      POSTGRES_PWD: ${DB_PASSWORD:-chainnode_secret}
       POSTGRES_SEEDS: postgres
       DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/development-sql.yaml
     volumes:
@@ -48,7 +48,7 @@ services:
 
   temporal-ui:
     image: temporalio/ui:2.26.2
-    container_name: phaxa-temporal-ui
+    container_name: chainnode-temporal-ui
     environment:
       TEMPORAL_ADDRESS: temporal:7233
     ports:
@@ -56,16 +56,16 @@ services:
     depends_on:
       - temporal
 
-  # ── Phaxa Services ─────────────────────────────────────────────────────────
+  # ── Chainnode Services ─────────────────────────────────────────────────────────
   server:
     build:
       context: .
       args:
         CMD: server
-    container_name: phaxa-server
+    container_name: chainnode-server
     restart: on-failure
     environment:
-      - DATABASE_URL=postgres://${DB_USER:-phaxa}:${DB_PASSWORD:-phaxa_secret}@postgres:5432/${DB_NAME:-phaxa}?sslmode=disable
+      - DATABASE_URL=postgres://${DB_USER:-chainnode}:${DB_PASSWORD:-chainnode_secret}@postgres:5432/${DB_NAME:-chainnode}?sslmode=disable
       - TEMPORAL_ADDRESS=temporal:7233
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET:-dev-insecure-secret-change-in-prod}
@@ -85,10 +85,10 @@ services:
       context: .
       args:
         CMD: worker
-    container_name: phaxa-worker
+    container_name: chainnode-worker
     restart: on-failure
     environment:
-      - DATABASE_URL=postgres://${DB_USER:-phaxa}:${DB_PASSWORD:-phaxa_secret}@postgres:5432/${DB_NAME:-phaxa}?sslmode=disable
+      - DATABASE_URL=postgres://${DB_USER:-chainnode}:${DB_PASSWORD:-chainnode_secret}@postgres:5432/${DB_NAME:-chainnode}?sslmode=disable
       - TEMPORAL_ADDRESS=temporal:7233
       - REDIS_URL=redis://redis:6379
     volumes:
@@ -102,7 +102,7 @@ services:
   frontend:
     build:
       context: ./frontend
-    container_name: phaxa-frontend
+    container_name: chainnode-frontend
     ports:
       - "5174:80"
     depends_on:

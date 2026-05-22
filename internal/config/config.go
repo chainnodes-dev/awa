@@ -55,7 +55,7 @@ func Load() *Config {
 		Port:              getEnv("PORT", "8080"),
 		Environment:       getEnv("ENVIRONMENT", "development"),
 		CORSOrigins:       strings.Split(getEnv("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174"), ","),
-		DatabaseURL:       getEnv("DATABASE_URL", "postgres://phaxa:phaxa_secret@localhost:5433/phaxa?sslmode=disable"),
+		DatabaseURL:       getEnv("DATABASE_URL", "postgres://chainnode:chainnode_secret@localhost:5433/chainnode?sslmode=disable"),
 		RedisURL:          getEnv("REDIS_URL", "redis://localhost:6379"),
 		TemporalAddress:   getEnv("TEMPORAL_ADDRESS", "localhost:7233"),
 		TemporalNamespace: getEnv("TEMPORAL_NAMESPACE", "default"),

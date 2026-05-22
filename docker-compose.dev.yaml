@@ -1,24 +1,24 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: asm-platform-postgres-1
+    container_name: chainnode-postgres-1
     environment:
-      POSTGRES_USER: phaxa
-      POSTGRES_PASSWORD: phaxa_secret
-      POSTGRES_DB: phaxa
+      POSTGRES_USER: chainnode
+      POSTGRES_PASSWORD: chainnode_secret
+      POSTGRES_DB: chainnode
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U phaxa"]
+      test: ["CMD-SHELL", "pg_isready -U chainnode"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: asm-platform-redis-1
+    container_name: chainnode-redis-1
     ports:
       - "6379:6379"
     volumes:
@@ -31,12 +31,12 @@ services:
 
   temporal:
     image: temporalio/auto-setup:1.24
-    container_name: asm-platform-temporal-1
+    container_name: chainnode-temporal-1
     environment:
       DB: postgres12
       DB_PORT: 5432
-      POSTGRES_USER: phaxa
-      POSTGRES_PWD: phaxa_secret
+      POSTGRES_USER: chainnode
+      POSTGRES_PWD: chainnode_secret
       POSTGRES_SEEDS: postgres
       DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/development-sql.yaml
     ports:
@@ -49,7 +49,7 @@ services:
 
   temporal-ui:
     image: temporalio/ui:2.26.2
-    container_name: asm-platform-temporal-ui-1
+    container_name: chainnode-temporal-ui-1
     environment:
       TEMPORAL_ADDRESS: temporal:7233
     ports:
