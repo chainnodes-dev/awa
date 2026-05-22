@@ -1,5 +1,6 @@
 # Local config — never commit
 .env
+.home/
 
 # Go build artifacts — compiled binaries at repo root and in bin/
 bin/
@@ -10,8 +11,15 @@ bin/
 /specialist-worker
 /specialist-worker-template
 .cache/
+.go/
 .go-cache/
+.go_cache/
+.gocache/
 .go-modcache/
+.gopath/
+.go-work/
+.go-build/
+.go_work/
 scratch/
 
 

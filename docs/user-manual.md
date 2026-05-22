@@ -44,7 +44,7 @@ The **Phaxa** platform is a workflow orchestration system for building AI-powere
 
 **Core philosophy:**
 
-> *Keep workers stupid. Let the state machine decide.*
+> *Keep workers as simple as possible. Let the state machine decide.*
 
 Each worker's only job is to complete its task and return a trigger. It never knows what happens next. All routing — transitions, conditions, branching — lives in the workflow definition. This means you can swap, upgrade, or specialise a worker without touching the workflow, and redesign the flow without touching the workers.
 
