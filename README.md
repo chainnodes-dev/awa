@@ -2,11 +2,9 @@
 
 **Agentic State Machine** — a workflow orchestration platform for building AI-powered business processes.
 
-[![Discord](https://img.shields.io/discord/1234567890?label=Discord&logo=discord&color=5865F2)](https://discord.gg/phaxa)
-
 Define your process as a state machine in YAML. Assign LLM agents, deterministic scripts, or JavaScript code nodes to each state. The platform runs it durably via Temporal, streams live events to the browser, and keeps every routing decision in the workflow definition — not in the workers.
 
-> **Keep workers stupid. Let the state machine decide.**
+> **Keep workers as simple as possible. Let the state machine decide.**
 
 ---
 
@@ -243,17 +241,14 @@ frontend/
 
 ## Configuration
 
-All configuration is via environment variables. Copy `.env.example` for a full annotated reference.
+LLM keys, administrator accounts, and provider URLs are configured directly in the web UI under **Settings**.
+
+System-level settings can be configured via environment variables. Copy `.env.example` for a full annotated reference.
 
 Key variables:
 
 | Variable | Description | Default |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key | — |
-| `OPENAI_API_KEY` | OpenAI API key | — |
-| `OLLAMA_URL` | Ollama base URL for local LLMs | — |
-| `ADMIN_USERNAME` | Seeded admin username | `admin` |
-| `ADMIN_PASSWORD` | Seeded admin password (required) | — |
 | `JWT_SECRET` | JWT signing secret — **change in production** | dev default |
 | `FRONTEND_PORT` | Host port for the Nginx frontend container | `80` |
 | `ENABLE_TELEMETRY` | Opt-in anonymous install beacon (sends OS/Arch on startup) | `false` |
@@ -262,33 +257,18 @@ Key variables:
 
 ## Using Ollama (local LLMs)
 
-```bash
-# In .env
-OLLAMA_URL=http://host.docker.internal:11434  # from Docker, or http://localhost:11434 for local dev
-LLM_PROVIDER=ollama
-OLLAMA_MODEL=llama3.2
-```
+You can enable and configure Ollama directly in the **Settings** menu:
+1. Enable the **Ollama** provider.
+2. Set the **Server URL** (e.g. `http://host.docker.internal:11434` when running inside Docker, or `http://localhost:11434` for local dev).
+3. Set the **Default Model** (e.g. `llama3.2`).
 
-Or keep the global provider as Anthropic/OpenAI and route individual agents to Ollama:
+You can route individual agents to Ollama by specifying their model in the workflow YAML:
 
 ```yaml
 agents:
   - name: classifier
-    model: llama3.2   # routed to Ollama when OLLAMA_URL is set
+    model: llama3.2   # routed to Ollama when Ollama is configured in Settings
 ```
-
----
-
-## Specialist workers
-
-For deterministic, high-throughput states that don't need LLM reasoning, you can build a typed Go worker on its own task queue:
-
-```bash
-# Scaffold a new specialist worker
-make specialist name=invoice-worker queue=invoice-workers
-```
-
-This copies the template in `cmd/specialist-worker-template/` and gives you a typed Go handler to fill in.
 
 ---
 
