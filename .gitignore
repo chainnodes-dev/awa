@@ -1,6 +1,8 @@
 # Local config — never commit
 .env
 .home/
+scripts/
+
 
 # Go build artifacts — compiled binaries at repo root and in bin/
 bin/
@@ -30,6 +32,7 @@ frontend/dist/
 # Temporal local state — the dynamicconfig file IS committed (required for startup)
 # only ignore extra files that may be generated at runtime
 temporal-config/*.lock
+internal/temporal/test_cache/
 
 # OS
 .DS_Store
@@ -64,4 +67,5 @@ website/.vitepress/cache/
 # Logs
 *.log
 *.pem
+.asm_master_key
 
