@@ -16,9 +16,9 @@ runcmd:
   - systemctl enable docker
   - systemctl start docker
 
-  # Clone repository and start Phaxa stack
-  - git clone https://github.com/bauhaus28/asm-platform.git /opt/phaxa
-  - cd /opt/phaxa
+  # Clone repository and start Chainnode stack
+  - git clone https://github.com/chainnodes-dev/awa.git /opt/chainnode
+  - cd /opt/chainnode
   - cp .env.example .env
   
   # Replace frontend port to 80 for public access if needed

@@ -19,8 +19,8 @@ The easiest way to get Chain Nodes up and running is via **Docker Compose**. Thi
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/bauhaus28/asm-platform.git
-   cd asm-platform
+   git clone https://github.com/chainnodes-dev/awa
+   cd awa
    ```
 
 2. **One-Command Start**:

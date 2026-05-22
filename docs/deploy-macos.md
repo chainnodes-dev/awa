@@ -14,8 +14,8 @@ That's the only prerequisite. No Go, no Node, no Temporal — Docker handles eve
 
 **2. Clone the repo**
 ```bash
-git clone https://github.com/bauhaus28/phaxa-platform
-cd phaxa-platform
+git clone https://github.com/chainnodes-dev/awa
+cd awa
 ```
 
 **3. Create the config file**

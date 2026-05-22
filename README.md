@@ -27,8 +27,8 @@ Define your process as a state machine in YAML. Assign LLM agents, deterministic
 The fastest way to deploy the full stack (API, Worker, Frontend, Temporal, Postgres, Redis) is using Docker Compose. No configuration or `.env` files are required for the initial launch:
 
 ```bash
-git clone https://github.com/bauhaus28/asm-platform
-cd asm-platform
+git clone https://github.com/chainnodes-dev/awa
+cd awa
 docker compose up -d
 ```
 
