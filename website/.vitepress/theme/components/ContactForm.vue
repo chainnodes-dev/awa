@@ -39,28 +39,9 @@ const handleSubmit = async () => {
     
     if (isFirebaseConfigured) {
       await addDoc(collection(db, 'contacts'), {
-        to: ['office@chainnodes.eu'],
-        message: {
-          subject: `Chain Nodes Contact: ${name.value}`,
-          html: `
-            <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; max-width: 600px; margin: auto; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
-              <h2 style="color: #a855f7; margin-top: 0;">New Contact Request</h2>
-              <p>You have received a new demo inquiry from the website contact form.</p>
-              <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-              <p><strong>Name:</strong> ${name.value}</p>
-              <p><strong>Email:</strong> <a href="mailto:${email.value}" style="color: #a855f7; text-decoration: none;">${email.value}</a></p>
-              <p><strong>Use Case / Message:</strong></p>
-              <blockquote style="background: #f9fafb; padding: 15px; border-left: 4px solid #a855f7; margin: 15px 0; border-radius: 4px; font-style: italic;">
-                "${message.value}"
-              </blockquote>
-              <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-              <p style="font-size: 11px; color: #9ca3af; text-align: center; margin-bottom: 0;">Submitted on ${new Date().toLocaleString()}</p>
-            </div>
-          `
-        },
         name: name.value,
         email: email.value,
-        rawMessage: message.value,
+        message: message.value,
         submittedAt: new Date().toISOString()
       })
     } else {
