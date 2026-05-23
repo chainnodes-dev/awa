@@ -1,0 +1,74 @@
+# Local config — never commit
+.env
+.home/
+scripts/
+
+
+# Go build artifacts — compiled binaries at repo root and in bin/
+bin/
+*.exe
+*.test
+/server
+/worker
+/specialist-worker
+/specialist-worker-template
+.cache/
+.go/
+.go-cache/
+.go_cache/
+.gocache/
+.go-modcache/
+.gopath/
+.go-work/
+.go-build/
+.go_work/
+scratch/
+
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Temporal local state — the dynamicconfig file IS committed (required for startup)
+# only ignore extra files that may be generated at runtime
+temporal-config/*.lock
+internal/temporal/test_cache/
+
+# OS
+.DS_Store
+
+# Claude Code local config
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# internal documentation
+docs/internal/
+
+#upload-folder
+data/uploads
+
+# Website (VitePress)
+website/node_modules/
+website/.vitepress/dist/
+website/.vitepress/cache/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+*.pem
+.asm_master_key
+
+# Firebase
+.firebase/
+

@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  :root {
+    /* Dark Mode (Default) */
+    --color-bg: #0c0e14;
+    --color-surface: #12151e;
+    --color-surface-2: #1a1d27;
+    --color-border: #3d4151;
+    --color-accent: #818cf8;
+    --color-text: #f8fafc;
+    --color-text-muted: #94a3b8;
+    --color-input-bg: #0c0e14;
+  }
+
+  html.light {
+    /* Light Mode */
+    --color-bg: #f1f5f9;
+    --color-surface: #ffffff;
+    --color-surface-2: #f8fafc;
+    --color-border: #cbd5e1;
+    --color-accent: #6366f1;
+    --color-text: #0f172a;
+    --color-text-muted: #475569;
+    --color-input-bg: #ffffff;
+  }
+
+  html, body { 
+    height: 100%; 
+    margin: 0; 
+    background: var(--color-bg);
+    color: var(--color-text);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    font-size: 17px;
+  }
+
+  #app { height: 100%; display: flex; flex-direction: column; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
+
+  /* Force theme-aware utilities to override hardcoded Tailwind values */
+  .bg-surface-0 { background-color: var(--color-bg) !important; }
+  .bg-surface-1 { background-color: var(--color-surface) !important; }
+  .bg-surface-2 { background-color: var(--color-surface-2) !important; }
+  .text-text { color: var(--color-text) !important; }
+  .text-text-muted { color: var(--color-text-muted) !important; }
+  .border-border { border-color: var(--color-border) !important; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer select-none;
+  }
+  .btn-primary {
+    @apply btn text-white;
+    background-color: var(--color-accent);
+  }
+  .btn-primary:hover {
+    filter: brightness(1.1);
+  }
+  .btn-primary:active {
+    transform: scale(0.95);
+  }
+  
+  .btn-ghost {
+    @apply btn transition-colors;
+    color: var(--color-text-muted);
+  }
+  .btn-ghost:hover {
+    color: var(--color-text);
+    background-color: var(--color-surface-2);
+  }
+  
+  .btn-danger {
+    @apply btn border;
+    background-color: rgba(239, 68, 68, 0.1);
+    color: rgb(239, 68, 68);
+    border-color: rgba(239, 68, 68, 0.2);
+  }
+  .btn-danger:hover {
+    background-color: rgba(239, 68, 68, 0.2);
+  }
+
+  .btn-danger-solid {
+    @apply btn text-white bg-red-600 hover:bg-red-500 active:scale-95;
+  }
+
+  .card {
+    @apply rounded-xl shadow-sm border transition-all;
+    background-color: var(--color-surface);
+    border-color: var(--color-border);
+  }
+  
+  .input {
+    @apply rounded-lg px-4 py-2.5 text-sm outline-none transition-colors w-full border;
+    background-color: var(--color-input-bg);
+    border-color: var(--color-border);
+    color: var(--color-text);
+  }
+  .input::placeholder {
+    color: color-mix(in srgb, var(--color-text-muted), transparent 50%);
+  }
+  .input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent), transparent 70%);
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border;
+  }
+  .status-running  { @apply badge; background-color: rgba(59, 130, 246, 0.1); color: rgb(59, 130, 246); border-color: rgba(59, 130, 246, 0.2); }
+  .status-complete { @apply badge; background-color: rgba(34, 197, 94, 0.1); color: rgb(34, 197, 94); border-color: rgba(34, 197, 94, 0.2); }
+  .status-failed   { @apply badge; background-color: rgba(239, 68, 68, 0.1); color: rgb(239, 68, 68); border-color: rgba(239, 68, 68, 0.2); }
+  .status-waiting  { @apply badge; background-color: rgba(245, 158, 11, 0.1); color: rgb(245, 158, 11); border-color: rgba(245, 158, 11, 0.2); }
+  .status-pending  { @apply badge; background-color: rgba(100, 116, 139, 0.1); color: rgb(100, 116, 139); border-color: rgba(100, 116, 139, 0.2); }
+}
+
+/* select options inherit theme colors */
+select option { background: var(--color-surface); color: var(--color-text); }
+
+/* Active-state glow ring colors match node type */
+.glow-initial      { box-shadow: 0 0 0 2px #22c55e, 0 0 16px 4px rgba(34,197,94,0.3); animation: node-pulse-green 2s infinite; }
+.glow-prompt { box-shadow: 0 0 0 2px var(--color-accent), 0 0 16px 4px rgba(99,102,241,0.3); animation: node-pulse-accent 2s infinite; }
+.glow-hitl         { box-shadow: 0 0 0 2px #f59e0b, 0 0 16px 4px rgba(245,158,11,0.3); animation: node-pulse-amber 2s infinite; }
+.glow-terminal     { box-shadow: 0 0 0 2px var(--color-text-muted), 0 0 16px 4px rgba(100,116,139,0.2); }
+.glow-wait         { box-shadow: 0 0 0 2px #818cf8, 0 0 16px 4px rgba(129,140,248,0.3); animation: node-pulse-indigo 2s infinite; }
+.glow-script       { box-shadow: 0 0 0 2px #f59e0b, 0 0 16px 4px rgba(245,158,11,0.2); animation: node-pulse-amber 2s infinite; }
+.glow-code         { box-shadow: 0 0 0 2px #2dd4bf, 0 0 16px 4px rgba(45,212,191,0.3); animation: node-pulse-teal 2s infinite; }
+.glow-subprocess   { box-shadow: 0 0 0 2px #a78bfa, 0 0 16px 4px rgba(167,139,250,0.3); animation: node-pulse-violet 2s infinite; }
+
+@keyframes node-pulse-accent {
+  0% { box-shadow: 0 0 0 0px var(--color-accent), 0 0 0px 0px rgba(99,102,241,0); }
+  50% { box-shadow: 0 0 0 2px var(--color-accent), 0 0 20px 6px rgba(99,102,241,0.4); }
+  100% { box-shadow: 0 0 0 0px var(--color-accent), 0 0 0px 0px rgba(99,102,241,0); }
+}
+@keyframes node-pulse-green {
+  0% { box-shadow: 0 0 0 0px #22c55e, 0 0 0px 0px rgba(34,197,94,0); }
+  50% { box-shadow: 0 0 0 2px #22c55e, 0 0 20px 6px rgba(34,197,94,0.4); }
+  100% { box-shadow: 0 0 0 0px #22c55e, 0 0 0px 0px rgba(34,197,94,0); }
+}
+@keyframes node-pulse-amber {
+  0% { box-shadow: 0 0 0 0px #f59e0b, 0 0 0px 0px rgba(245,158,11,0); }
+  50% { box-shadow: 0 0 0 2px #f59e0b, 0 0 20px 6px rgba(245,158,11,0.4); }
+  100% { box-shadow: 0 0 0 0px #f59e0b, 0 0 0px 0px rgba(245,158,11,0); }
+}
+@keyframes node-pulse-indigo {
+  0% { box-shadow: 0 0 0 0px #818cf8, 0 0 0px 0px rgba(129,140,248,0); }
+  50% { box-shadow: 0 0 0 2px #818cf8, 0 0 20px 6px rgba(129,140,248,0.4); }
+  100% { box-shadow: 0 0 0 0px #818cf8, 0 0 0px 0px rgba(129,140,248,0); }
+}
+@keyframes node-pulse-teal {
+  0% { box-shadow: 0 0 0 0px #2dd4bf, 0 0 0px 0px rgba(45,212,191,0); }
+  50% { box-shadow: 0 0 0 2px #2dd4bf, 0 0 20px 6px rgba(45,212,191,0.4); }
+  100% { box-shadow: 0 0 0 0px #2dd4bf, 0 0 0px 0px rgba(45,212,191,0); }
+}
+@keyframes node-pulse-violet {
+  0% { box-shadow: 0 0 0 0px #a78bfa, 0 0 0px 0px rgba(167,139,250,0); }
+  50% { box-shadow: 0 0 0 2px #a78bfa, 0 0 20px 6px rgba(167,139,250,0.4); }
+  100% { box-shadow: 0 0 0 0px #a78bfa, 0 0 0px 0px rgba(167,139,250,0); }
+}
+
+/* Vue Flow overrides */
+.vue-flow__background { background: var(--color-bg) !important; }
+.vue-flow__minimap { background: var(--color-surface) !important; border: 1px solid var(--color-border) !important; border-radius: 8px !important; }
+.vue-flow__controls { background: var(--color-surface) !important; border: 1px solid var(--color-border) !important; border-radius: 8px !important; }
+.vue-flow__controls-button { background: transparent !important; border: none !important; color: var(--color-text-muted) !important; }
+.vue-flow__controls-button:hover { background: var(--color-accent) !important; color: white !important; }
+.vue-flow__edge-path { stroke: var(--color-border) !important; stroke-width: 2 !important; }
+.vue-flow__edge.selected .vue-flow__edge-path { stroke: var(--color-accent) !important; }
+.vue-flow__connection-path { stroke: var(--color-accent) !important; stroke-width: 2 !important; }
+
+/* Active Edge Highlight */
+.edge-active .vue-flow__edge-path {
+  stroke: var(--color-accent) !important;
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 0 4px var(--color-accent));
+}
+.edge-active .vue-flow__edge-text {
+  fill: var(--color-accent) !important;
+  font-weight: bold !important;
+}
+
+/* Edge styles are now handled via edge properties in Monitor.vue for better layout accuracy */

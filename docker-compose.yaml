@@ -1,0 +1,115 @@
+services:
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: chainnode-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-chainnode}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chainnode_secret}
+      POSTGRES_DB: ${DB_NAME:-chainnode}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-chainnode} -d ${DB_NAME:-chainnode}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: chainnode-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:1.24
+    container_name: chainnode-temporal
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${DB_USER:-chainnode}
+      POSTGRES_PWD: ${DB_PASSWORD:-chainnode_secret}
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/development-sql.yaml
+    volumes:
+      - ./temporal-config:/etc/temporal/config/dynamicconfig
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    container_name: chainnode-temporal-ui
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "8088:8080"
+    depends_on:
+      - temporal
+
+  # ── Chainnode Services ─────────────────────────────────────────────────────────
+  server:
+    build:
+      context: .
+      args:
+        CMD: server
+    container_name: chainnode-server
+    restart: on-failure
+    environment:
+      - DATABASE_URL=postgres://${DB_USER:-chainnode}:${DB_PASSWORD:-chainnode_secret}@postgres:5432/${DB_NAME:-chainnode}?sslmode=disable
+      - TEMPORAL_ADDRESS=temporal:7233
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-dev-insecure-secret-change-in-prod}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:80}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      args:
+        CMD: worker
+    container_name: chainnode-worker
+    restart: on-failure
+    environment:
+      - DATABASE_URL=postgres://${DB_USER:-chainnode}:${DB_PASSWORD:-chainnode_secret}@postgres:5432/${DB_NAME:-chainnode}?sslmode=disable
+      - TEMPORAL_ADDRESS=temporal:7233
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./data:/app/data
+      - npm_cache:/root/.npm
+      - pip_cache:/root/.cache/pip
+    depends_on:
+      - temporal
+      - server
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: chainnode-frontend
+    ports:
+      - "5174:80"
+    depends_on:
+      - server
+
+volumes:
+  postgres_data:
+  redis_data:
+  npm_cache:
+  pip_cache:

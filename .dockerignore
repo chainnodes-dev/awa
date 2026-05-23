@@ -1,0 +1,71 @@
+# Go build artifacts
+bin/
+*.exe
+*.test
+server
+worker
+specialist-worker
+specialist-worker-template
+
+# Go build/dependency caches
+.cache/
+.go/
+.go-cache/
+.go_cache/
+.gocache/
+.go-modcache/
+.gopath/
+.go-work/
+.go-build/
+.go_work/
+
+# Frontend build — not needed for the Go binary
+frontend/node_modules/
+frontend/dist/
+
+# Website build & dependencies (VitePress)
+website/node_modules/
+website/.vitepress/dist/
+website/.vitepress/cache/
+
+# Local secrets & credentials
+.env
+.env.*
+!.env.example
+*.pem
+
+# Claude Code & IDEs
+.claude/
+.vscode/
+.idea/
+*.swp
+
+# Git internals
+.git/
+.gitignore
+
+# Docs — not needed at runtime
+docs/
+
+# Temporal local state
+temporal-config/
+temporal-config/*.lock
+
+# Python cache & environments
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+env/
+
+# Local workspace directories & data
+.home/
+scripts/
+scratch/
+data/uploads/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log

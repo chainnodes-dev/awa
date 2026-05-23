@@ -1,0 +1,218 @@
+[
+  {
+    "id": "brave-search",
+    "name": "Brave Search",
+    "description": "Real-time web search. Tools: search(query).",
+    "icon": "search",
+    "category": "Search & Knowledge",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+    "env_vars": [{ "name": "BRAVE_API_KEY", "required": true }]
+  },
+  {
+    "id": "wikipedia",
+    "name": "Wikipedia",
+    "description": "Search and retrieve Wikipedia articles. Tools: search_wikipedia(query), get_article(title).",
+    "icon": "book",
+    "category": "Search & Knowledge",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-wikipedia"]
+  },
+  {
+    "id": "google-sheets",
+    "name": "Google Sheets",
+    "description": "Manage Google Sheets. Tools: read_spreadsheet(id), update_cell(id, range, value).",
+    "icon": "table",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-google-sheets"]
+  },
+  {
+    "id": "google-drive",
+    "name": "Google Drive",
+    "description": "Access Google Drive files. Tools: list_files(), download_file(id).",
+    "icon": "hard-drive",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-google-drive"]
+  },
+  {
+    "id": "google-calendar",
+    "name": "Google Calendar",
+    "description": "Manage calendar events. Tools: list_events(), create_event(data).",
+    "icon": "calendar",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-google-calendar"]
+  },
+  {
+    "id": "microsoft-graph",
+    "name": "Microsoft Graph",
+    "description": "Access M365 (Outlook/Teams/OneDrive). Tools: list_messages(), send_teams_message().",
+    "icon": "mail",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-microsoft-graph"]
+  },
+  {
+    "id": "aws-s3",
+    "name": "AWS S3",
+    "description": "Manage Amazon S3 buckets. Tools: list_buckets(), upload_object(bucket, key, body).",
+    "icon": "box",
+    "category": "Infrastructure",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-aws-s3"]
+  },
+  {
+    "id": "github",
+    "name": "GitHub",
+    "description": "Automate GitHub tasks. Tools: create_issue(repo, title), list_pull_requests(repo).",
+    "icon": "github",
+    "category": "Infrastructure",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env_vars": [{ "name": "GITHUB_PERSONAL_ACCESS_TOKEN", "required": true }]
+  },
+  {
+    "id": "postgres",
+    "name": "Postgres",
+    "description": "Query PostgreSQL databases. Tools: query(sql), list_tables().",
+    "icon": "database",
+    "category": "Databases",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-postgres"],
+    "env_vars": [{ "name": "DATABASE_URL", "required": true }]
+  },
+  {
+    "id": "mysql",
+    "name": "MySQL",
+    "description": "Query MySQL/MariaDB databases. Tools: query(sql), describe_table(name).",
+    "icon": "database",
+    "category": "Databases",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-mysql"]
+  },
+  {
+    "id": "slack",
+    "name": "Slack",
+    "description": "Interact with Slack. Tools: post_message(channel, text), list_channels().",
+    "icon": "message-square",
+    "category": "Communication",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-slack"],
+    "env_vars": [{ "name": "SLACK_BOT_TOKEN", "required": true }]
+  },
+  {
+    "id": "send-mail",
+    "name": "Send Mail",
+    "description": "Sends transactional emails via Resend. Tools: send_email(to, subject, html_body).",
+    "icon": "send",
+    "category": "Communication",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-resend"],
+    "env_vars": [{ "name": "RESEND_API_KEY", "required": true }]
+  },
+  {
+    "id": "fetch",
+    "name": "Fetch",
+    "description": "Fetches and cleans web content for LLMs. Tools: fetch(url).",
+    "icon": "globe",
+    "category": "Utilities",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-fetch"]
+  },
+  {
+    "id": "filesystem",
+    "name": "Filesystem",
+    "description": "Access local files (restricted to ./data). Tools: read_file(path), write_file(path, content).",
+    "icon": "file-text",
+    "category": "Utilities",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem"]
+  },
+  {
+    "id": "gleif",
+    "name": "GLEIF",
+    "description": "Verified legal entity lookups. Tools: gleif_search(query).",
+    "icon": "shield-check",
+    "category": "Business & Data",
+    "transport": "sse",
+    "url": "https://mcp.gleif.org/sse",
+    "env_vars": [{ "name": "MCP_GLEIF_URL", "required": true }]
+  },
+  {
+    "id": "exchange-rates",
+    "name": "Exchange Rates",
+    "description": "Currency conversion via Frankfurter. Tools: get_exchange_rate(amount, from, to).",
+    "icon": "refresh-cw",
+    "category": "Business & Data",
+    "transport": "sse",
+    "url": "https://mcp.frankfurter.app/sse",
+    "env_vars": [{ "name": "MCP_EXCHANGE_URL", "required": true }]
+  },
+  {
+    "id": "openfigi",
+    "name": "OpenFIGI",
+    "description": "Financial instrument lookups. Tools: figi_lookup(ticker).",
+    "icon": "trending-up",
+    "category": "Business & Data",
+    "transport": "sse",
+    "url": "https://mcp.openfigi.com/sse",
+    "env_vars": [{ "name": "MCP_OPENFIGI_URL", "required": true }]
+  },
+  {
+    "id": "yahoo-finance",
+    "name": "Yahoo Finance",
+    "description": "Real-time market data, stock prices, and analyst ratings. Tools: get_stock_price(ticker), get_analyst_ratings(ticker).",
+    "icon": "bar-chart-2",
+    "category": "Business & Data",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-yfinance"]
+  },
+  {
+    "id": "sec-edgar",
+    "name": "SEC Edgar",
+    "description": "Official SEC filings database. Tools: search_filings(ticker, form_type), get_latest_10k(ticker).",
+    "icon": "file-search",
+    "category": "Business & Data",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-sec-edgar"]
+  },
+  {
+    "id": "weather",
+    "name": "Weather",
+    "description": "Global weather data and forecasts. Tools: get_forecast(lat, lon).",
+    "icon": "sun",
+    "category": "Environment & Energy",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-weather"],
+    "env_vars": [{ "name": "OPENWEATHERMAP_API_KEY", "required": true }]
+  },
+  {
+    "id": "solar-wind-prognosis",
+    "name": "Solar & Wind",
+    "description": "Specialized forecasts for PV (sun intensity) and wind turbines. Tools: get_solar_yield(lat, lon), get_wind_prognosis(lat, lon).",
+    "icon": "wind",
+    "category": "Environment & Energy",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-solar-wind"]
+  }
+]

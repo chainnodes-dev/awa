@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chain Nodes | Autonomous Agentic Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap"
+        rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#faf5ff',
+                            100: '#f3e8ff',
+                            200: '#e9d5ff',
+                            300: '#d8b4fe',
+                            400: '#c084fc',
+                            500: '#a855f7',
+                            600: '#9333ea',
+                            700: '#7e22ce',
+                            800: '#6b21a8',
+                            900: '#581c87',
+                        },
+                        secondary: {
+                            50: '#fdf2f8',
+                            100: '#fce7f3',
+                            200: '#fbcfe8',
+                            300: '#f9a8d4',
+                            400: '#f472b6',
+                            500: '#ec4899',
+                            600: '#db2777',
+                            700: '#be185d',
+                            800: '#9d174d',
+                            900: '#831843',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="icon" type="image/svg+xml" href="assets/logos/favicon.svg">
+    <style>
+        body {
+            background-color: #02010a;
+            color: #f3f4f6;
+        }
+
+        .glass {
+            background: rgba(8, 2, 18, 0.8);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(168, 85, 247, 0.15);
+        }
+
+        .hero-gradient {
+            background: radial-gradient(circle at 50% 40%, rgba(147, 51, 234, 0.1) 0%, rgba(2, 1, 10, 0) 60%);
+        }
+
+        .animate-float {
+            animation: float 8s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0) scale(1);
+            }
+
+            50% {
+                transform: translateY(-20px) scale(1.01);
+            }
+        }
+
+        .text-glow {
+            text-shadow: 0 0 40px rgba(168, 85, 247, 0.4);
+        }
+    </style>
+</head>
+
+<body class="font-sans antialiased selection:bg-primary-500/30">
+    <!-- Navigation -->
+    <nav class="fixed top-0 w-full z-50 glass border-b border-white/5">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center gap-4">
+                    <img src="assets/logos/favicon.svg" alt="Chain Nodes Logo" class="w-10 h-10 object-contain">
+                    <span
+                        class="text-2xl md:text-3xl font-display font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-primary-100 to-secondary-200">CHAIN NODES</span>
+                </div>
+                <div
+                    class="hidden md:flex items-center gap-10 text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">
+                    <a href="#features" class="hover:text-primary-300 transition-colors">Architecture</a>
+                    <a href="https://github.com/phaxa-ai" class="hover:text-primary-300 transition-colors">Ecosystem</a>
+                    <a href="/docs" class="hover:text-primary-300 transition-colors">Docs</a>
+                    <a href="#contact"
+                        class="px-6 py-2.5 bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-full hover:scale-105 transition-all font-bold border border-white/10">Deploy</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="relative pt-44 pb-32 overflow-hidden hero-gradient">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+            <div
+                class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary-500/20 bg-primary-500/5 text-primary-300 text-[10px] font-black mb-12 tracking-[0.3em] uppercase">
+                <span class="w-1.5 h-1.5 bg-secondary-500 rounded-full shadow-[0_0_8px_#ec4899]"></span>
+                Deep-Chain Reasoning v1.2.0
+            </div>
+            <h1
+                class="text-6xl md:text-9xl font-display font-extrabold tracking-tighter mb-10 leading-[0.85] text-white">
+                The Future of <br>
+                <span
+                    class="bg-clip-text text-transparent bg-gradient-to-r from-primary-400 via-secondary-400 to-primary-300 text-glow">Autonomous</span>
+                Logic.
+            </h1>
+            <p class="text-xl md:text-2xl text-gray-400 max-w-3xl mx-auto mb-16 leading-relaxed font-light">
+                Chain Nodes is the industrial-grade autonomous agent platform. Orchestrate neural workflows, bridge data silos
+                with MCP, and scale with Temporal precision.
+            </p>
+            <div class="flex flex-col sm:flex-row justify-center gap-6">
+                <a href="#contact"
+                    class="px-10 py-5 bg-gradient-to-r from-primary-600 to-secondary-600 hover:scale-105 text-white rounded-2xl font-black text-xl transition-all shadow-2xl shadow-primary-500/30">
+                    Get Started with Chain Nodes
+                </a>
+                <a href="https://github.com/phaxa-ai"
+                    class="px-10 py-5 glass hover:bg-white/10 rounded-2xl font-bold text-xl transition-all flex items-center justify-center gap-3 border border-primary-500/20">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path
+                            d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.292 24 17.8 24 12.5 24 5.87 18.63.5 12 .5z" />
+                    </svg>
+                    Enterprise Forge
+                </a>
+            </div>
+        </div>
+
+        <!-- Abstract App Preview -->
+        <div class="max-w-5xl mx-auto mt-24 px-4 animate-float">
+            <div class="glass rounded-[2.5rem] p-3 shadow-[0_0_80px_rgba(168,85,247,0.15)] border-primary-500/30">
+                <div
+                    class="bg-black/80 rounded-[2.2rem] aspect-[16/9] relative overflow-hidden flex items-center justify-center border border-white/5">
+                    <div
+                        class="absolute inset-0 bg-gradient-to-tr from-primary-500/10 via-transparent to-secondary-500/10">
+                    </div>
+                    <div
+                        class="absolute text-secondary-300 font-display font-black text-4xl tracking-widest uppercase opacity-80 mix-blend-overlay">
+                        NEURAL DESIGNER</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="py-32 bg-gray-950/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-5xl font-display font-bold mb-4">Everything you need to <span
+                        class="text-primary-500">Scale</span></h2>
+                <p class="text-gray-400 max-w-xl mx-auto">Build sophisticated multi-agent systems without fighting
+                    infrastructure.</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8 text-center">
+                <div class="glass p-10 rounded-[2rem] hover:border-primary-500/50 transition-all">
+                    <h3 class="text-2xl font-bold mb-4">MCP Native</h3>
+                    <p class="text-gray-400 leading-relaxed font-light">The Model Context Protocol is at our core.
+                        Instantly connect agents to any digital or physical infrastructure.</p>
+                </div>
+                <div class="glass p-10 rounded-[2rem] hover:border-primary-500/50 transition-all">
+                    <h3 class="text-2xl font-bold mb-4">Temporal Reliability</h3>
+                    <p class="text-gray-400 leading-relaxed font-light">Powered by Temporal, our workflows are immutable
+                        and resilient. A single run can survive an entire data center failure.</p>
+                </div>
+                <div class="glass p-10 rounded-[2rem] hover:border-primary-500/50 transition-all">
+                    <h3 class="text-2xl font-bold mb-4">Human Oversight</h3>
+                    <p class="text-gray-400 leading-relaxed font-light">Integrated HITL patterns ensure humans remain in
+                        control of high-stakes decisions.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Form -->
+    <section id="contact" class="py-24">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="glass rounded-3xl p-10 md:p-16 shadow-2xl relative overflow-hidden">
+                <h2 class="text-3xl md:text-5xl font-display font-bold mb-8 text-center">Let's Build the <span
+                        class="text-primary-400">Future</span></h2>
+                <form class="space-y-6 mazx-w-xl mx-auto">
+                    <input type="text" placeholder="Full Name"
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:border-primary-500 focus:outline-none transition-all">
+                    <input type="email" placeholder="Email Address"
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:border-primary-500 focus:outline-none transition-all">
+                    <textarea rows="4" placeholder="How can Chain Nodes help your team?"
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:border-primary-500 focus:outline-none transition-all"></textarea>
+                    <button type="submit"
+                        class="w-full bg-primary-600 hover:bg-primary-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-primary-500/20 uppercase tracking-widest">
+                        Initiate Transmission
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 border-t border-white/10 text-center">
+        <p class="text-xs text-gray-700 font-mono tracking-tighter uppercase">© 2026 CHAIN NODES LOGIC SYSTEMS. ZERO LOSS
+            PERSISTENCE ENABLED.</p>
+    </footer>
+</body>
+
+</html>

@@ -1,0 +1,71 @@
+name: Phaxa Container Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger only on version tags (e.g., v1.0.0, v2.1.0)
+
+env:
+  REGISTRY: ghcr.io
+  # Converts the repository owner to lowercase for the registry path
+  IMAGE_BASE: ${{ github.repository_owner }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        # Define our three Phaxa components
+        include:
+          - component: server
+            image_name: phaxa-server
+            context: .
+            build_arg: CMD=server
+          - component: worker
+            image_name: phaxa-worker
+            context: .
+            build_arg: CMD=worker
+          - component: frontend
+            image_name: phaxa-frontend
+            context: ./frontend
+            build_arg: ""
+          - component: specialist-worker
+            image_name: phaxa-specialist-worker
+            context: .
+            build_arg: CMD=specialist-worker
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}/${{ matrix.image_name }}
+          # Use the tag as the primary version, also keep 'latest'
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          build-args: ${{ matrix.build_arg }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

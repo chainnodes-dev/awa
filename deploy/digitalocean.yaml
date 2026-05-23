@@ -1,0 +1,39 @@
+name: chainnode-platform
+region: fra
+services:
+  - name: chainnode-server
+    github:
+      branch: main
+      repo: chainnodes-dev/awa
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${chainnode-db.DATABASE_URL}
+      - key: REDIS_URL
+        scope: RUN_TIME
+        value: ${chainnode-redis.REDIS_URL}
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+  
+  - name: chainnode-frontend
+    github:
+      branch: main
+      repo: chainnodes-dev/awa
+      deploy_on_push: true
+    dockerfile_path: frontend/Dockerfile
+    http_port: 80
+    instance_count: 1
+    instance_size_slug: basic-xxs
+
+databases:
+  - name: chainnode-db
+    engine: PG
+    version: "14"
+    size: db-s-dev-database
+  - name: chainnode-redis
+    engine: REDIS
+    version: "6"
+    size: db-s-dev-redis
