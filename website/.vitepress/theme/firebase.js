@@ -4,13 +4,14 @@ import { getFirestore } from 'firebase/firestore'
 // Your Firebase web app configuration.
 // These credentials can be pasted here or loaded via VITE_ environment variables.
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "fb-agentic-workflow-automation.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "fb-agentic-workflow-automation",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "fb-agentic-workflow-automation.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "YOUR_MESSAGING_SENDER_ID",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "YOUR_APP_ID"
-}
+  apiKey: "REDACTED",
+  authDomain: "fb-agentic-workflow-automation.firebaseapp.com",
+  projectId: "fb-agentic-workflow-automation",
+  storageBucket: "fb-agentic-workflow-automation.firebasestorage.app",
+  messagingSenderId: "1011930557878",
+  appId: "1:1011930557878:web:b12c7c764de933892c2517",
+  measurementId: "G-C6684PGY7N"
+};
 
 let db = null
 
