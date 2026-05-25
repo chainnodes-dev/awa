@@ -215,23 +215,34 @@ func wrapCode(code string) string {
 // toJSValue converts a Go value to a goja-compatible value, preserving nested
 // maps and slices so the full blackboard structure is accessible in JavaScript.
 func toJSValue(vm *goja.Runtime, v interface{}) goja.Value {
-	// Round-trip through JSON to get a plain JS-compatible value.
-	// This handles nested maps/slices correctly without reflection gymnastics.
-	b, err := json.Marshal(v)
-	if err != nil {
-		return vm.ToValue(fmt.Sprintf("%v", v))
+	if v == nil {
+		return goja.Undefined()
 	}
-	var parsed interface{}
-	if err := json.Unmarshal(b, &parsed); err != nil {
-		return vm.ToValue(fmt.Sprintf("%v", v))
+	switch val := v.(type) {
+	case string, bool, int, int32, int64, float32, float64:
+		return vm.ToValue(val)
+	default:
+		// Round-trip through JSON to get a plain JS-compatible value.
+		// This handles nested maps/slices correctly without reflection gymnastics.
+		b, err := json.Marshal(v)
+		if err != nil {
+			return vm.ToValue(fmt.Sprintf("%v", v))
+		}
+		var parsed interface{}
+		if err := json.Unmarshal(b, &parsed); err != nil {
+			return vm.ToValue(fmt.Sprintf("%v", v))
+		}
+		return vm.ToValue(parsed)
 	}
-	return vm.ToValue(parsed)
 }
 
 // jsonEqual compares two values for equality using JSON serialisation.
 // This is deliberately simple: we don't need structural deep-equality — we
 // just need to know if the script changed the value.
 func jsonEqual(a, b interface{}) bool {
+	if a == b {
+		return true
+	}
 	aj, err1 := json.Marshal(a)
 	bj, err2 := json.Marshal(b)
 	if err1 != nil || err2 != nil {

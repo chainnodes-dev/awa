@@ -192,9 +192,10 @@ type Client interface {
 
 func (p *stdioProcess) Call(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	p.idCount++
 	id := p.idCount
-	p.mu.Unlock()
 
 	req := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -236,12 +237,19 @@ func (p *stdioProcess) Call(ctx context.Context, method string, params interface
 }
 
 func (p *stdioProcess) Notify(ctx context.Context, method string, params interface{}) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	req := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"method":  method,
 		"params":  params,
 	}
 	return p.encoder.Encode(req)
+}
+
+var sseHTTPClient = &http.Client{
+	Timeout: 15 * time.Second,
 }
 
 // sseClient implementation
@@ -266,7 +274,7 @@ func (c *sseClient) Call(ctx context.Context, method string, params interface{})
 	req, _ := http.NewRequestWithContext(ctx, "POST", c.url, strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sseHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +298,7 @@ func (c *sseClient) Notify(ctx context.Context, method string, params interface{
 	})
 	req, _ := http.NewRequestWithContext(ctx, "POST", c.url, strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sseHTTPClient.Do(req)
 	if err != nil {
 		return err
 	}

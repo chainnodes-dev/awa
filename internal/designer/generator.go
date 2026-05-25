@@ -605,19 +605,7 @@ func (g *Generator) AssembleSystemPrompt(ctx context.Context, requestedServers [
 // refinementAddendum returns additional instructions appended to the system prompt
 // when the user is refining an existing workflow rather than generating from scratch.
 func (g *Generator) refinementAddendum() string {
-	return g.prompts.Get(PromptIDRefine, `
-## Refinement Mode
-
-You are modifying an existing workflow. The user will provide the current YAML and a change request.
-
-Rules for refinement:
-1. Preserve the workflow's name and overall structure unless the change explicitly requires restructuring.
-2. Only modify the parts of the workflow that are relevant to the user's request.
-3. Keep all existing states, transitions, agents, and blackboard fields that are not affected by the change.
-4. If adding new states, integrate them naturally into the existing flow.
-5. Ensure all transitions remain valid after the change — no dangling references.
-6. Output the complete updated YAML (not just the diff).
-`)
+	return g.prompts.Get(PromptIDRefine, DefaultRefinePrompt())
 }
 
 // extractYAMLBlock finds the first ```yaml ... ``` block in the LLM response,

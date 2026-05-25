@@ -250,7 +250,11 @@ Key variables:
 | Variable | Description | Default |
 |---|---|---|
 | `JWT_SECRET` | JWT signing secret — **change in production** | dev default |
-| `FRONTEND_PORT` | Host port for the Nginx frontend container | `80` |
+| `HOST_FRONTEND_PORT` | Mapped host port for the frontend WebGUI | `5174` |
+| `HOST_API_PORT` | Mapped host port for the API server | `8080` |
+| `HOST_DB_PORT` | Mapped host port for PostgreSQL database | `5433` |
+| `HOST_REDIS_PORT` | Mapped host port for Redis event bus | `6379` |
+| `HOST_TEMPORAL_UI_PORT` | Mapped host port for Temporal Web UI | `8088` |
 | `ENABLE_TELEMETRY` | Opt-in anonymous install beacon (sends OS/Arch on startup) | `false` |
 
 ---

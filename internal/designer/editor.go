@@ -115,21 +115,28 @@ func (e *WorkflowEditor) SetStateAgent(name, agentName string, mcpServers []stri
 			e.Def.States[i].Agent = agentName
 			
 			// Find or create agent definition
-			agentDef := e.Def.AgentByName(agentName)
-			if agentDef == nil {
+			foundIdx := -1
+			for idx := range e.Def.Agents {
+				if e.Def.Agents[idx].Name == agentName {
+					foundIdx = idx
+					break
+				}
+			}
+
+			if foundIdx == -1 {
 				e.Def.Agents = append(e.Def.Agents, asmtypes.AgentDef{
 					Name: agentName,
 				})
-				agentDef = &e.Def.Agents[len(e.Def.Agents)-1]
+				foundIdx = len(e.Def.Agents) - 1
 			}
 
 			// Assign MCP servers to the agent config
 			if len(mcpServers) > 0 {
-				if agentDef.Config == nil {
-					agentDef.Config = make(map[string]string)
+				if e.Def.Agents[foundIdx].Config == nil {
+					e.Def.Agents[foundIdx].Config = make(map[string]string)
 				}
 				// Standard platform key for MCP server list
-				agentDef.Config["mcp_servers"] = strings.Join(mcpServers, ",")
+				e.Def.Agents[foundIdx].Config["mcp_servers"] = strings.Join(mcpServers, ",")
 			}
 			return nil
 		}

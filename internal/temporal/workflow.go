@@ -1,6 +1,7 @@
 package temporal
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -906,7 +907,16 @@ func resolveTemplate(tmpl string, bb map[string]interface{}) string {
 		if !ok {
 			return ""
 		}
-		return fmt.Sprintf("%v", val)
+		switch v := val.(type) {
+		case map[string]interface{}, []interface{}, map[string]string, []string:
+			b, err := json.Marshal(v)
+			if err != nil {
+				return fmt.Sprintf("%v", val)
+			}
+			return string(b)
+		default:
+			return fmt.Sprintf("%v", val)
+		}
 	})
 }
 

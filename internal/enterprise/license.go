@@ -96,7 +96,7 @@ func (v *Verifier) Verify(tokenString string) (*LicenseClaims, error) {
 	}
 
 	if claims, ok := token.Claims.(*LicenseClaims); ok && token.Valid {
-		if time.Now().Unix() > claims.ExpiresAt {
+		if claims.ExpiresAt > 0 && time.Now().Unix() > claims.ExpiresAt {
 			return nil, ErrLicenseExpired
 		}
 		return claims, nil

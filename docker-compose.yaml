@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-chainnode_secret}
       POSTGRES_DB: ${DB_NAME:-chainnode}
     ports:
-      - "5433:5432"
+      - "${HOST_DB_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +21,7 @@ services:
     image: redis:7-alpine
     container_name: chainnode-redis
     ports:
-      - "6379:6379"
+      - "${HOST_REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -52,7 +52,7 @@ services:
     environment:
       TEMPORAL_ADDRESS: temporal:7233
     ports:
-      - "8088:8080"
+      - "${HOST_TEMPORAL_UI_PORT:-8088}:8080"
     depends_on:
       - temporal
 
@@ -71,7 +71,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-dev-insecure-secret-change-in-prod}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:80}
     ports:
-      - "8080:8080"
+      - "${HOST_API_PORT:-8080}:8080"
     volumes:
       - ./data:/app/data
     depends_on:
@@ -104,7 +104,7 @@ services:
       context: ./frontend
     container_name: chainnode-frontend
     ports:
-      - "5174:80"
+      - "${HOST_FRONTEND_PORT:-5174}:80"
     depends_on:
       - server
 

@@ -72,3 +72,8 @@ website/.vitepress/cache/
 # Firebase
 .firebase/
 
+#MCP tools
+graphify-out/
+.contextshrinker/
+
+

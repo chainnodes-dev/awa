@@ -258,6 +258,10 @@ func (a *Activities) GetLicenseClaims(ctx context.Context, tenantID string) (*en
 	return a.Verifier.Verify(tenant.LicenseToken)
 }
 
+var activityHTTPClient = &http.Client{
+	Timeout: 15 * time.Second,
+}
+
 // SendTelegramMessage resolves Telegram Bot Token, Chat ID and sends message text.
 func (a *Activities) SendTelegramMessage(ctx context.Context, p SendTelegramMessageParams) (string, error) {
 	token, err := a.SecretMgr.GetSecret(ctx, p.TenantID, "TELEGRAM_BOT_TOKEN")
@@ -281,7 +285,7 @@ func (a *Activities) SendTelegramMessage(ctx context.Context, p SendTelegramMess
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := activityHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send telegram request: %w", err)
 	}
@@ -317,7 +321,7 @@ func (a *Activities) SendDiscordMessage(ctx context.Context, p SendDiscordMessag
 	req.Header.Set("Authorization", fmt.Sprintf("Bot %s", token))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := activityHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send discord request: %w", err)
 	}

@@ -28,6 +28,15 @@ The easiest way to get Chain Nodes up and running is via **Docker Compose**. Thi
    docker compose up -d
    ```
 
+::: tip PORT CONFLICTS
+If ports like `5174` (WebGUI) or `8080` (API) are already occupied on your machine, you can customize them before booting:
+```bash
+cp .env.example .env
+# Open .env and adjust HOST_FRONTEND_PORT or HOST_API_PORT
+docker compose up -d
+```
+:::
+
 3. **Access the Platform**:
    - **Frontend**: [http://localhost:5174](http://localhost:5174)
    - **Temporal UI**: [http://localhost:8088](http://localhost:8088)
