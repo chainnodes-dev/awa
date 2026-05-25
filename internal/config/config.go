@@ -59,7 +59,7 @@ func Load() *Config {
 		RedisURL:          getEnv("REDIS_URL", "redis://localhost:6379"),
 		TemporalAddress:   getEnv("TEMPORAL_ADDRESS", "localhost:7233"),
 		TemporalNamespace: getEnv("TEMPORAL_NAMESPACE", "default"),
-		TemporalTaskQueue: getEnv("TEMPORAL_TASK_QUEUE", "phaxa-workers"),
+		TemporalTaskQueue: getEnv("TEMPORAL_TASK_QUEUE", "chainnodes-workers"),
 		LLMProvider:       getEnv("LLM_PROVIDER", ""),
 		AnthropicKey:      getEnv("ANTHROPIC_API_KEY", ""),
 		OpenAIKey:         getEnv("OPENAI_API_KEY", ""),

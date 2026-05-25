@@ -1,4 +1,4 @@
-# Phaxa — User Manual
+# Chain Nodes — User Manual
 
 > **Version:** post-M17 · **Last updated:** May 2026
 
@@ -40,7 +40,7 @@
 
 ## 1. Introduction
 
-The **Phaxa** platform is a workflow orchestration system for building AI-powered business processes. You describe a process as a directed graph of states and transitions in a YAML definition. The platform runs it durably, connecting LLM agents, deterministic scripts, JavaScript code, and human approvals in a single coherent flow.
+The **Chain Nodes** platform is a workflow orchestration system for building AI-powered business processes. You describe a process as a directed graph of states and transitions in a YAML definition. The platform runs it durably, connecting LLM agents, deterministic scripts, JavaScript code, and human approvals in a single coherent flow.
 
 **Core philosophy:**
 
@@ -78,12 +78,12 @@ Each worker's only job is to complete its task and return a trigger. It never kn
 │          Durable workflow engine — all state is             │
 │          persisted; replays guarantee correctness           │
 └────────────────────┬────────────────────────────────────────┘
-                     │  Task Queue  (phaxa-workers)
+                     │  Task Queue  (chainnodes-workers)
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Temporal Worker                            │
 │                                                             │
-│  PhaxaWorkflow (state machine loop)                           │
+│  ChainNodesWorkflow (state machine loop)                           │
 │  ├── ExecuteAgent   — LLM call via configured provider      │
 │  ├── ExecuteCode    — JavaScript sandbox (goja)             │
 │  ├── ExecuteScript  — Deterministic expressions (expr-lang) │
@@ -252,8 +252,8 @@ MCP (Model Context Protocol) servers expose tools that LLM agents can call durin
 4. The resolved value stored in the workflow (shown in small text below the chips) uses the `{{ env.ENV_VAR }}` template syntax, e.g. `{{ env.MCP_GLEIF_URL }}`. This means the actual URL is supplied via the environment and never hardcoded in the workflow definition.
 
 **Local (STDIO) MCP Servers:**
-Phaxa supports local tool servers running via `npx`, `docker`, or direct binaries. 
-1. Ensure the API server is started with `PHAXA_ALLOW_STDIO_MCP=true`.
+Chain Nodes supports local tool servers running via `npx`, `docker`, or direct binaries. 
+1. Ensure the API server is started with `CHAINNODES_ALLOW_STDIO_MCP=true`.
 2. In the MCP Management screen, create a new server with **Transport: stdio**.
 3. Set the **Command** (e.g., `npx`) and **Arguments** (e.g., `-y @modelcontextprotocol/server-postgres`).
 4. Local servers are managed automatically—they are started when an agent needs them and shut down when the run finishes.
@@ -280,7 +280,7 @@ Once you click **Apply** in the state panel and **Save** the workflow, the schem
 
 ### 4.8 Sentinel (Perpetual) Workflows
 
-Phaxa workflows are typically short-lived, but you can build **Sentinels**—perpetual agents that monitor data and react indefinitely.
+Chain Nodes workflows are typically short-lived, but you can build **Sentinels**—perpetual agents that monitor data and react indefinitely.
 
 **The "Pulse" Pattern:**
 1. Create a `wait` state (e.g., `IDLE_PULSE`) at the end of your workflow logic.
@@ -492,7 +492,7 @@ This panel is the primary tool for diagnosing unexpected agent behaviour — you
 
 ### 7.4 Deep Observability (Stack Traces)
 
-For developers using **Code Nodes**, Phaxa provides deep observability into execution failures. When a JavaScript node throws an error (e.g., a type error or a manual `throw`), the platform captures the full **JavaScript Stack Trace**.
+For developers using **Code Nodes**, Chain Nodes provides deep observability into execution failures. When a JavaScript node throws an error (e.g., a type error or a manual `throw`), the platform captures the full **JavaScript Stack Trace**.
 
 - **Display**: The failure reason in the Monitor header will show the primary error message.
 - **Detailed Trace**: Hover over or click the failure banner to see the full file and line number where the error occurred within your code block.
@@ -510,7 +510,7 @@ It shows:
 - Retry history for failed activities
 - The ability to terminate or reset a stuck run
 
-The Temporal workflow ID matches the Phaxa `run_id`, so you can find any run by searching for its ID.
+The Temporal workflow ID matches the Chain Nodes `run_id`, so you can find any run by searching for its ID.
 
 ---
 

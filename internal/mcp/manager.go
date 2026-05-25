@@ -263,7 +263,7 @@ func NewSSEClient(url string) Client {
 
 func (c *sseClient) Call(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
 	// Simple HTTP POST for SSE (assuming an SSE-to-RPC bridge or similar)
-	// In Phaxa, SSE servers often handle JSON-RPC via POST to /rpc
+	// In Chain Nodes, SSE servers often handle JSON-RPC via POST to /rpc
 	payload, _ := json.Marshal(map[string]interface{}{
 		"jsonrpc": "2.0",
 		"id":      time.Now().UnixNano(),

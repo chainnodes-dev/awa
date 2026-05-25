@@ -67,7 +67,7 @@ func (e *EngineClient) StartWorkflow(ctx context.Context, run *asmtypes.Workflow
 	return wfID, nil
 }
 
-// SendTriggerSignal sends an external trigger signal to an active Phaxa workflow.
+// SendTriggerSignal sends an external trigger signal to an active Chain Nodes workflow.
 func (e *EngineClient) SendTriggerSignal(ctx context.Context, temporalID, trigger string, payload map[string]interface{}) error {
 	return e.client.SignalWorkflow(ctx, temporalID, "", SignalTrigger, TriggerSignalPayload{
 		Trigger: trigger,
@@ -75,7 +75,7 @@ func (e *EngineClient) SendTriggerSignal(ctx context.Context, temporalID, trigge
 	})
 }
 
-// SendHITLSignal sends a HITL resolution signal to an active Phaxa workflow.
+// SendHITLSignal sends a HITL resolution signal to an active Chain Nodes workflow.
 func (e *EngineClient) SendHITLSignal(ctx context.Context, temporalID string, sig asmtypes.HITLSignal) error {
 	return e.client.SignalWorkflow(ctx, temporalID, "", SignalHITLResolution, HITLResolutionPayload{
 		Resolution: sig.Resolution,

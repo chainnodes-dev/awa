@@ -21,7 +21,7 @@ func hashAPIKey(raw string) string {
 
 // RequireAuthOrAPIKey accepts either a standard JWT Bearer token or an API key.
 // API keys may be supplied via the X-API-Key header or as a Bearer token with
-// the "phaxa_sk_" prefix (e.g. "Authorization: Bearer phaxa_sk_...").
+// the "chainnodes_sk_" prefix (e.g. "Authorization: Bearer chainnodes_sk_...").
 //
 // On success the tenant ID is injected into the request context identically to
 // RequireAuth so that all downstream store calls are correctly scoped.
@@ -30,7 +30,7 @@ func RequireAuthOrAPIKey(jwtSvc *auth.JWTService, s store.Store) gin.HandlerFunc
 		// 1. Extract a candidate API key from the request.
 		rawKey := c.GetHeader("X-API-Key")
 		if rawKey == "" {
-			if h := c.GetHeader("Authorization"); strings.HasPrefix(h, "Bearer phaxa_sk_") {
+			if h := c.GetHeader("Authorization"); strings.HasPrefix(h, "Bearer chainnodes_sk_") {
 				rawKey = strings.TrimPrefix(h, "Bearer ")
 			}
 		}

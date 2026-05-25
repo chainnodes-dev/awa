@@ -217,7 +217,7 @@ func (h *Handlers) DiscoverMCPServer(c *gin.Context) {
 	initReq := map[string]interface{}{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "phaxa-discovery", "version": "1.0"},
+		"clientInfo":      map[string]interface{}{"name": "chainnodes-discovery", "version": "1.0"},
 	}
 	_, err := client.Call(ctx, "initialize", initReq)
 	if err != nil {

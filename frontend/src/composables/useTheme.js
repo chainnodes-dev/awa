@@ -1,7 +1,7 @@
 import { ref, watchEffect } from 'vue'
 
 export function useTheme() {
-  const theme = ref(localStorage.getItem('chainnodes-theme') || localStorage.getItem('phaxa-theme') || 'system')
+  const theme = ref(localStorage.getItem('chainnodes-theme') || 'system')
 
   function setTheme(val) {
     theme.value = val

@@ -21,7 +21,7 @@ data:
   # or a Temporal server deployed in the same cluster.
   TEMPORAL_ADDRESS: "temporal-frontend.temporal.svc.cluster.local:7233"
   TEMPORAL_NAMESPACE: "default"
-  TEMPORAL_TASK_QUEUE: "phaxa-workers"
+  TEMPORAL_TASK_QUEUE: "chainnodes-workers"
 
   # ── LLM ──────────────────────────────────────────────────────────────────────
   LLM_PROVIDER: "anthropic"

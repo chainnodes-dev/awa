@@ -97,7 +97,7 @@ func (h *Handlers) OIDCCallback(c *gin.Context) {
 		return
 	}
 
-	// Map OIDC user to Phaxa user.
+	// Map OIDC user to Chain Nodes user.
 	externalEmail, _ := claims["email"].(string)
 	if externalEmail == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "OIDC token missing email claim"})
@@ -105,7 +105,7 @@ func (h *Handlers) OIDCCallback(c *gin.Context) {
 	}
 
 	// 1. Find or create user in the database.
-	// 2. Issue Phaxa JWT access token.
+	// 2. Issue Chain Nodes JWT access token.
 	
 	// Stub for demo: generate a token.
 	token, err := h.jwtSvc.GenerateAccessToken("oidc-"+externalEmail, tenant.ID, externalEmail, string(auth.RoleOperator))

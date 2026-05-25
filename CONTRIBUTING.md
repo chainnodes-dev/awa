@@ -34,4 +34,4 @@ make frontend  # Runs the Vite dev server on :5173
 - Submit the PR! A maintainer will review it and merge it once approved.
 
 ## Need Help?
-Join our [Discord Community](https://discord.gg/phaxa) to ask questions, showcase what you're building, and talk with the maintainers directly.
+Join our [Discord Community](https://discord.gg/chainnodes) to ask questions, showcase what you're building, and talk with the maintainers directly.

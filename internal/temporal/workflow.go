@@ -17,7 +17,7 @@ import (
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
-// ASMWorkflow is the Temporal workflow function that drives a single Phaxa run.
+// ASMWorkflow is the Temporal workflow function that drives a single Chain Nodes run.
 // It mirrors the Engine.driveRun loop but uses Temporal primitives for
 // durability: all I/O goes through activities, all state lives in workflow memory.
 func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {

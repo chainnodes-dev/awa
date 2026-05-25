@@ -23,7 +23,7 @@ const (
 	// MonthlyLookback is the standard window for run quota enforcement.
 	MonthlyLookback = 30 * 24 * time.Hour
 
-	// ChainNodesPublicKey is the hardcoded public key for Phaxa license verification.
+	// ChainNodesPublicKey is the hardcoded public key for Chain Nodes license verification.
 	// This ensures that only licenses signed by Chain Nodes SRL are accepted.
 	ChainNodesPublicKey = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3QwlqfwEnHKdXXYG1aL/

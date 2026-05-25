@@ -8,7 +8,7 @@ import (
 )
 
 // GetMCPMarket returns a curated list of MCP servers from a marketplace source.
-// This source can be a remote URL (curated by Phaxa or an enterprise) or a local file.
+// This source can be a remote URL (curated by Chain Nodes or an enterprise) or a local file.
 // GET /api/v1/mcp-market
 func (h *Handlers) GetMCPMarket(c *gin.Context) {
 	ctx := c.Request.Context()

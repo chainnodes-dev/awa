@@ -153,7 +153,7 @@ func FetchMarketplace(ctx context.Context, source string) ([]MarketEntry, error)
 	return entries, nil
 }
 
-// GetDefaultMarketplace returns the Phaxa-curated list of reliable MCP servers.
+// GetDefaultMarketplace returns the Chain Nodes-curated list of reliable MCP servers.
 func GetDefaultMarketplace() []MarketEntry {
 	return []MarketEntry{
 		{

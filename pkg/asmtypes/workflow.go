@@ -215,9 +215,9 @@ type AgentDef struct {
 	Name           string            `yaml:"name"                      json:"name"`
 	Model          string            `yaml:"model,omitempty"           json:"model,omitempty"`
 	// TaskQueue overrides the default Temporal task queue for this agent.
-	// When set, the ASM workflow schedules this agent's activity on the named
+	// When set, the Chain Nodes workflow schedules this agent's activity on the named
 	// queue so that a specialist worker (not the LLM worker) picks it up.
-	// Leave empty to use the platform default queue (asm-workers).
+	// Leave empty to use the platform default queue (chainnodes-workers).
 	TaskQueue      string            `yaml:"task_queue,omitempty"      json:"task_queue,omitempty"`
 	Tools          []string          `yaml:"tools,omitempty"           json:"tools,omitempty"`
 	PromptTemplate string            `yaml:"prompt_template,omitempty" json:"prompt_template,omitempty"`

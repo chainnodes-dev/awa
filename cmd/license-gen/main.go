@@ -54,7 +54,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("\n--- PHAXA ENTERPRISE LICENSE TOKEN ---")
+	fmt.Println("\n--- CHAINNODES ENTERPRISE LICENSE TOKEN ---")
 	fmt.Println(token)
 	fmt.Println("--------------------------------------")
 	fmt.Printf("Issued To: %s\n", *tenantID)

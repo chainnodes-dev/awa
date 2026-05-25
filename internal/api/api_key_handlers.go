@@ -11,14 +11,14 @@ import (
 	"github.com/asm-platform/asm/internal/store"
 )
 
-// generateAPIKey produces a new raw API key in the format phaxa_sk_<base64url(32 bytes)>.
+// generateAPIKey produces a new raw API key in the format chainnodes_sk_<base64url(32 bytes)>.
 // The key is shown once at creation time; only its SHA-256 hash is stored.
 func generateAPIKey() string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		panic("crypto/rand unavailable: " + err.Error())
 	}
-	return "phaxa_sk_" + base64.RawURLEncoding.EncodeToString(b)
+	return "chainnodes_sk_" + base64.RawURLEncoding.EncodeToString(b)
 }
 
 func (h *Handlers) CreateAPIKey(c *gin.Context) {

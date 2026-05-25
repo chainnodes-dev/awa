@@ -1,4 +1,4 @@
--- Phaxa Platform - Users & Auth Schema
+-- Chain Nodes Platform - Users & Auth Schema
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (

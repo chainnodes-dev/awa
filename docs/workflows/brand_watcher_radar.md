@@ -5,7 +5,7 @@ Monitors specified brand names and competitor products across the web using sear
 
 ## Blackboard Schema Requirements
 The blackboard must hold the following strictly typed variables to track state:
-- `target_brands` (list of strings, required): List of brand or competitor names to track (e.g. "Phaxa", "Temporal").
+- `target_brands` (list of strings, required): List of brand or competitor names to track (e.g. "Chain Nodes", "Temporal").
 - `raw_mentions` (list of objects): A collected array of recent articles, forum posts, and tweets containing brand mentions.
 - `filtered_mentions` (list of objects): Mentions annotated with relevance scores (1-10) and sentiment labels ("positive", "negative", "neutral").
 - `dossier_markdown` (string): The structured, polished executive markdown briefing.

@@ -1,4 +1,4 @@
--- Phaxa Platform - Initial Schema
+-- Chain Nodes Platform - Initial Schema
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 

@@ -18,7 +18,7 @@ type IDPConfig struct {
 	IssuerURL    string            `json:"issuer_url"`
 	ClientID     string            `json:"client_id"`
 	ClientSecret string            `json:"client_secret"`
-	RoleMapping  map[string]string `json:"role_mapping"` // Map of IDP group names to Phaxa roles
+	RoleMapping  map[string]string `json:"role_mapping"` // Map of IDP group names to Chain Nodes roles
 	Active       bool              `json:"active"`
 }
 

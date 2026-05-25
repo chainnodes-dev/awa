@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Report represents the anonymized data sent to Phaxa HQ.
+// Report represents the anonymized data sent to Chain Nodes HQ.
 type Report struct {
 	InstallationID string `json:"installation_id"`
 	Country        string `json:"country"`
@@ -48,9 +48,9 @@ type Service struct {
 }
 
 func NewService(s store.Store, interval time.Duration) *Service {
-	endpoint := os.Getenv("PHAXA_TELEMETRY_URL")
+	endpoint := os.Getenv("CHAINNODES_TELEMETRY_URL")
 	if endpoint == "" {
-		endpoint = "https://telemetry.phaxa.com/v1/report"
+		endpoint = "https://telemetry.chainnodes.io/v1/report"
 	}
 	return &Service{
 		store:    s,
@@ -123,7 +123,7 @@ func (s *Service) Collect(ctx context.Context) (*Report, error) {
 	}
 
 	// 2. Get Country (from ENV or default)
-	country := os.Getenv("PHAXA_COUNTRY")
+	country := os.Getenv("CHAINNODES_COUNTRY")
 	if country == "" {
 		country = "unknown"
 	}
