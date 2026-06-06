@@ -49,10 +49,13 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 			},
 		})
 	}
-	makeAgentOpts := func(bCtx workflow.Context, taskQueue string) workflow.Context {
+	makeAgentOpts := func(bCtx workflow.Context, taskQueue string, timeout time.Duration) workflow.Context {
+		if timeout <= 0 {
+			timeout = 10 * time.Minute
+		}
 		return workflow.WithActivityOptions(bCtx, workflow.ActivityOptions{
 			TaskQueue:           taskQueue, // empty string → default queue
-			StartToCloseTimeout: 10 * time.Minute,
+			StartToCloseTimeout: timeout,
 			HeartbeatTimeout:    30 * time.Second,
 			RetryPolicy: &temporalsdk.RetryPolicy{
 				InitialInterval:    2 * time.Second,
@@ -92,17 +95,20 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					return
 				}
 				var autoTrigger string
+				matched := false
 				for _, t := range transitions {
 					if t.Guard == "" {
 						autoTrigger = t.Trigger
+						matched = true
 						break
 					}
 					if ok, _ := orchestrator.EvalGuard(t.Guard, bb); ok {
 						autoTrigger = t.Trigger
+						matched = true
 						break
 					}
 				}
-				if autoTrigger == "" {
+				if !matched {
 					workflowErr = fmt.Errorf("initial state '%s': no outgoing transition guard passed", currentState)
 					return
 				}
@@ -276,6 +282,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					Blackboard:       bb,
 					BlackboardSchema: p.Def.Blackboard.Schema,
 					WorkflowName:     p.Def.Metadata.Name,
+					WorkflowVersion:  p.Def.Metadata.Version,
 				}
 				waitDur := 24 * time.Hour
 				if state.Timeout != "" {
@@ -309,7 +316,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					if state.Agent != "" {
 						agentDef := p.Def.AgentByName(state.Agent)
 						if agentDef != nil {
-							agentOpts := makeAgentOpts(bCtx, agentDef.TaskQueue)
+							agentOpts := makeAgentOpts(bCtx, agentDef.TaskQueue, 0)
 							var output *asmtypes.AgentOutput
 							_ = workflow.ExecuteActivity(agentOpts, (*Activities).ExecuteAgent, ExecuteAgentParams{
 								RunID:           p.RunID,
@@ -374,7 +381,13 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					return
 				}
 
-				agentOpts := makeAgentOpts(bCtx, agentDef.TaskQueue)
+				var stateTimeout time.Duration
+				if state.Timeout != "" {
+					if d, err := time.ParseDuration(state.Timeout); err == nil {
+						stateTimeout = d
+					}
+				}
+				agentOpts := makeAgentOpts(bCtx, agentDef.TaskQueue, stateTimeout)
 				var output *asmtypes.AgentOutput
 				err := workflow.ExecuteActivity(agentOpts, (*Activities).ExecuteAgent, ExecuteAgentParams{
 					RunID:           p.RunID,
@@ -387,6 +400,30 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					Def:             p.Def,
 				}).Get(bCtx, &output)
 				if err != nil {
+					if temporalsdk.IsTimeoutError(err) {
+						trigger := state.OnTimeout
+						if trigger == "" {
+							trigger = "timeout"
+						}
+						nextStates, transErr := applyTransition(p.Def, currentState, trigger, bb)
+						if transErr != nil {
+							workflowErr = fmt.Errorf("agent execution timed out and no transition found for trigger '%s': %w", trigger, err)
+							return
+						}
+						if len(nextStates) == 0 {
+							return
+						}
+						if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+							workflowErr = err
+							return
+						}
+						for i := 1; i < len(nextStates); i++ {
+							target := nextStates[i]
+							workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+						}
+						currentState = nextStates[0]
+						continue
+					}
 					workflowErr = fmt.Errorf("agent execution failed: %w", err)
 					return
 				}
@@ -454,7 +491,13 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					validTriggers = append(validTriggers, t.Trigger)
 				}
 
-				codeOpts := makeAgentOpts(bCtx, "") // same long-timeout / heartbeat as agent activities
+				var stateTimeout time.Duration
+				if state.Timeout != "" {
+					if d, err := time.ParseDuration(state.Timeout); err == nil {
+						stateTimeout = d
+					}
+				}
+				codeOpts := makeAgentOpts(bCtx, "", stateTimeout) // same long-timeout / heartbeat as agent activities
 				var output *asmtypes.AgentOutput
 				err := workflow.ExecuteActivity(codeOpts, (*Activities).ExecuteCode, ExecuteCodeParams{
 					RunID:           p.RunID,
@@ -466,6 +509,30 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					ValidTriggers:   validTriggers,
 				}).Get(bCtx, &output)
 				if err != nil {
+					if temporalsdk.IsTimeoutError(err) {
+						trigger := state.OnTimeout
+						if trigger == "" {
+							trigger = "timeout"
+						}
+						nextStates, transErr := applyTransition(p.Def, currentState, trigger, bb)
+						if transErr != nil {
+							workflowErr = fmt.Errorf("code execution timed out and no transition found for trigger '%s': %w", trigger, err)
+							return
+						}
+						if len(nextStates) == 0 {
+							return
+						}
+						if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+							workflowErr = err
+							return
+						}
+						for i := 1; i < len(nextStates); i++ {
+							target := nextStates[i]
+							workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+						}
+						currentState = nextStates[0]
+						continue
+					}
 					workflowErr = fmt.Errorf("code execution failed in state '%s': %w", currentState, err)
 					return
 				}

@@ -31,13 +31,8 @@
         </button>
       </div>
 
-      <!-- HITL controls (only for hitl-type states, not wait/join nodes) -->
-      <template v-if="currentStateType === 'hitl' && !hitlResolved">
-        <button @click="resolve('approved')" class="btn bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs">✓ Approve</button>
-        <button @click="resolve('rejected')" class="btn bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs">✕ Reject</button>
-      </template>
       <!-- Wait/join node indicator -->
-      <span v-else-if="run?.status === 'waiting' && currentStateType === 'wait'"
+      <span v-if="run?.status === 'waiting' && currentStateType === 'wait'"
             class="text-xs text-indigo-400/80 font-mono px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20">
         ⏳ awaiting condition…
       </span>
@@ -360,9 +355,23 @@
         <!-- Task tab (HITL) -->
         <div v-else-if="activeTab === 'task'" class="flex-1 flex flex-col overflow-hidden bg-surface-2/30">
           <div class="p-4 space-y-4 flex-1 overflow-y-auto">
-            <div class="space-y-1 mb-4">
-              <h3 class="text-xs font-semibold text-text uppercase tracking-wider">Input Required</h3>
-              <p class="text-xs text-text-muted">{{ currentStateDef?.instructions || 'A human must review this step to continue.' }}</p>
+            <div class="flex items-center justify-between mb-4">
+              <div class="space-y-1">
+                <h3 class="text-xs font-semibold text-text uppercase tracking-wider">Input Required</h3>
+                <p class="text-xs text-text-muted">{{ currentStateDef?.instructions || 'A human must review this step to continue.' }}</p>
+              </div>
+              <button 
+                v-if="currentFormSchema"
+                @click="showPopOutModal = true" 
+                class="btn-ghost p-1.5 text-text-muted hover:text-text"
+                title="Pop out form"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </button>
             </div>
 
             <JsonSchemaForm
@@ -421,8 +430,14 @@
           </div>
           
           <div class="p-4 border-t border-border bg-surface-1/50 flex gap-3">
-            <button @click="resolve('rejected')" class="flex-1 btn-danger-solid justify-center py-2.5">Reject</button>
-            <button @click="resolve('approved')" class="flex-1 btn-primary justify-center py-2.5">Approve</button>
+            <button
+              v-for="btn in currentTransitions"
+              :key="btn.trigger"
+              @click="resolve(btn.trigger)"
+              :class="['flex-1 justify-center py-2.5', getButtonClass(btn.trigger)]"
+            >
+              {{ btn.label }}
+            </button>
           </div>
         </div>
 
@@ -530,8 +545,57 @@
       :definition="workflowDef"
       :initial-data="rerunInitialData"
       @close="showRunModal = false"
-      @started="(newRun) => router.push(`/monitor/${newRun.id}`).then(() => location.reload())"
+      @started="(newRun) => router.push(`/monitor/${newRun.id}`)"
     />
+
+    <!-- Pop Out HITL Form Modal -->
+    <div
+      v-if="showPopOutModal && currentFormSchema"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4"
+      @click.self="showPopOutModal = false"
+    >
+      <div class="card w-full max-w-[600px] p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-slate-100 flex items-center gap-2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-indigo-400">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Task Input Required
+          </h3>
+          <button @click="showPopOutModal = false" class="text-text-muted hover:text-text transition-colors">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <p class="text-xs text-text-muted">{{ currentStateDef?.instructions || 'Provide the required information below to resolve this step.' }}</p>
+
+        <div class="min-h-[150px] overflow-y-auto max-h-[400px] pr-2 scrollbar-thin scrollbar-thumb-slate-800">
+          <JsonSchemaForm
+            ref="popOutForm"
+            :schema="currentFormSchema"
+            :initial-data="run?.blackboard"
+          />
+        </div>
+
+        <div class="pt-4 border-t border-border flex gap-3 justify-end">
+          <button
+            class="px-4 py-2 text-xs font-medium text-text-muted hover:text-text transition-colors border border-border rounded-lg bg-surface-2"
+            @click="showPopOutModal = false"
+          >
+            Cancel
+          </button>
+          <button
+            v-for="btn in currentTransitions"
+            :key="btn.trigger"
+            @click="resolveFromModal(btn.trigger)"
+            :class="['px-5 py-2 text-xs font-semibold rounded-lg', getButtonClass(btn.trigger)]"
+          >
+            {{ btn.label }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -573,6 +637,62 @@ const showRunModal = ref(false)
 const showDebugModal = ref(false)
 const triggerName  = ref('')
 const workflowDef  = ref(null)
+const currentTransitions = computed(() => {
+  if (!workflowDef.value || !displayCurrentState.value) {
+    return [
+      { trigger: 'accept', label: 'Accept' },
+      { trigger: 'reject', label: 'Reject' }
+    ]
+  }
+  // Find all transitions originating from displayCurrentState.value
+  const list = workflowDef.value.transitions?.filter(t => t.from === displayCurrentState.value && t.trigger) || []
+  if (list.length > 0) {
+    // Return unique triggers
+    const triggers = [...new Set(list.map(t => t.trigger))]
+    return triggers.map(trig => ({
+      trigger: trig,
+      label: formatTriggerLabel(trig)
+    }))
+  }
+  // Fallback if no transitions with triggers are defined
+  return [
+    { trigger: 'accept', label: 'Accept' },
+    { trigger: 'reject', label: 'Reject' }
+  ]
+})
+
+function formatTriggerLabel(trigger) {
+  if (!trigger) return ''
+  return trigger
+    .replace(/[_-]/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+function getButtonClass(trigger) {
+  const t = trigger.toLowerCase()
+  if (t.includes('reject') || t.includes('cancel') || t.includes('deny') || t.includes('fail') || t.includes('no')) {
+    return 'btn-danger-solid'
+  }
+  return 'btn-primary'
+}
+
+function getHeaderButtonClass(trigger) {
+  const t = trigger.toLowerCase()
+  if (t.includes('reject') || t.includes('cancel') || t.includes('deny') || t.includes('fail') || t.includes('no')) {
+    return 'btn bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs'
+  }
+  return 'btn bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs'
+}
+
+function getHeaderButtonPrefix(trigger) {
+  const t = trigger.toLowerCase()
+  if (t.includes('reject') || t.includes('cancel') || t.includes('deny') || t.includes('fail') || t.includes('no')) {
+    return '✕ '
+  }
+  return '✓ '
+}
 const workflowYAML = ref('')
 const nodeTypes    = shallowRef({ stateNode: markRaw(StateNode) })
 const hitlForm     = ref(null)
@@ -582,6 +702,8 @@ const editedBlackboard = ref({})
 const resolveError = ref('')
 const hitlResolved = ref(false)
 const selectedTransition = ref(null)
+const showPopOutModal = ref(false)
+const popOutForm = ref(null)
 
 const scrubIndex = ref(0)
 const isLive     = ref(true)
@@ -650,13 +772,26 @@ const blackboardSchema = computed(() => {
 })
 
 const rerunInitialData = computed(() => {
-  if (!run.value?.blackboard || !workflowDef.value?.blackboard?.schema) return {}
-  const schema = workflowDef.value.blackboard.schema
+  if (!run.value?.blackboard || !workflowDef.value) return {}
   const bb = run.value.blackboard
   const filtered = {}
-  for (const k of Object.keys(schema)) {
-    if (bb[k] !== undefined) {
-      filtered[k] = bb[k]
+  
+  const inputs = workflowDef.value.inputs || []
+  if (inputs.length > 0) {
+    for (const port of inputs) {
+      if (bb[port.name] !== undefined) {
+        filtered[port.name] = bb[port.name]
+      }
+    }
+  } else {
+    const schema = workflowDef.value.blackboard?.schema || {}
+    const outputs = workflowDef.value.outputs || []
+    const outputNames = new Set(outputs.map(o => o.name))
+    for (const [key, field] of Object.entries(schema)) {
+      if (outputNames.has(key) || field.is_output) continue
+      if (bb[key] !== undefined) {
+        filtered[key] = bb[key]
+      }
     }
   }
   return filtered
@@ -742,6 +877,28 @@ watch([() => run.value?.blackboard, () => run.value?.status], ([bb, status]) => 
     }
   }
 }, { immediate: true, deep: true })
+
+// Reset state and fetch new run when switching runs (rerun or manual navigation)
+watch(() => route.params.id, (newId) => {
+  if (newId) {
+    activeTab.value = 'blackboard'
+    showTriggerModal.value = false
+    showRunModal.value = false
+    showDebugModal.value = false
+    triggerName.value = ''
+    workflowDef.value = null
+    workflowYAML.value = ''
+    showBlackboardTweak.value = true
+    tweakView.value = 'form'
+    editedBlackboard.value = {}
+    resolveError.value = ''
+    hitlResolved.value = false
+    selectedTransition.value = null
+    scrubIndex.value = 0
+    isLive.value = true
+    loadRun()
+  }
+})
 
 function syncFromTweakForm(data) {
   if (JSON.stringify(editedBlackboard.value) !== JSON.stringify(data)) {
@@ -923,6 +1080,31 @@ async function resolve(resolution) {
     await execStore.resolveHITL(route.params.id, resolution, 'user', finalPayload)
     
     // Switch tab and clean up before refetching to ensure smooth transition
+    activeTab.value = 'blackboard'
+    showBlackboardTweak.value = false
+    
+    await loadRun()
+  } catch (err) {
+    hitlResolved.value = false
+    const msg = err?.response?.data?.error ?? err?.message ?? 'Unknown error'
+    resolveError.value = msg
+    await loadRun()
+  }
+}
+
+async function resolveFromModal(resolution) {
+  if (!run.value) return
+  resolveError.value = ''
+  try {
+    const formPayload = popOutForm.value ? popOutForm.value.formData : {}
+    const finalPayload = {
+      ...editedBlackboard.value,
+      ...formPayload
+    }
+    hitlResolved.value = true
+    showPopOutModal.value = false
+    await execStore.resolveHITL(route.params.id, resolution, 'user', finalPayload)
+    
     activeTab.value = 'blackboard'
     showBlackboardTweak.value = false
     

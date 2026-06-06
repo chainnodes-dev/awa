@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -44,14 +45,89 @@ transitions:
 `
 
 // stubTemporalClient satisfies orchestrator.TemporalEngineClient for API tests.
-type stubTemporalClient struct{}
+type stubTemporalClient struct {
+	store store.Store
+}
 
 func (s *stubTemporalClient) StartWorkflow(_ context.Context, _ *asmtypes.WorkflowRun, _ *asmtypes.WorkflowDef) (string, error) {
 	return "stub-temporal-id", nil
 }
-func (s *stubTemporalClient) SendTriggerSignal(_ context.Context, _, _ string, _ map[string]interface{}) error {
+
+func (s *stubTemporalClient) SendTriggerSignal(ctx context.Context, temporalID, trigger string, payload map[string]interface{}) error {
+	if s.store == nil {
+		return nil
+	}
+	runs, err := s.store.ListRuns(ctx, store.RunFilter{})
+	if err != nil {
+		return err
+	}
+	var targetRun *asmtypes.WorkflowRun
+	for _, r := range runs {
+		if r.TemporalID == temporalID {
+			targetRun = r
+			break
+		}
+	}
+	if targetRun == nil {
+		return fmt.Errorf("run not found for temporal ID %s", temporalID)
+	}
+
+	def, _, err := s.store.GetDefinition(ctx, targetRun.WorkflowName, targetRun.WorkflowVersion)
+	if err != nil {
+		return err
+	}
+
+	var matchedTransition *asmtypes.Transition
+	for i := range def.Transitions {
+		t := &def.Transitions[i]
+		if t.From == targetRun.CurrentState && t.Trigger == trigger {
+			matchedTransition = t
+			break
+		}
+	}
+
+	if matchedTransition == nil {
+		return fmt.Errorf("invalid trigger %s for state %s", trigger, targetRun.CurrentState)
+	}
+
+	var targetState *asmtypes.StateDef
+	for i := range def.States {
+		st := &def.States[i]
+		if st.Name == matchedTransition.To {
+			targetState = st
+			break
+		}
+	}
+	if targetState == nil {
+		return fmt.Errorf("target state %s not found in definition", matchedTransition.To)
+	}
+
+	oldState := targetRun.CurrentState
+	targetRun.CurrentState = targetState.Name
+	targetRun.UpdatedAt = time.Now()
+
+	if targetState.Type == asmtypes.StateTerminal {
+		targetRun.Status = asmtypes.RunComplete
+	}
+
+	if err := s.store.UpdateRun(ctx, targetRun); err != nil {
+		return err
+	}
+
+	rec := &asmtypes.TransitionRecord{
+		RunID:     targetRun.ID,
+		FromState: oldState,
+		ToState:   targetState.Name,
+		Trigger:   trigger,
+		Timestamp: time.Now(),
+	}
+	if err := s.store.RecordTransition(ctx, rec); err != nil {
+		return err
+	}
+
 	return nil
 }
+
 func (s *stubTemporalClient) SendHITLSignal(_ context.Context, _ string, _ asmtypes.HITLSignal) error {
 	return nil
 }
@@ -80,7 +156,7 @@ func testRouter(t *testing.T) testEnv {
 	t.Helper()
 	s := store.NewMemoryStore()
 	bus := events.NewLocalBus()
-	temporal := &stubTemporalClient{}
+	temporal := &stubTemporalClient{store: s}
 	eng := orchestrator.NewEngine(s, bus, temporal)
 
 	jwtSvc := auth.NewJWTService("test-secret-do-not-use-in-prod")
@@ -176,10 +252,12 @@ func TestCreateWorkflow_Valid(t *testing.T) {
 		t.Errorf("status: got %d, want 201 (body: %s)", w.Code, w.Body.String())
 	}
 
-	var def asmtypes.WorkflowDef
-	decode(t, w, &def)
-	if def.Metadata.Name != "test-wf" {
-		t.Errorf("name: got %q, want %q", def.Metadata.Name, "test-wf")
+	var resp struct {
+		Definition asmtypes.WorkflowDef `json:"definition"`
+	}
+	decode(t, w, &resp)
+	if resp.Definition.Metadata.Name != "test-wf" {
+		t.Errorf("name: got %q, want %q", resp.Definition.Metadata.Name, "test-wf")
 	}
 }
 
@@ -278,6 +356,59 @@ func TestDeleteWorkflow(t *testing.T) {
 		t.Errorf("expected 404 after delete, got %d", w2.Code)
 	}
 }
+
+func TestDeleteWorkflow_AllVersions(t *testing.T) {
+	env := testRouter(t)
+	
+	// Create two versions of the same workflow.
+	// Note: SaveDefinition in memory store auto-increments the version number/tag to v1 and v2.
+	do(env.router, "POST", "/api/v1/workflows",
+		jsonBody(t, map[string]string{"yaml": simpleWorkflowYAML}), env.adminToken)
+
+	simpleWorkflowYAML2 := `apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: test-wf
+  version: v2
+states:
+  - name: start
+    type: initial
+  - name: done
+    type: terminal
+transitions:
+  - from: start
+    to: done
+    trigger: finish
+`
+	do(env.router, "POST", "/api/v1/workflows",
+		jsonBody(t, map[string]string{"yaml": simpleWorkflowYAML2}), env.adminToken)
+
+	w1 := do(env.router, "GET", "/api/v1/workflows/test-wf/v1", nil, env.adminToken)
+	if w1.Code != http.StatusOK {
+		t.Errorf("expected version v1 to exist, got %d", w1.Code)
+	}
+	w2 := do(env.router, "GET", "/api/v1/workflows/test-wf/v2", nil, env.adminToken)
+	if w2.Code != http.StatusOK {
+		t.Errorf("expected version v2 to exist, got %d", w2.Code)
+	}
+
+	// Delete version v2. This should delete all versions under the hood.
+	wDel := do(env.router, "DELETE", "/api/v1/workflows/test-wf/v2", nil, env.adminToken)
+	if wDel.Code != http.StatusNoContent {
+		t.Errorf("expected 204 on delete, got %d", wDel.Code)
+	}
+
+	// Verify both version 1 and version 2 are gone
+	wGet1 := do(env.router, "GET", "/api/v1/workflows/test-wf/v1", nil, env.adminToken)
+	if wGet1.Code != http.StatusNotFound {
+		t.Errorf("expected version 1 to be deleted, got %d", wGet1.Code)
+	}
+	wGet2 := do(env.router, "GET", "/api/v1/workflows/test-wf/v2", nil, env.adminToken)
+	if wGet2.Code != http.StatusNotFound {
+		t.Errorf("expected version 2 to be deleted, got %d", wGet2.Code)
+	}
+}
+
 
 // --- Runs ---
 

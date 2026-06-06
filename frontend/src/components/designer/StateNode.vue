@@ -1,7 +1,7 @@
 <template>
   <div
     :class="[
-      'state-node relative flex flex-col gap-1 px-3 py-2.5 rounded-xl border-2 min-w-[140px] cursor-default select-none transition-shadow duration-300',
+      'state-node relative flex flex-col gap-1 px-4 py-3 rounded-2xl border-2 min-w-[150px] cursor-default select-none transition-shadow duration-300',
       nodeStyle,
       isActive && `glow-${data.type ?? 'prompt'}`,
     ]"
@@ -112,18 +112,18 @@ const props = defineProps({
 })
 
 const TYPE_STYLES = {
-  initial:      'border-green-500/60 bg-green-500/10',
-  prompt:       'border-indigo-500/60 bg-indigo-500/10',
-  hitl:         'border-amber-500/40 bg-amber-500/10',
-  terminal:     'border-border bg-surface-2',
-  subprocess:   'border-violet-500/60 bg-violet-500/10',
-  wait:         'border-border bg-surface-2',
-  script:       'border-amber-500/50 bg-amber-500/5',
-  code:         'border-teal-500/60 bg-teal-500/10',
-  emit_event:   'border-blue-500/40 bg-blue-500/10',
-  telegram_output: 'border-blue-500/60 bg-blue-500/10',
-  discord_output:  'border-indigo-500/60 bg-indigo-500/10',
-  timeout_node:    'border-red-500/60 bg-red-500/10',
+  initial:      'border-green-500/50 bg-green-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(34,197,94,0.12)]',
+  prompt:       'border-indigo-500/50 bg-indigo-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(99,102,241,0.12)]',
+  hitl:         'border-amber-500/40 bg-amber-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(245,158,11,0.12)]',
+  terminal:     'border-slate-500/40 bg-slate-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(148,163,184,0.08)]',
+  subprocess:   'border-violet-500/50 bg-violet-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(167,139,250,0.12)]',
+  wait:         'border-slate-500/40 bg-slate-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(148,163,184,0.08)]',
+  script:       'border-amber-500/40 bg-amber-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(245,158,11,0.12)]',
+  code:         'border-teal-500/50 bg-teal-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(45,212,191,0.12)]',
+  emit_event:   'border-blue-500/40 bg-blue-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(59,130,246,0.12)]',
+  telegram_output: 'border-blue-500/50 bg-blue-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(59,130,246,0.12)]',
+  discord_output:  'border-indigo-500/50 bg-indigo-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(99,102,241,0.12)]',
+  timeout_node:    'border-red-500/50 bg-red-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(239,68,68,0.12)]',
 }
 const TYPE_DOTS = {
   initial:      'bg-indigo-400',

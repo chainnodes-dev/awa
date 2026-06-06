@@ -544,6 +544,9 @@ func (s *MemoryStore) GetHITL(_ context.Context, runID string) (*asmtypes.HITLRe
 	if !ok {
 		return nil, fmt.Errorf("no HITL request for run '%s'", runID)
 	}
+	if run, ok := s.runs[req.RunID]; ok {
+		req.WorkflowVersion = run.WorkflowVersion
+	}
 	return req, nil
 }
 
@@ -584,6 +587,9 @@ func (s *MemoryStore) ListHITLs(ctx context.Context, filter HITLFilter) ([]*asmt
 			if !ok || run.TenantID != tenantID {
 				continue
 			}
+		}
+		if run, ok := s.runs[r.RunID]; ok {
+			r.WorkflowVersion = run.WorkflowVersion
 		}
 		out = append(out, r)
 	}

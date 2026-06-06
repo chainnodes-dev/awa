@@ -110,6 +110,22 @@ func (m *Manager) startStdioClient(srv *store.MCPServer) (*stdioProcess, io.Clos
 		decoder: json.NewDecoder(stdout),
 		stderr:  stderr,
 	}
+
+	// Listen for process exit asynchronously to update state and clear from cache.
+	go func() {
+		err := cmd.Wait()
+		p.mu.Lock()
+		p.exitErr = err
+		p.exited = true
+		p.mu.Unlock()
+
+		m.mu.Lock()
+		if m.procs[srv.Name] == p {
+			delete(m.procs, srv.Name)
+		}
+		m.mu.Unlock()
+	}()
+
 	return p, p, nil
 }
 
@@ -153,6 +169,16 @@ func (m *Manager) TestStdioClientMap(command string, args []string, envVars map[
 		decoder: json.NewDecoder(stdout),
 		stderr:  stderr,
 	}
+
+	// Listen for process exit asynchronously to update state.
+	go func() {
+		err := cmd.Wait()
+		p.mu.Lock()
+		p.exitErr = err
+		p.exited = true
+		p.mu.Unlock()
+	}()
+
 	return p, p, nil
 }
 
@@ -165,6 +191,8 @@ type stdioProcess struct {
 	stderr  *bytes.Buffer
 	idCount int
 	mu      sync.Mutex
+	exitErr error
+	exited  bool
 }
 
 func (p *stdioProcess) Close() error {
@@ -220,8 +248,11 @@ func (p *stdioProcess) Call(ctx context.Context, method string, params interface
 
 	if err := p.decoder.Decode(&resp); err != nil {
 		if err == io.EOF {
-			// Check if process exited with an error
-			if exitErr := p.cmd.Wait(); exitErr != nil {
+			p.mu.Lock()
+			exited := p.exited
+			exitErr := p.exitErr
+			p.mu.Unlock()
+			if exited && exitErr != nil {
 				return nil, fmt.Errorf("mcp server exited: %v (stderr: %s)", exitErr, p.stderr.String())
 			}
 			return nil, fmt.Errorf("mcp server closed connection (EOF). stderr: %s", p.stderr.String())

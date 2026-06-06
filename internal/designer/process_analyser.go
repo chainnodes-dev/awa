@@ -185,9 +185,10 @@ For each subprocess state:
 `)
 
 	for _, s := range processes {
-		sb.WriteString(fmt.Sprintf("### %s\n", s.Metadata.Name))
+		fmt.Fprintf(&sb, "### %s\n", s.Metadata.Name)
 		if s.Metadata.Description != "" {
-			sb.WriteString(s.Metadata.Description + "\n\n")
+			sb.WriteString(s.Metadata.Description)
+			sb.WriteString("\n\n")
 		}
 
 		if len(s.Inputs) > 0 {
@@ -197,9 +198,10 @@ For each subprocess state:
 				if p.Required {
 					req = " *(required)*"
 				}
-				sb.WriteString(fmt.Sprintf("- `%s` (%s)%s", p.Name, p.Type, req))
+				fmt.Fprintf(&sb, "- `%s` (%s)%s", p.Name, p.Type, req)
 				if p.Description != "" {
-					sb.WriteString(": " + p.Description)
+					sb.WriteString(": ")
+					sb.WriteString(p.Description)
 				}
 				sb.WriteString("\n")
 			}
@@ -209,9 +211,10 @@ For each subprocess state:
 		if len(s.Outputs) > 0 {
 			sb.WriteString("**Output ports:**\n")
 			for _, p := range s.Outputs {
-				sb.WriteString(fmt.Sprintf("- `%s` (%s)", p.Name, p.Type))
+				fmt.Fprintf(&sb, "- `%s` (%s)", p.Name, p.Type)
 				if p.Description != "" {
-					sb.WriteString(": " + p.Description)
+					sb.WriteString(": ")
+					sb.WriteString(p.Description)
 				}
 				sb.WriteString("\n")
 			}
@@ -244,9 +247,10 @@ func (g *Generator) buildProcessUserMsg(req ProcessAnalyseRequest) string {
 			if p.Required {
 				req = " (required)"
 			}
-			sb.WriteString(fmt.Sprintf("- `%s` (%s)%s", p.Name, p.Type, req))
+			fmt.Fprintf(&sb, "- `%s` (%s)%s", p.Name, p.Type, req)
 			if p.Description != "" {
-				sb.WriteString(": " + p.Description)
+				sb.WriteString(": ")
+				sb.WriteString(p.Description)
 			}
 			sb.WriteString("\n")
 		}
@@ -256,9 +260,10 @@ func (g *Generator) buildProcessUserMsg(req ProcessAnalyseRequest) string {
 	if len(req.Outputs) > 0 {
 		sb.WriteString("## Output Contract\n\n")
 		for _, p := range req.Outputs {
-			sb.WriteString(fmt.Sprintf("- `%s` (%s)", p.Name, p.Type))
+			fmt.Fprintf(&sb, "- `%s` (%s)", p.Name, p.Type)
 			if p.Description != "" {
-				sb.WriteString(": " + p.Description)
+				sb.WriteString(": ")
+				sb.WriteString(p.Description)
 			}
 			sb.WriteString("\n")
 		}

@@ -155,9 +155,14 @@ function applyFix() {
     explanation: proposal.value.explanation
   }))
   
-  // Close and navigate to designer
+  // Close and navigate to preferred designer
   emit('close')
-  router.push('/designer?fix=true')
+  const preferred = sessionStorage.getItem('chainnodes_preferred_designer') || 'legacy'
+  if (preferred === 'ai') {
+    router.push('/ai-designer?fix=true')
+  } else {
+    router.push('/designer?fix=true')
+  }
 }
 
 onMounted(runDiagnostic)

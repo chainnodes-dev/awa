@@ -8,6 +8,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
+	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
@@ -20,12 +21,13 @@ type Scheduler struct {
 	startFn StartFn
 
 	mu      sync.Mutex
-	entries map[string]cron.EntryID // key: "name@version"
+	entries map[string]cron.EntryID // key: "tenantID/name@version"
 }
 
 // CronTrigger describes a single cron-scheduled workflow start.
 type CronTrigger struct {
 	Schedule        string                 // 6-field cron expression (seconds first)
+	TenantID        string
 	WorkflowName    string
 	WorkflowVersion string
 	Input           map[string]interface{}
@@ -42,13 +44,14 @@ func New(startFn StartFn) *Scheduler {
 // AddCronTrigger registers a cron expression and returns the entry ID.
 func (s *Scheduler) AddCronTrigger(t CronTrigger) (cron.EntryID, error) {
 	id, err := s.cron.AddFunc(t.Schedule, func() {
-		ctx := context.Background()
+		// Scoping background workflow runs to the correct tenant context
+		ctx := store.WithTenantID(context.Background(), t.TenantID)
 		run, err := s.startFn(ctx, t.WorkflowName, t.WorkflowVersion, t.Input)
 		if err != nil {
-			slog.Error("Scheduler failed to start workflow", "workflow", t.WorkflowName, "error", err)
+			slog.Error("Scheduler failed to start workflow", "workflow", t.WorkflowName, "tenant", t.TenantID, "error", err)
 			return
 		}
-		slog.Info("Scheduler started run", "run_id", run.ID, "workflow", t.WorkflowName)
+		slog.Info("Scheduler started run", "run_id", run.ID, "workflow", t.WorkflowName, "tenant", t.TenantID)
 	})
 	if err != nil {
 		return 0, err
@@ -58,17 +61,18 @@ func (s *Scheduler) AddCronTrigger(t CronTrigger) (cron.EntryID, error) {
 
 // AddWorkflow registers a cron trigger for def if it has a non-empty Schedule.
 // It is idempotent: calling it again for the same workflow replaces the existing trigger.
-func (s *Scheduler) AddWorkflow(def *asmtypes.WorkflowDef) error {
+func (s *Scheduler) AddWorkflow(tenantID string, def *asmtypes.WorkflowDef) error {
 	if def.Metadata.Schedule == "" {
 		return nil
 	}
-	key := workflowKey(def.Metadata.Name, def.Metadata.Version)
+	key := workflowKey(tenantID, def.Metadata.Name, def.Metadata.Version)
 
 	// Remove any existing trigger for this workflow before adding the new one.
 	s.removeByKey(key)
 
 	id, err := s.AddCronTrigger(CronTrigger{
 		Schedule:        def.Metadata.Schedule,
+		TenantID:        tenantID,
 		WorkflowName:    def.Metadata.Name,
 		WorkflowVersion: def.Metadata.Version,
 	})
@@ -81,13 +85,14 @@ func (s *Scheduler) AddWorkflow(def *asmtypes.WorkflowDef) error {
 	s.mu.Unlock()
 
 	slog.Info("Workflow schedule registered", "workflow", def.Metadata.Name,
-		"version", def.Metadata.Version, "schedule", def.Metadata.Schedule)
+		"version", def.Metadata.Version, "tenant", tenantID, "schedule", def.Metadata.Schedule)
 	return nil
 }
 
 // RemoveWorkflow deregisters the cron trigger for the given workflow, if any.
-func (s *Scheduler) RemoveWorkflow(name, version string) {
-	s.removeByKey(workflowKey(name, version))
+// It matches by tenantID, workflow name, and version.
+func (s *Scheduler) RemoveWorkflow(tenantID, name, version string) {
+	s.removeByKey(workflowKey(tenantID, name, version))
 }
 
 func (s *Scheduler) removeByKey(key string) {
@@ -114,4 +119,4 @@ func (s *Scheduler) Start() { s.cron.Start() }
 // that is done when all currently-running jobs have finished.
 func (s *Scheduler) Stop() context.Context { return s.cron.Stop() }
 
-func workflowKey(name, version string) string { return name + "@" + version }
+func workflowKey(tenantID, name, version string) string { return tenantID + "/" + name + "@" + version }

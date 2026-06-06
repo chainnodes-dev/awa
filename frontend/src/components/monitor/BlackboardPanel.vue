@@ -20,10 +20,20 @@
         
         <div class="flex flex-col">
           <div v-if="isChanged(key) && previousBlackboard?.[key] !== undefined" class="text-[10px] font-mono text-text-muted/40 line-through mb-0.5">
-            {{ formatValue(previousBlackboard[key]) }}
+            <template v-if="typeof previousBlackboard[key] === 'object' && previousBlackboard[key] !== null">
+              <JsonTree :data="previousBlackboard[key]" />
+            </template>
+            <template v-else>
+              {{ formatValue(previousBlackboard[key]) }}
+            </template>
           </div>
           <div class="text-xs font-mono break-all leading-relaxed" :class="valueColor(value)">
-            {{ formatValue(value) }}
+            <template v-if="typeof value === 'object' && value !== null">
+              <JsonTree :data="value" />
+            </template>
+            <template v-else>
+              {{ formatValue(value) }}
+            </template>
           </div>
         </div>
       </div>
@@ -37,6 +47,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import JsonTree from '@/components/shared/JsonTree.vue'
 
 const props = defineProps({
   blackboard: { type: Object, default: () => ({}) },

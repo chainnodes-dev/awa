@@ -35,6 +35,10 @@
    - [HITL State](#83-hitl-state)
 9. [Workflow YAML Reference](#9-workflow-yaml-reference)
 10. [Execution Engines](#10-execution-engines)
+    - [expr-lang/expr — Script nodes](#expr-langexpr--script-nodes)
+    - [dop251/goja — Code nodes](#dop251goja--code-nodes)
+    - [robfig/cron — Scheduled workflows](#robfigcron--scheduled-workflows)
+    - [ollama/ollama — Local Inference & Weight Management](#ollamaollama--local-inference--weight-management)
 
 ---
 
@@ -783,7 +787,7 @@ agents:
 | `metadata.schedule` | Cron schedule (6-field robfig format, seconds first) |
 | `metadata.system_prompt` | Prepended to every agent call |
 | `state.instructions` | State-specific context appended to the system prompt |
-| `state.timeout` | Max duration before `on_timeout` trigger fires (Go duration: `30s`, `5m`, `2h`) |
+| `state.timeout` | Max duration before `on_timeout` trigger fires (supported on `wait`, `hitl`, `prompt` (agent), and `code` states; Go duration: `30s`, `5m`, `2h`) |
 | `state.on_timeout` | Trigger name fired on timeout |
 | `state.condition` | `expr-lang` expression for `wait` nodes — fires `on_condition` when true |
 | `state.on_condition` | Trigger fired when the wait condition is met (default: `condition_met`) |
@@ -840,3 +844,13 @@ Used for the `metadata.schedule` cron field. Uses a 6-field format with seconds 
 │ │ │ │ │ │
 0 0 9 * * 1-5   →  Mon–Fri at 09:00:00
 ```
+
+### ollama/ollama — Local Inference & Weight Management
+
+**Repository:** https://github.com/ollama/ollama
+
+Used for local LLM agent execution without external cloud dependencies.
+
+- **Weight Management**: The settings dashboard includes a built-in **Local Model Weight Manager** allowing administrators to list downloaded models, check connection health, delete old weights, and pull new open-source models (e.g. `gemma2`, `llama3.2`) directly from the Ollama library.
+- **Execution vs Generation Boundary**: Local LLMs are optimized and supported for **workflow execution** (running `prompt` states). They are intentionally excluded from **AI generation** tasks (workflow creation, code generation, and scaffolding), which require large-scale cloud models (like GPT-4o or Claude 3.5 Sonnet).
+- **Subprocess Auto-Launch (Local Dev)**: When running locally, if the Ollama daemon (`127.0.0.1:11434`) is offline, the backend automatically attempts to auto-launch the background process using `ollama serve` if it is present in the host system's PATH.

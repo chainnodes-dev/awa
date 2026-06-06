@@ -106,6 +106,104 @@ func DefaultSkillPrompt() string {
    - Failure: ` + "`" + `error` + "`" + `, ` + "`" + `rejected` + "`" + `, ` + "`" + `timeout` + "`" + `
 6. **State Naming**: Use UPPERCASE_SNAKE_CASE (e.g., VALIDATE_INPUT).
 7. **Safe Transitions**: Every non-terminal state must have at least one outgoing transition. Every transition leaving a state must have a UNIQUE trigger.
+8. **Human Review (HITL) & Configurable Buttons**: When human input/review is needed:
+   - Set the state type to ` + "`" + `hitl` + "`" + `.
+   - **Mandatory Form Schema**: Every ` + "`" + `hitl` + "`" + ` state MUST define a non-empty ` + "`" + `form_schema` + "`" + ` (defining type, required fields, and properties). Without a form, no blackboard key is written by the UI, and subsequent transitions/guards checking these values will fail.
+   - **Configurable Buttons**: Outgoing transitions originating from a ` + "`" + `hitl` + "`" + ` state are dynamically rendered as action buttons in the UI (e.g., if transitions leaving CHOOSE_OPTION are ` + "`" + `accept` + "`" + `, ` + "`" + `reject` + "`" + `, and ` + "`" + `escalate` + "`" + `, these names will be displayed as the action buttons the human operator can click).
+   - **Dynamic Selection (Selection from Set of Values)**: To let the operator select a value from a dynamic set of options populated at runtime:
+     - The preceding search/retrieval state MUST populate the candidate list (e.g., ` + "`" + `lei_candidates` + "`" + `) on the blackboard as an array of objects, where each object has exactly ` + "`" + `value` + "`" + ` (the unique ID/code) and ` + "`" + `label` + "`" + ` (the human-readable name/description) keys. Do NOT output a flat array of strings.
+     - The ` + "`" + `hitl` + "`" + ` state MUST define a select field in ` + "`" + `form_schema` + "`" + ` with ` + "`" + `enum_from_blackboard: "candidate_list_key"` + "`" + ` (e.g., ` + "`" + `enum_from_blackboard: "lei_candidates"` + "`" + `). The operator's selection is written to the blackboard key matching the select field name (e.g., ` + "`" + `selected_lei` + "`" + `).
+   - **Quoting & Type Safety**: When writing code or expressions to extract, clean, or use selected values (e.g. setting a single value from a selection or extracting properties from the candidates), ensure syntax is valid and avoid quoting or array-type mismatch errors. Reference properties correctly (e.g., if extracting an object, treat it as an object).
+
+### State Types & Properties Reference
+
+You can use the following state types in the ` + "`" + `states` + "`" + ` array of a workflow. Each state type serves a specific purpose and has unique configuration fields:
+
+1. **` + "`" + `initial` + "`" + `**:
+   - **Purpose**: The starting state of the workflow execution. Every workflow MUST have exactly one ` + "`" + `initial` + "`" + ` state.
+   - **Key Fields**:
+     - ` + "`" + `name` + "`" + ` (required): Capitalized snake case name (e.g., ` + "`" + `START` + "`" + `).
+     - ` + "`" + `type` + "`" + ` (required): MUST be ` + "`" + `initial` + "`" + `.
+     - ` + "`" + `to` + "`" + ` or ` + "`" + `transitions` + "`" + `: Link to the next state. To prevent execution failures, the initial state MUST have exactly one transition, and it must be unconditional (no guard).
+
+2. **` + "`" + `terminal` + "`" + `**:
+   - **Purpose**: Marks the end of an execution path. A workflow terminates when it reaches a ` + "`" + `terminal` + "`" + ` state.
+   - **Key Fields**:
+     - ` + "`" + `name` + "`" + ` (required): Name of the final state (e.g., ` + "`" + `COMPLETED` + "`" + `, ` + "`" + `FAILED` + "`" + `).
+     - ` + "`" + `type` + "`" + ` (required): MUST be ` + "`" + `terminal` + "`" + `.
+     - ` + "`" + `is_timeout_node` + "`" + ` (optional): Set to ` + "`" + `true` + "`" + ` if this terminal state is used strictly to catch timeouts.
+
+3. **` + "`" + `prompt` + "`" + `**:
+   - **Purpose**: Executes an LLM reasoning task, text generation, decision-making, or MCP tool calling.
+   - **Key Fields**:
+     - ` + "`" + `agent` + "`" + ` (required): Name of the agent config to use (must be defined in the ` + "`" + `agents` + "`" + ` list).
+     - ` + "`" + `instructions` + "`" + ` (required): Text describing the persona, context, and goal of the step.
+     - ` + "`" + `technical_requirements` + "`" + ` (optional): Machine-readable execution details or MCP tool names the agent must invoke.
+
+4. **` + "`" + `script` + "`" + `**:
+   - **Purpose**: Evaluates fast, simple, deterministic expressions (using expr-lang) to calculate values or branch transitions. No LLM is called.
+   - **Key Fields**:
+     - ` + "`" + `script` + "`" + ` (required): Object containing:
+       - ` + "`" + `trigger` + "`" + ` (required): An expr-lang expression evaluating to a transition trigger (e.g., ` + "`" + `amount > 1000 ? "needs_review" : "auto_approve"` + "`" + `).
+       - ` + "`" + `updates` + "`" + ` (optional): Map of blackboard key names to expr-lang expressions computing their new values (e.g., ` + "`" + `vat: "amount * 0.2"` + "`" + `, ` + "`" + `discounted: "amount - discount"` + "`" + `).
+
+5. **` + "`" + `code` + "`" + `**:
+   - **Purpose**: Executes complex inline JavaScript code for data manipulation, formatting, or custom logic.
+   - **Key Fields**:
+     - ` + "`" + `code` + "`" + ` (required): Object containing:
+       - ` + "`" + `language` + "`" + ` (required): MUST be ` + "`" + `"javascript"` + "`" + `.
+       - ` + "`" + `code` + "`" + ` (required): JavaScript code string. It reads/writes to the ` + "`" + `bb` + "`" + ` blackboard object directly (e.g., ` + "`" + `bb.user.age = 30` + "`" + `). Must return an object with a ` + "`" + `trigger` + "`" + ` field (e.g., ` + "`" + `return { trigger: "success" };` + "`" + `) or call ` + "`" + `trigger("success")` + "`" + `.
+
+6. **` + "`" + `hitl` + "`" + `** (Human-in-the-loop):
+   - **Purpose**: Pauses execution to wait for manual human operator review, form submission, or approval.
+   - **Key Fields**:
+     - ` + "`" + `assignee` + "`" + ` (optional): Target operator group/role (e.g., ` + "`" + `"compliance-officer"` + "`" + `).
+     - ` + "`" + `form_schema` + "`" + ` (optional): JSON Schema defining form input fields that will render in the UI.
+       - Use select property fields with ` + "`" + `enum_from_blackboard: "blackboard_key"` + "`" + ` to populate dropdown selections dynamically from a blackboard key holding options (an array of {'value', 'label'} objects).
+     - **Configurable Buttons**: Outgoing transitions from this state dynamically become action buttons in the UI (e.g., triggers like ` + "`" + `accept` + "`" + ` or ` + "`" + `reject` + "`" + ` render as "Accept" and "Reject" buttons).
+
+7. **` + "`" + `wait` + "`" + `**:
+   - **Purpose**: Pauses execution until a condition evaluates to true, an external tenant event is received, or a timeout occurs.
+   - **Key Fields**:
+     - ` + "`" + `condition` + "`" + ` (optional): Expr-lang expression (e.g., ` + "`" + `bb.payment_status == "completed"` + "`" + `). Pauses until true.
+     - ` + "`" + `on_condition` + "`" + ` (optional): Trigger to fire when the condition is met (default: ` + "`" + `"condition_met"` + "`" + `).
+     - ` + "`" + `on_event` + "`" + ` (optional): Platform event name to listen for (e.g., ` + "`" + `"webhook.received"` + "`" + `).
+     - ` + "`" + `on_event_match` + "`" + ` (optional): Trigger to fire when event is received (default: ` + "`" + `"event_received"` + "`" + `).
+
+8. **` + "`" + `subprocess` + "`" + `**:
+   - **Purpose**: Invokes and runs another reusable workflow definition as a child process.
+   - **Key Fields**:
+     - ` + "`" + `subprocess` + "`" + ` (required): Object containing:
+       - ` + "`" + `process_ref` + "`" + ` (required): Name of the target sub-process to run.
+       - ` + "`" + `process_version` + "`" + ` (optional): Specific version (default: ` + "`" + `"latest"` + "`" + `).
+       - ` + "`" + `input_mappings` + "`" + ` (optional): Map of parent blackboard keys to sub-process input ports.
+       - ` + "`" + `output_mappings` + "`" + ` (optional): Map of sub-process output ports to parent blackboard keys.
+       - ` + "`" + `completion_trigger` + "`" + ` (optional): Trigger to fire on success (default: ` + "`" + `"done"` + "`" + `).
+       - ` + "`" + `failure_trigger` + "`" + ` (optional): Trigger to fire on failure (default: ` + "`" + `"failed"` + "`" + `).
+
+9. **` + "`" + `emit_event` + "`" + `**:
+   - **Purpose**: Broadcasts a platform-wide event within the tenant to wake waiting runs or notify integrations.
+   - **Key Fields**:
+     - ` + "`" + `emit_event` + "`" + ` (required): Object containing:
+       - ` + "`" + `event_name` + "`" + ` (required): Event identifier (e.g., ` + "`" + `"order.ready"` + "`" + `).
+       - ` + "`" + `payload_fields` + "`" + ` (optional): List of blackboard field names to include in the event payload.
+       - ` + "`" + `completion_trigger` + "`" + ` (optional): Trigger to fire after emitting (default: ` + "`" + `"emitted"` + "`" + `).
+
+10. **` + "`" + `telegram_output` + "`" + `**:
+    - **Purpose**: Sends a message to a Telegram chat.
+    - **Key Fields**:
+      - ` + "`" + `telegram_output` + "`" + ` (required): Object containing:
+        - ` + "`" + `chat_id` + "`" + ` (required): Telegram target chat ID string.
+        - ` + "`" + `message_text` + "`" + ` (required): Text to send.
+        - ` + "`" + `completion_trigger` + "`" + ` (optional): Trigger to fire after sending (default: ` + "`" + `"sent"` + "`" + `).
+
+11. **` + "`" + `discord_output` + "`" + `**:
+    - **Purpose**: Sends a message to a Discord channel.
+    - **Key Fields**:
+      - ` + "`" + `discord_output` + "`" + ` (required): Object containing:
+        - ` + "`" + `channel_id` + "`" + ` (required): Discord target channel ID.
+        - ` + "`" + `message_text` + "`" + ` (required): Text to send.
+        - ` + "`" + `completion_trigger` + "`" + ` (optional): Trigger to fire after sending (default: ` + "`" + `"sent"` + "`" + `).
 
 ### Output Rules
 - You are part of a multi-step generation pipeline.
@@ -121,6 +219,7 @@ Produce a structured JSON payload describing the changes.
 - **Atomic Patches**: Do NOT return the whole YAML. Only return the components that need to change.
 - **Context Awareness**: Review both 'instructions' (human-readable) and 'technical_requirements' (machine-readable) to understand the current logic. If 'technical_requirements' is missing, treat 'instructions' as the source of truth.
 - **Consistency**: Ensure any new states or transitions remain consistent with the existing flow.
+- **Human Review (HITL) Nodes**: When defining or refining ` + "`" + `hitl` + "`" + ` states, remember that outgoing transitions originating from the state define action buttons in the UI. For dynamic selection from a blackboard key, configure ` + "`" + `enum_from_blackboard: "blackboard_key_name"` + "`" + ` on the select field in the ` + "`" + `form_schema` + "`" + `.
 
 ### Output Format
 Return ONLY a valid JSON block with the following schema:
@@ -179,7 +278,7 @@ Decompose the provided process description into a sequence of logical states and
 
 ### Guidelines
 1. **State Identification**: Break the process into atomic steps. 
-   - **Entry Point**: The first state in the array MUST be the workflow entry point (mark it as the start).
+   - **Entry Point (Start Node)**: The first state in the array MUST be the workflow entry point (mark it as the start). To prevent runtime execution errors, this entry point state MUST have exactly ONE outgoing transition, and it MUST be unconditional (no guard). Place any initial routing, input validation, or decision logic in subsequent nodes rather than the start node.
    - **Exit Point**: At least one state (usually the last one) MUST represent the logical conclusion of the process (terminal).
 2. **Data Contract**: For every state, define exactly which Blackboard keys it reads and which it writes.
 3. **Workflow Ports**: Identify which data points are required as initial **Inputs** to the entire workflow and which represent the final **Outputs**.
@@ -222,31 +321,35 @@ Decompose the provided process description into a sequence of logical states and
 
 func DefaultCategorisePrompt() string {
 	return `## Step 2: Categorisation
-
+ 
 Review the workflow states and determine the optimal execution type for each.
-
+ 
 ### Types
 - 'initial': The entry point of the workflow. Every workflow MUST have exactly one initial state.
 - 'terminal': The logical conclusion of the process. Every workflow SHOULD have at least one terminal state.
 - 'subprocess': Delegates to an existing workflow in the Reusable Process Catalog.
 - 'script': Simple deterministic math/string logic.
 - 'code': Complex deterministic data transformation (JavaScript).
-- 'hitl': Human-in-the-loop required.
+- 'hitl': Human-in-the-loop required. For 'hitl' states, outgoing transitions act as dynamic operator action buttons in the UI. You MUST define a 'form_schema' with select fields utilizing 'enum_from_blackboard' to support runtime dynamic selection from a blackboard key list.
 - 'wait': Waiting for external events.
 - 'prompt': Agentic reasoning, text generation, or MCP tool calling.
-
+ 
 ### Guidelines
 - One state MUST be 'initial'. Usually, this is the first logical step.
 - At least one state MUST be 'terminal'. This is the logical end of the process.
 - Prefer 'subprocess' if a match exists in the Catalog.
 - Prefer 'script' over 'code' for simple boolean checks.
 - Use 'prompt' ONLY when LLM intelligence or an MCP server is actually required.
-
+- **HITL Form Schema & Assignee**: Every 'hitl' state MUST have a non-empty 'form_schema' (defining type, required fields, and properties) and an 'assignee' (string name of the team/role responsible, e.g. "compliance-officer").
+- **Timeouts**: Every non-terminal node (especially 'prompt' and 'hitl' nodes) MUST have a timeout configured. You must specify a 'timeout' string (e.g. '2m', '10m', '24h') and 'on_timeout' (the name of the transition trigger to fire when the timeout occurs). If no specific timeout is requested in the process description, use the standard timeout of '2m' with 'on_timeout: "timeout"'.
+- **Timeout Nodes**: If you add a timeout (transitioning to "timeout"), you must also define a corresponding terminal state (e.g. name: "timeout", type: "terminal") with "is_timeout_node": true in the states list.
+ 
 ### Output Format
-**IMPORTANT**: Return ONLY a valid JSON block defining the type for each state. 
+**IMPORTANT**: Return ONLY a valid JSON block defining the type and timeout settings for each state. 
 - For 'prompt' nodes, you MUST provide an 'agent_name' (e.g., 'primary-agent') and a list of 'mcp_servers' (e.g., ['wikipedia']).
 - If no specific agent exists, use 'primary-agent' as the default.
-
+- For 'hitl' nodes, you MUST provide an 'assignee' and a JSON schema 'form_schema'.
+ 
 ` + "```json" + `
 {
   "states": [
@@ -254,7 +357,32 @@ Review the workflow states and determine the optimal execution type for each.
       "name": "STATE_NAME",
       "type": "prompt",
       "agent_name": "primary-agent",
-      "mcp_servers": ["server-name"]
+      "mcp_servers": ["server-name"],
+      "timeout": "2m",
+      "on_timeout": "timeout"
+    },
+    {
+      "name": "SELECT_OPTION",
+      "type": "hitl",
+      "assignee": "compliance-officer",
+      "timeout": "10m",
+      "on_timeout": "timeout",
+      "form_schema": {
+        "type": "object",
+        "required": ["selected_item"],
+        "properties": {
+          "selected_item": {
+            "type": "string",
+            "title": "Select Option",
+            "enum_from_blackboard": "item_candidates"
+          }
+        }
+      }
+    },
+    {
+      "name": "timeout",
+      "type": "terminal",
+      "is_timeout_node": true
     },
     {
       "name": "OTHER_STATE",

@@ -1,7 +1,12 @@
 package api
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -168,17 +173,181 @@ func (h *Handlers) reloadLLMRegistry(ctx context.Context) {
 	h.llmRegistry.Reload(reg.Snapshot(), defaultName)
 	slog.Info("LLM registry reloaded", "default", defaultName)
 
-	// Also rebuild the AI generator if we now have a default provider.
-	if defaultName != "" {
-		slog.Info("Attempting to re-initialize AI generator", "provider", defaultName)
-		if prov, err := h.llmRegistry.Get(defaultName); err == nil {
+	// Also rebuild the AI generator if we have an appropriate cloud default provider.
+	generatorProvider := defaultName
+	if generatorProvider == "ollama" {
+		generatorProvider = ""
+		// Look for any other enabled non-ollama provider in the registry.
+		for name := range reg.Snapshot() {
+			if name != "ollama" {
+				generatorProvider = name
+				break
+			}
+		}
+	}
+
+	if generatorProvider != "" {
+		slog.Info("Attempting to re-initialize AI generator", "provider", generatorProvider)
+		if prov, err := h.llmRegistry.Get(generatorProvider); err == nil {
 			h.generator = designer.NewGenerator(prov, h.mcpEntries, h.store)
-			slog.Info("AI workflow generator successfully re-initialized", "provider", defaultName)
+			slog.Info("AI workflow generator successfully re-initialized", "provider", generatorProvider)
 		} else {
-			slog.Warn("Failed to get provider from registry during reload", "provider", defaultName, "error", err)
+			slog.Warn("Failed to get provider from registry during reload", "provider", generatorProvider, "error", err)
+			h.generator = nil
 		}
 	} else {
 		h.generator = nil
-		slog.Info("AI workflow generator disabled (no default provider)")
+		slog.Info("AI workflow generator disabled (no cloud default provider configured)")
 	}
+}
+
+// ListLocalModels returns the list of models downloaded in the local Ollama instance.
+func (h *Handlers) ListLocalModels(c *gin.Context) {
+	ctx := c.Request.Context()
+	cfg, err := h.store.GetLLMConfig(ctx, "ollama")
+	baseURL := "http://localhost:11434"
+	if err == nil && cfg.BaseURL != "" {
+		baseURL = cfg.BaseURL
+	}
+
+	tagsURL := baseURL + "/api/tags"
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", tagsURL, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("Failed to contact Ollama: %v", err)})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(resp.StatusCode, gin.H{"error": fmt.Sprintf("Ollama returned error status: %d", resp.StatusCode)})
+		return
+	}
+
+	var tags struct {
+		Models []interface{} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to parse Ollama response: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, tags)
+}
+
+// PullLocalModel triggers downloading model weights from Ollama and streams progress updates.
+func (h *Handlers) PullLocalModel(c *gin.Context) {
+	var req struct {
+		Model string `json:"model" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	cfg, err := h.store.GetLLMConfig(ctx, "ollama")
+	baseURL := "http://localhost:11434"
+	if err == nil && cfg.BaseURL != "" {
+		baseURL = cfg.BaseURL
+	}
+
+	pullURL := baseURL + "/api/pull"
+	payload, err := json.Marshal(map[string]string{"name": req.Model})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", pullURL, bytes.NewReader(payload))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("Failed to contact Ollama: %v", err)})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(resp.StatusCode, gin.H{"error": fmt.Sprintf("Ollama returned error status: %d", resp.StatusCode)})
+		return
+	}
+
+	// Set headers for streaming response
+	c.Header("Content-Type", "application/json-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Transfer-Encoding", "chunked")
+	c.Status(http.StatusOK)
+
+	reader := bufio.NewReader(resp.Body)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err != io.EOF {
+				slog.Error("error reading ollama pull stream", "err", err)
+			}
+			break
+		}
+		_, writeErr := c.Writer.Write(line)
+		if writeErr != nil {
+			slog.Warn("client disconnected from ollama pull stream", "err", writeErr)
+			break
+		}
+		c.Writer.Flush()
+	}
+}
+
+// DeleteLocalModel deletes model weights from local Ollama cache.
+func (h *Handlers) DeleteLocalModel(c *gin.Context) {
+	model := c.Query("model")
+	if model == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "model query parameter is required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	cfg, err := h.store.GetLLMConfig(ctx, "ollama")
+	baseURL := "http://localhost:11434"
+	if err == nil && cfg.BaseURL != "" {
+		baseURL = cfg.BaseURL
+	}
+
+	deleteURL := baseURL + "/api/delete"
+	payload, err := json.Marshal(map[string]string{"name": model})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", deleteURL, bytes.NewReader(payload))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("Failed to contact Ollama: %v", err)})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(resp.StatusCode, gin.H{"error": fmt.Sprintf("Ollama returned error status: %d", resp.StatusCode)})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }

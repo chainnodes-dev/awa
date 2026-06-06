@@ -99,6 +99,9 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 				llmCfg.DELETE("/:provider", h.DeleteLLMConfig)
 				llmCfg.POST("/default", h.SetDefaultProvider)
 				llmCfg.POST("/:provider/test", h.TestLLMConnection)
+				llmCfg.GET("/local/models", h.ListLocalModels)
+				llmCfg.POST("/local/models/pull", h.PullLocalModel)
+				llmCfg.DELETE("/local/models", h.DeleteLocalModel)
 			}
 
 			designerGroup := protected.Group("/designer", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor, auth.RoleOperator))

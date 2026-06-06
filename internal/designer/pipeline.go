@@ -102,7 +102,29 @@ func (g *Generator) DecomposeWorkflow(ctx context.Context, req PipelineRequest) 
 			return err
 		}
 
-		e.SetMetadata(resp.Name, resp.Abstract, resp.DetailedDescription)
+		name := strings.TrimSpace(resp.Name)
+		if name == "" {
+			// Try extracting from first line of ProcessDescription
+			for _, line := range strings.Split(req.ProcessDescription, "\n") {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "#") {
+					name = strings.TrimLeft(line, "# ")
+					break
+				}
+			}
+			if name == "" {
+				name = resp.Abstract
+			}
+			if name == "" {
+				name = "generated-workflow"
+			}
+		}
+
+		e.SetMetadata(name, resp.Abstract, resp.DetailedDescription)
+
+		// Clear existing states and transitions since we are decomposing from scratch
+		e.Def.States = nil
+		e.Def.Transitions = nil
 
 		bbSchema := make(map[string]asmtypes.FieldDef)
 		inputsMap := make(map[string]asmtypes.PortDef)
@@ -169,10 +191,15 @@ func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*
 
 	type step2Response struct {
 		States []struct {
-			Name       string   `json:"name"`
-			Type       string   `json:"type"`
-			AgentName  string   `json:"agent_name"`
-			MCPServers []string `json:"mcp_servers"`
+			Name          string                 `json:"name"`
+			Type          string                 `json:"type"`
+			AgentName     string                 `json:"agent_name"`
+			MCPServers    []string               `json:"mcp_servers"`
+			Timeout       string                 `json:"timeout,omitempty"`
+			OnTimeout     string                 `json:"on_timeout,omitempty"`
+			IsTimeoutNode bool                   `json:"is_timeout_node,omitempty"`
+			Assignee      string                 `json:"assignee,omitempty"`
+			FormSchema    map[string]interface{} `json:"form_schema,omitempty"`
 		} `json:"states"`
 	}
 
@@ -185,7 +212,25 @@ func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*
 			if s.Type == "" {
 				continue
 			}
-			e.UpdateState(s.Name, asmtypes.StateType(s.Type), "", "")
+			if e.Def.StateByName(s.Name) == nil {
+				e.AddState(s.Name, asmtypes.StateType(s.Type), "", "")
+			} else {
+				e.UpdateState(s.Name, asmtypes.StateType(s.Type), "", "")
+			}
+			if s.IsTimeoutNode {
+				if st := e.Def.StateByName(s.Name); st != nil {
+					st.IsTimeoutNode = true
+				}
+			}
+			if s.Timeout != "" {
+				e.SetStateTimeout(s.Name, s.Timeout, s.OnTimeout)
+			}
+			if s.Assignee != "" {
+				e.SetStateAssignee(s.Name, s.Assignee)
+			}
+			if s.FormSchema != nil {
+				e.SetStateFormSchema(s.Name, s.FormSchema)
+			}
 			switch s.Type {
 			case "prompt":
 				agentName := s.AgentName
@@ -289,6 +334,8 @@ func (g *Generator) CategoriseNodes(ctx context.Context, req PipelineRequest) (*
 		}
 	}
 
+	postProcessWorkflow(editor.Def)
+
 	outYAML, _ := yaml.Marshal(editor.Def)
 	res.YAML = string(outYAML)
 	return res, nil
@@ -320,6 +367,8 @@ func (g *Generator) WireWorkflow(ctx context.Context, req PipelineRequest) (*Pip
 		if err := json.Unmarshal(b, &resp); err != nil {
 			return err
 		}
+		// Clear existing transitions so we do not end up with duplicate/stale transitions from step 1
+		e.Def.Transitions = nil
 		for _, t := range resp.Transitions {
 			e.AddTransition(t.From, t.To, t.Trigger, t.Guard)
 		}
@@ -435,6 +484,7 @@ func (g *Generator) runJSONPipelineStep(ctx context.Context, req PipelineRequest
 		}
 
 		// Success! Serialize to YAML
+		postProcessWorkflow(editor.Def)
 		outYAML, err := yaml.Marshal(editor.Def)
 		if err != nil {
 			lastValErr = err

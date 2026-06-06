@@ -295,6 +295,10 @@ func (h *Handlers) GenerateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if req.Provider == "ollama" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Local models cannot be used for AI workflow generation"})
+		return
+	}
 	result, err := h.generator.Generate(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -307,6 +311,10 @@ func (h *Handlers) GenerateWorkflow(c *gin.Context) {
 // ScaffoldHandler calls the LLM to produce a Go HandlerFunc skeleton.
 // POST /api/v1/designer/scaffold
 func (h *Handlers) ScaffoldHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
 	var req designer.ScaffoldRequest
 	_ = c.ShouldBindJSON(&req)
 	result, err := h.generator.Scaffold(c.Request.Context(), req)
@@ -320,6 +328,10 @@ func (h *Handlers) ScaffoldHandler(c *gin.Context) {
 // CodegenHandler uses the LLM to generate code snippets.
 // POST /api/v1/designer/codegen
 func (h *Handlers) CodegenHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
 	var req designer.CodegenRequest
 	_ = c.ShouldBindJSON(&req)
 	result, err := h.generator.Codegen(c.Request.Context(), req)
@@ -332,6 +344,10 @@ func (h *Handlers) CodegenHandler(c *gin.Context) {
 
 // ProcessAnalyseHandler decomposes a process description.
 func (h *Handlers) ProcessAnalyseHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
 	var req designer.ProcessAnalyseRequest
 	_ = c.ShouldBindJSON(&req)
 	result, err := h.generator.AnalyseProcess(c.Request.Context(), req)
@@ -347,6 +363,10 @@ func (h *Handlers) ProcessAnalyseHandler(c *gin.Context) {
 
 // ProcessSummariseHandler converts a WorkflowDef YAML into a summary.
 func (h *Handlers) ProcessSummariseHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
 	var req designer.ProcessSummariseRequest
 	_ = c.ShouldBindJSON(&req)
 	result, err := h.generator.SummariseProcess(c.Request.Context(), req)
@@ -360,7 +380,10 @@ func (h *Handlers) ProcessSummariseHandler(c *gin.Context) {
 // ── Multi-step pipeline handlers ─────────────────────────────────────────────
 
 func (h *Handlers) pipelineGeneratorFor(req designer.PipelineRequest) *designer.Generator {
-	if req.Provider != "" {
+	if h.generator == nil {
+		return nil
+	}
+	if req.Provider != "" && req.Provider != "ollama" {
 		if p, err := h.llmRegistry.Get(req.Provider); err == nil {
 			return h.generator.WithProvider(p)
 		}
@@ -380,32 +403,56 @@ func writePipelineResult(c *gin.Context, result *designer.PipelineStepResult, er
 func (h *Handlers) PipelineDecomposeHandler(c *gin.Context) {
 	var req designer.PipelineRequest
 	_ = c.ShouldBindJSON(&req)
-	result, err := h.pipelineGeneratorFor(req).DecomposeWorkflow(c.Request.Context(), req)
+	gen := h.pipelineGeneratorFor(req)
+	if gen == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
+	result, err := gen.DecomposeWorkflow(c.Request.Context(), req)
 	writePipelineResult(c, result, err)
 }
 
 func (h *Handlers) PipelineCategoriseHandler(c *gin.Context) {
 	var req designer.PipelineRequest
 	_ = c.ShouldBindJSON(&req)
-	result, err := h.pipelineGeneratorFor(req).CategoriseNodes(c.Request.Context(), req)
+	gen := h.pipelineGeneratorFor(req)
+	if gen == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
+	result, err := gen.CategoriseNodes(c.Request.Context(), req)
 	writePipelineResult(c, result, err)
 }
 
 func (h *Handlers) PipelineWireHandler(c *gin.Context) {
 	var req designer.PipelineRequest
 	_ = c.ShouldBindJSON(&req)
-	result, err := h.pipelineGeneratorFor(req).WireWorkflow(c.Request.Context(), req)
+	gen := h.pipelineGeneratorFor(req)
+	if gen == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
+	result, err := gen.WireWorkflow(c.Request.Context(), req)
 	writePipelineResult(c, result, err)
 }
 
 func (h *Handlers) PipelineImplementHandler(c *gin.Context) {
 	var req designer.PipelineRequest
 	_ = c.ShouldBindJSON(&req)
-	result, err := h.pipelineGeneratorFor(req).ImplementNodes(c.Request.Context(), req)
+	gen := h.pipelineGeneratorFor(req)
+	if gen == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
+	result, err := gen.ImplementNodes(c.Request.Context(), req)
 	writePipelineResult(c, result, err)
 }
 
 func (h *Handlers) ScaffoldMCPHandler(c *gin.Context) {
+	if h.generator == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
 	var req designer.MCPScaffoldRequest
 	_ = c.ShouldBindJSON(&req)
 	result, err := h.generator.ScaffoldMCP(c.Request.Context(), req)

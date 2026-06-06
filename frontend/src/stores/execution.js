@@ -33,12 +33,30 @@ export const useExecutionStore = defineStore('execution', () => {
 
   async function fetchRun(id) {
     const { data } = await api.get(`/runs/${id}`)
+    if (activeRun.value && activeRun.value.id === id) {
+      const currentUpdated = new Date(activeRun.value.updated_at || 0)
+      const fetchedUpdated = new Date(data.updated_at || 0)
+      if (currentUpdated > fetchedUpdated) {
+        console.debug('[race-protection] fetchRun returned older data than store. Ignoring.', {
+          current: activeRun.value.updated_at,
+          fetched: data.updated_at
+        })
+        return activeRun.value
+      }
+    }
     activeRun.value = data
     return data
   }
 
   async function fetchHistory(id) {
     const { data } = await api.get(`/runs/${id}/history`)
+    if (transitions.value.length > 0 && data && data.length < transitions.value.length) {
+      console.debug('[race-protection] fetchHistory returned fewer items than store. Ignoring.', {
+        storeCount: transitions.value.length,
+        fetchedCount: data.length
+      })
+      return transitions.value
+    }
     transitions.value = data ?? []
     return data
   }
@@ -132,6 +150,7 @@ export const useExecutionStore = defineStore('execution', () => {
         if (activeRun.value?.id === data.run_id) {
           activeRun.value.current_state = data.to_state
           activeRun.value.blackboard = data.blackboard
+          activeRun.value.updated_at = event.timestamp
         }
         // Append to transitions
         transitions.value.push({
@@ -150,6 +169,7 @@ export const useExecutionStore = defineStore('execution', () => {
             ...activeRun.value.blackboard,
             [data.key]: data.value
           }
+          activeRun.value.updated_at = event.timestamp
         }
         break
       }
@@ -202,7 +222,11 @@ export const useExecutionStore = defineStore('execution', () => {
         const hwIdx = runs.value.findIndex(r => r.id === data.run_id)
         if (hwIdx !== -1) runs.value[hwIdx].status = 'waiting'
         if (activeRun.value?.id === data.run_id)
-          activeRun.value = { ...activeRun.value, status: 'waiting' }
+          activeRun.value = { 
+            ...activeRun.value, 
+            status: 'waiting',
+            updated_at: event.timestamp
+          }
         break
       }
 
@@ -214,7 +238,11 @@ export const useExecutionStore = defineStore('execution', () => {
         if (hrIdx !== -1 && runs.value[hrIdx].status === 'waiting')
           runs.value[hrIdx].status = 'running'
         if (activeRun.value?.id === data.run_id && activeRun.value.status === 'waiting')
-          activeRun.value = { ...activeRun.value, status: 'running' }
+          activeRun.value = { 
+            ...activeRun.value, 
+            status: 'running',
+            updated_at: event.timestamp
+          }
         break
       }
 

@@ -7,14 +7,15 @@
 
     <!-- Enum / Select -->
     <select
-      v-if="schema.enum"
+      v-if="schema.enum || schema.enum_from_blackboard"
       :value="modelValue"
       @input="$emit('update:modelValue', $event.target.value)"
       class="input"
       :required="required"
     >
-      <option v-if="!required" value="">(Select...)</option>
-      <option v-for="opt in schema.enum" :key="opt" :value="opt">{{ opt }}</option>
+      <option v-if="required" value="" disabled selected hidden>(Select...)</option>
+      <option v-else value="">(Select...)</option>
+      <option v-for="opt in resolvedOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
     </select>
 
     <!-- Boolean / Checkbox -->
@@ -36,15 +37,29 @@
         :name="propName"
         :schema="propSchema"
         :required="Array.isArray(schema.required) && schema.required.includes(propName)"
+        :blackboard="blackboard"
         :modelValue="modelValue?.[propName]"
         @update:modelValue="v => updateObjectProperty(propName, v)"
       />
       <div v-if="!Object.keys(schema.properties || {}).length" class="space-y-2 py-2">
         <div class="flex items-center justify-between text-[10px] text-text-muted italic px-1">
           <span>No sub-properties defined</span>
-          <span class="font-mono opacity-50">JSON Mode</span>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              @click="jsonEditMode = !jsonEditMode"
+              class="text-[9px] font-bold uppercase text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
+              {{ jsonEditMode ? 'View Tree' : 'Edit JSON' }}
+            </button>
+            <span class="font-mono opacity-50">JSON Mode</span>
+          </div>
+        </div>
+        <div v-if="!jsonEditMode" class="bg-surface-1/40 p-2.5 rounded-xl border border-border/50 max-h-48 overflow-y-auto scrollbar-thin">
+          <JsonTree :data="modelValue" />
         </div>
         <textarea
+          v-else
           class="input font-mono text-xs min-h-[80px] w-full bg-surface-1/50"
           :value="typeof modelValue === 'object' ? JSON.stringify(modelValue, null, 2) : modelValue"
           @input="onJsonInput"
@@ -65,6 +80,7 @@
         </div>
         <SchemaField
           :schema="schema.items || { type: 'string' }"
+          :blackboard="blackboard"
           :modelValue="item"
           @update:modelValue="v => updateArrayItem(index, v)"
         />
@@ -150,16 +166,56 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { api } from '@/stores/auth'
+import JsonTree from '@/components/shared/JsonTree.vue'
+
+const jsonEditMode = ref(false)
 const props = defineProps({
   name: String,
   schema: { type: Object, required: true },
   modelValue: [String, Number, Boolean, Array, Object],
-  required: Boolean
+  required: Boolean,
+  blackboard: { type: Object, default: () => ({}) }
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+const resolvedOptions = computed(() => {
+  if (props.schema.enum_from_blackboard && props.blackboard) {
+    const list = props.blackboard[props.schema.enum_from_blackboard]
+    if (Array.isArray(list)) {
+      return list.map(item => {
+        if (item && typeof item === 'object') {
+          return {
+            label: item.label || item.name || String(item.value || JSON.stringify(item)),
+            value: item.value !== undefined ? item.value : (item.id || JSON.stringify(item))
+          }
+        }
+        return {
+          label: String(item),
+          value: item
+        }
+      })
+    }
+  }
+
+  if (Array.isArray(props.schema.enum)) {
+    return props.schema.enum.map(opt => ({
+      label: String(opt),
+      value: opt
+    }))
+  }
+
+  return []
+})
+
+// Auto-select the first option when options are loaded and no value is currently selected
+watch([resolvedOptions, () => props.modelValue], ([newOpts, newVal]) => {
+  if (newOpts && newOpts.length > 0 && (newVal === undefined || newVal === null || newVal === '')) {
+    emit('update:modelValue', newOpts[0].value)
+  }
+}, { immediate: true })
 
 function addArrayItem() {
   const current = Array.isArray(props.modelValue) ? [...props.modelValue] : []

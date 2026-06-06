@@ -46,20 +46,21 @@ type TransitionRecord struct {
 
 // HITLRequest tracks a pending human-in-the-loop action.
 type HITLRequest struct {
-	ID         string                 `json:"id"`
-	RunID      string                 `json:"run_id"`
-	StateName  string                 `json:"state_name"`
-	Assignee   string                 `json:"assignee,omitempty"`
-	TimeoutAt  *time.Time             `json:"timeout_at,omitempty"`
-	Resolved   bool                   `json:"resolved"`
-	ResolvedAt *time.Time             `json:"resolved_at,omitempty"`
-	Resolution string                 `json:"resolution,omitempty"` // "approved" | "rejected"
-	Resolver   string                 `json:"resolver,omitempty"`
+	ID               string                 `json:"id"`
+	RunID            string                 `json:"run_id"`
+	StateName        string                 `json:"state_name"`
+	Assignee         string                 `json:"assignee,omitempty"`
+	TimeoutAt        *time.Time             `json:"timeout_at,omitempty"`
+	Resolved         bool                   `json:"resolved"`
+	ResolvedAt       *time.Time             `json:"resolved_at,omitempty"`
+	Resolution       string                 `json:"resolution,omitempty"` // "approved" | "rejected"
+	Resolver         string                 `json:"resolver,omitempty"`
 	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 	FormSchema       map[string]interface{} `json:"form_schema,omitempty"`
 	Blackboard       map[string]interface{} `json:"blackboard,omitempty"`
 	BlackboardSchema map[string]FieldDef    `json:"blackboard_schema,omitempty"`
 	WorkflowName     string                 `json:"workflow_name,omitempty"`
+	WorkflowVersion  string                 `json:"workflow_version,omitempty"`
 	CreatedAt        time.Time              `json:"created_at"`
 }
 

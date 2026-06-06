@@ -16,6 +16,12 @@
                     style="background-color: activeTab === 'general' ? 'var(--color-accent)' : 'transparent'">
               General
             </button>
+            <button @click="activeTab = 'local_models'" 
+                    :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
+                             activeTab === 'local_models' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
+                    style="background-color: activeTab === 'local_models' ? 'var(--color-accent)' : 'transparent'">
+              Local Models
+            </button>
             <button @click="activeTab = 'secrets'" 
                     :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
                              activeTab === 'secrets' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
@@ -199,6 +205,122 @@
                 Secrets Management is an Enterprise feature. Please upload an enterprise license token or upgrade your plan to unlock encrypted vault storage for keys and API credentials.
               </p>
             </div>
+        </section>
+      </div>
+
+      <!-- Local Models Management Tab -->
+      <div v-if="activeTab === 'local_models'" class="flex-1 px-6 py-6 max-w-3xl w-full mx-auto space-y-6">
+        <section class="space-y-4">
+          <div class="flex items-center gap-2 px-1">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+            <h2 class="text-sm font-bold text-text uppercase tracking-wider">Local Model Weight Manager</h2>
+          </div>
+
+          <!-- Ollama Server Status & Models List -->
+          <div class="card p-5 space-y-4">
+            <div class="flex items-center justify-between border-b border-border/50 pb-3">
+              <div>
+                <h3 class="text-xs font-bold text-text uppercase tracking-widest">Ollama Status</h3>
+                <p class="text-[11px] text-text-muted mt-0.5">Manage local weights served via http://localhost:11434</p>
+              </div>
+              <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest', modelsError ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400']">
+                {{ modelsError ? 'Disconnected' : 'Connected' }}
+              </span>
+            </div>
+
+            <!-- Error state -->
+            <div v-if="modelsError" class="bg-red-500/10 text-red-400 text-xs p-4 rounded border border-red-500/20">
+              <p class="font-bold">Cannot connect to Ollama server:</p>
+              <p class="mt-1 font-mono text-[10px]">{{ modelsError }}</p>
+              <p class="mt-2 text-text-muted text-[10px]">
+                Please ensure Ollama is running on your machine (`ollama serve`) and is accessible.
+              </p>
+            </div>
+
+            <!-- Models list -->
+            <div v-else class="space-y-3">
+              <h4 class="text-[10px] font-bold text-text-muted uppercase tracking-widest">Downloaded Models</h4>
+              
+              <div v-if="localModels.length === 0" class="text-center py-6 text-xs text-text-muted">
+                No local models downloaded yet.
+              </div>
+              
+              <div v-else class="divide-y divide-border/50">
+                <div v-for="model in localModels" :key="model.name" class="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                  <div class="flex flex-col gap-0.5">
+                    <span class="text-xs font-bold text-text font-mono">{{ model.name }}</span>
+                    <span class="text-[10px] text-text-muted font-medium">
+                      Size: {{ formatSize(model.size) }} | Format: {{ model.details?.format || 'GGUF' }}
+                    </span>
+                  </div>
+                  <button @click="deleteModel(model.name)" class="btn-ghost text-red-400 text-xs px-2.5 py-1 font-bold uppercase hover:bg-red-500/10 rounded">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Download Model Form -->
+          <div v-if="!modelsError" class="card p-5 space-y-4">
+            <h3 class="text-xs font-bold text-text uppercase tracking-widest border-b border-border/50 pb-2">Download Local Weights</h3>
+            
+            <div class="flex gap-2">
+              <div class="flex-1 relative">
+                <input 
+                  v-model="downloadModelName" 
+                  type="text" 
+                  placeholder="e.g. gemma2:2b, gemma2:9b, llama3.2" 
+                  class="input text-sm w-full font-mono"
+                  :disabled="downloadProgress.active"
+                  @keyup.enter="downloadModel"
+                />
+                <!-- Suggestions -->
+                <div class="flex flex-wrap gap-1.5 mt-2">
+                  <span 
+                    v-for="suggest in ['gemma2:2b', 'gemma2:9b', 'llama3.2', 'qwen2.5-coder:7b']"
+                    :key="suggest"
+                    @click="!downloadProgress.active && (downloadModelName = suggest)"
+                    :class="['text-[9px] font-mono font-bold uppercase tracking-wide px-2 py-0.5 rounded cursor-pointer transition-all border',
+                             downloadModelName === suggest ? 'bg-accent/20 border-accent text-accent' : 'bg-surface-2 border-border text-text-muted hover:text-text']"
+                  >
+                    {{ suggest }}
+                  </span>
+                </div>
+              </div>
+              <button 
+                @click="downloadModel" 
+                :disabled="downloadProgress.active || !downloadModelName" 
+                class="btn-primary text-xs px-5 h-9 shrink-0 flex items-center justify-center font-bold uppercase tracking-wider"
+              >
+                {{ downloadProgress.active ? 'Downloading...' : 'Pull Weights' }}
+              </button>
+            </div>
+
+            <!-- Download Progress Display -->
+            <div v-if="downloadProgress.active" class="space-y-2 bg-surface-2 border border-border/80 rounded-xl p-4">
+              <div class="flex items-center justify-between text-[11px] font-bold text-text uppercase tracking-wider">
+                <span>{{ downloadProgress.status }}</span>
+                <span>{{ downloadProgress.percent }}%</span>
+              </div>
+              
+              <!-- Progress Bar -->
+              <div class="w-full bg-surface-3 h-2 rounded-full overflow-hidden">
+                <div 
+                  class="bg-accent h-full transition-all duration-150" 
+                  :style="{ width: downloadProgress.percent + '%' }"
+                ></div>
+              </div>
+              
+              <div class="flex justify-between text-[10px] text-text-muted font-mono">
+                <span>{{ downloadProgress.completed }} / {{ downloadProgress.total }}</span>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
 
@@ -488,6 +610,125 @@ async function savePrompt(id) {
   }
 }
 
+
+// -- Local Models Manager --
+const localModels = ref([])
+const modelsLoading = ref(false)
+const modelsError = ref(null)
+const downloadModelName = ref('')
+const downloadProgress = reactive({
+  active: false,
+  status: '',
+  percent: 0,
+  completed: '0 B',
+  total: '0 B'
+})
+
+function formatSize(bytes) {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+async function fetchLocalModels() {
+  modelsLoading.value = true
+  modelsError.value = null
+  try {
+    const { data } = await api.get('/llm-configs/local/models')
+    localModels.value = data.models ?? []
+  } catch (e) {
+    modelsError.value = e.response?.data?.error ?? e.message
+  } finally {
+    modelsLoading.value = false
+  }
+}
+
+async function deleteModel(modelName) {
+  if (!confirm(`Are you sure you want to delete ${modelName}?`)) return
+  try {
+    await api.delete(`/llm-configs/local/models?model=${encodeURIComponent(modelName)}`)
+    await fetchLocalModels()
+  } catch (e) {
+    alert('Failed to delete model: ' + (e.response?.data?.error ?? e.message))
+  }
+}
+
+async function downloadModel() {
+  const modelName = downloadModelName.value.trim()
+  if (!modelName) return
+
+  downloadProgress.active = true
+  downloadProgress.status = 'Connecting to Ollama...'
+  downloadProgress.percent = 0
+  downloadProgress.completed = '0 B'
+  downloadProgress.total = '0 B'
+
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch('/api/v1/llm-configs/local/models/pull', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ model: modelName })
+    })
+
+    if (!response.ok) {
+      const errText = await response.text()
+      let errMsg = response.statusText
+      try {
+        const parsed = JSON.parse(errText)
+        errMsg = parsed.error || errMsg
+      } catch (e) {}
+      throw new Error(`Failed with status ${response.status}: ${errMsg}`)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder("utf-8")
+    let buffer = ""
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() // keep last incomplete line
+      
+      for (const line of lines) {
+        if (line.trim()) {
+          const data = JSON.parse(line)
+          if (data.status) {
+            downloadProgress.status = data.status
+          }
+          if (data.total) {
+            downloadProgress.total = formatSize(data.total)
+            if (data.completed) {
+              downloadProgress.completed = formatSize(data.completed)
+              downloadProgress.percent = Math.min(100, Math.round((data.completed / data.total) * 100))
+            }
+          }
+          if (data.status === 'success') {
+            downloadProgress.percent = 100
+          }
+        }
+      }
+    }
+
+    downloadProgress.status = 'Success!'
+    downloadProgress.percent = 100
+    downloadModelName.value = ''
+    await fetchLocalModels()
+    alert('Model downloaded successfully!')
+  } catch (e) {
+    alert('Failed to download model: ' + e.message)
+  } finally {
+    downloadProgress.active = false
+  }
+}
+
 onMounted(async () => {
   if (!isAdmin.value) return
 
@@ -495,7 +736,8 @@ onMounted(async () => {
   try {
     await Promise.allSettled([
       llmStore.fetchAll(),
-      fetchPrompts()
+      fetchPrompts(),
+      fetchLocalModels()
     ])
     syncFormsFromStore()
   } catch (e) { console.error('Failed to load core settings', e) }

@@ -94,7 +94,7 @@ func (p *OpenAIProvider) buildRequest(req CompletionRequest, stream bool) map[st
 		msgs = append(msgs, map[string]interface{}{"role": "system", "content": req.SystemPrompt})
 	}
 	for _, m := range req.Messages {
-		msgs = append(msgs, p.convertMessage(m))
+		msgs = append(msgs, p.convertMessage(m)...)
 	}
 
 	model := req.Model
@@ -132,7 +132,7 @@ func (p *OpenAIProvider) buildRequest(req CompletionRequest, stream bool) map[st
 
 // convertMessage translates the provider-agnostic Message into OpenAI's wire format.
 // Content blocks (Anthropic-style) are translated to OpenAI equivalents.
-func (p *OpenAIProvider) convertMessage(m Message) map[string]interface{} {
+func (p *OpenAIProvider) convertMessage(m Message) []map[string]interface{} {
 	blocks, ok := m.Content.([]ContentBlock)
 	if !ok {
 		// Plain string content or already a raw value.
@@ -140,7 +140,7 @@ func (p *OpenAIProvider) convertMessage(m Message) map[string]interface{} {
 		if m.ToolCallID != "" {
 			msg["tool_call_id"] = m.ToolCallID
 		}
-		return msg
+		return []map[string]interface{}{msg}
 	}
 
 	// Translate content blocks.
@@ -178,7 +178,7 @@ func (p *OpenAIProvider) convertMessage(m Message) map[string]interface{} {
 		if len(toolCalls) > 0 {
 			msg["tool_calls"] = toolCalls
 		}
-		return msg
+		return []map[string]interface{}{msg}
 
 	case "user":
 		// tool_result blocks → individual role:tool messages are added separately.
@@ -186,23 +186,26 @@ func (p *OpenAIProvider) convertMessage(m Message) map[string]interface{} {
 		// so we encode each as a JSON string inside a single user content for now.
 		// The executor ensures tool results are sent as individual tool messages.
 		var text string
+		var msgs []map[string]interface{}
 		for _, b := range blocks {
 			if b.Type == "tool_result" {
 				resultBytes, _ := json.Marshal(b.Output)
-				return map[string]interface{}{
+				msgs = append(msgs, map[string]interface{}{
 					"role":         "tool",
 					"tool_call_id": b.ToolUseID,
 					"content":      string(resultBytes),
-				}
-			}
-			if b.Type == "text" {
+				})
+			} else if b.Type == "text" {
 				text += b.Text
 			}
 		}
-		return map[string]interface{}{"role": "user", "content": text}
+		if text != "" {
+			msgs = append([]map[string]interface{}{{"role": "user", "content": text}}, msgs...)
+		}
+		return msgs
 	}
 
-	return map[string]interface{}{"role": m.Role, "content": m.Content}
+	return []map[string]interface{}{{"role": m.Role, "content": m.Content}}
 }
 
 func (p *OpenAIProvider) doRequest(ctx context.Context, body map[string]interface{}) (map[string]interface{}, error) {

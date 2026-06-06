@@ -25,8 +25,8 @@ import (
 // SchedulerAdder is the minimal scheduler interface needed by the handlers.
 // Using an interface keeps the api package free of a direct import on internal/scheduler.
 type SchedulerAdder interface {
-	AddWorkflow(def *asmtypes.WorkflowDef) error
-	RemoveWorkflow(name, version string)
+	AddWorkflow(tenantID string, def *asmtypes.WorkflowDef) error
+	RemoveWorkflow(tenantID, name, version string)
 }
 
 type TriggerManagerAdder interface {
@@ -145,7 +145,7 @@ func (h *Handlers) CreateWorkflow(c *gin.Context) {
 
 	// Register (or update) cron schedule if the workflow carries one.
 	if h.scheduler != nil {
-		if err := h.scheduler.AddWorkflow(def); err != nil {
+		if err := h.scheduler.AddWorkflow(store.TenantIDFromContext(c.Request.Context()), def); err != nil {
 			slog.Warn("Failed to register workflow schedule", "workflow", def.Metadata.Name, "error", err)
 		}
 	}
@@ -191,20 +191,44 @@ func (h *Handlers) GetWorkflowByVersion(c *gin.Context) {
 func (h *Handlers) DeleteWorkflow(c *gin.Context) {
 	name := c.Param("name")
 	version := c.Param("version")
-	if err := h.store.DeleteDefinition(c.Request.Context(), name, version); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	ctx := c.Request.Context()
+	tenantID := store.TenantIDFromContext(ctx)
+
+	// Fetch all versions of this workflow under the current tenant
+	versions, err := h.store.ListDefinitionVersions(ctx, name)
+	if err != nil {
+		slog.Warn("Failed to list workflow versions for deletion, falling back to deleting specific version", "name", name, "version", version, "error", err)
+		if err := h.store.DeleteDefinition(ctx, name, version); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if h.scheduler != nil {
+			h.scheduler.RemoveWorkflow(tenantID, name, version)
+		}
+		if h.triggerManager != nil {
+			h.triggerManager.RemoveWorkflow(ctx, tenantID, name, version)
+		}
+		c.Status(http.StatusNoContent)
 		return
 	}
-	// Deregister any cron schedule for this workflow.
-	if h.scheduler != nil {
-		h.scheduler.RemoveWorkflow(name, version)
+
+	// Delete all versions and clean up their associated scheduler and trigger managers
+	for _, v := range versions {
+		if err := h.store.DeleteDefinition(ctx, name, v.Version); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if h.scheduler != nil {
+			h.scheduler.RemoveWorkflow(tenantID, name, v.Version)
+		}
+		if h.triggerManager != nil {
+			h.triggerManager.RemoveWorkflow(ctx, tenantID, name, v.Version)
+		}
 	}
-	// Deregister dynamic triggers.
-	if h.triggerManager != nil {
-		h.triggerManager.RemoveWorkflow(c.Request.Context(), store.TenantIDFromContext(c.Request.Context()), name, version)
-	}
+
 	c.Status(http.StatusNoContent)
 }
+
 
 // -- Workflow Runs --
 

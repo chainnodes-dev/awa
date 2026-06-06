@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 import TriggerCombobox from './TriggerCombobox.vue'
 
 const props = defineProps({
@@ -30,4 +30,10 @@ const props = defineProps({
 })
 defineEmits(['update', 'delete'])
 const form = reactive({ ...props.edge })
+
+watch(() => props.edge, (newEdge) => {
+  if (newEdge) {
+    Object.assign(form, newEdge)
+  }
+}, { deep: true })
 </script>

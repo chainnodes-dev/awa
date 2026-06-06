@@ -189,3 +189,75 @@ select option { background: var(--color-surface); color: var(--color-text); }
 }
 
 /* Edge styles are now handled via edge properties in Monitor.vue for better layout accuracy */
+
+/* AI Designer smooth auto-layout animations */
+.ai-designer-mode .vue-flow__node {
+  transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.ai-designer-mode .vue-flow__edge-path {
+  transition: d 0.65s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Premium custom checkbox styles that override native browser/tailwind styling */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: var(--color-input-bg) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 4px !important;
+  width: 14px !important;
+  height: 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-color: transparent !important;
+  --tw-ring-offset-width: 0px !important;
+  --tw-ring-width: 0px !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
+}
+
+input[type="checkbox"]::before {
+  content: "" !important;
+  width: 7px !important;
+  height: 7px !important;
+  transform: scale(0) !important;
+  transition: 100ms transform ease-in-out !important;
+  background-color: #ffffff !important;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%) !important;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+}
+
+input[type="checkbox"]:checked::before {
+  transform: scale(1) !important;
+}
+
+input[type="checkbox"]:focus {
+  border-color: var(--color-accent) !important;
+}
+
+/* Global select box styling overrides to ensure soft, theme-integrated borders */
+select {
+  border: 1px solid var(--color-border) !important;
+  background-color: var(--color-input-bg) !important;
+  color: var(--color-text) !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-color: transparent !important;
+  --tw-ring-offset-width: 0px !important;
+  --tw-ring-width: 0px !important;
+  transition: border-color 0.15s ease !important;
+}
+
+select:focus {
+  border-color: var(--color-accent) !important;
+}

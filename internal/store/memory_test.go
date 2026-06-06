@@ -99,11 +99,12 @@ func TestMemoryStore_DeleteDefinition(t *testing.T) {
 	}
 }
 
-func TestMemoryStore_SaveDefinition_Overwrite(t *testing.T) {
+func TestMemoryStore_UpdateDefinition(t *testing.T) {
 	s := NewMemoryStore()
 	ctx := context.Background()
-	_ = s.SaveDefinition(ctx, testDef("wf", "v1"), "original")
-	_ = s.SaveDefinition(ctx, testDef("wf", "v1"), "updated")
+	def := testDef("wf", "v1")
+	_ = s.SaveDefinition(ctx, def, "original")
+	_ = s.UpdateDefinition(ctx, def, "updated")
 
 	_, yaml, _ := s.GetDefinition(ctx, "wf", "v1")
 	if yaml != "updated" {

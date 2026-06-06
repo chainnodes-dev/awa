@@ -210,6 +210,7 @@ export function useCanvasActions({ nodes, edges, agents, isDirty, selected, pend
           })
         }
       })
+      edges.value = [...edges.value]
     }
 
     upsertAgent(agentDef)
@@ -228,13 +229,17 @@ export function useCanvasActions({ nodes, edges, agents, isDirty, selected, pend
 
     const newId = `${edges.value[idx].source}__${data.label}__${edges.value[idx].target}`
     const isTimeout = data.label === 'timeout'
-    edges.value[idx] = {
+    
+    const updated = [...edges.value]
+    updated[idx] = {
       ...edges.value[idx],
       id: newId, label: data.label,
       sourceHandle: isTimeout ? 'timeout' : undefined,
       data: { ...edges.value[idx].data, guard: data.guard, isTimeout },
       selected: true,
     }
+    edges.value = updated
+
     nextTick(() => {
       selected.value = {
         type: 'edge', id: newId,

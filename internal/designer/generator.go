@@ -319,6 +319,8 @@ func (g *Generator) handleRefinementResponse(req GenerateRequest, content string
 		}
 	}
 
+	postProcessWorkflow(def)
+
 	newYAML, err := yaml.Marshal(def)
 	if err != nil {
 		return &GenerateResult{Interactions: interactions}, fmt.Errorf("failed to marshal refined workflow: %w", err)
@@ -450,6 +452,8 @@ func (g *Generator) DebugWorkflow(ctx context.Context, req DebugWorkflowRequest)
 		}
 	}
 
+	postProcessWorkflow(def)
+
 	newYAML, err := yaml.Marshal(def)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal fixed workflow: %w", err)
@@ -478,6 +482,8 @@ func (g *Generator) extractAndValidate(content string) (string, *asmtypes.Workfl
 	if err != nil {
 		return "", nil, fmt.Errorf("YAML validation failed: %w", err)
 	}
+
+	postProcessWorkflow(def)
 
 	// Tidy up: marshal back to YAML to ensure consistent indentation/format.
 	tidied, err := yaml.Marshal(def)
@@ -514,7 +520,18 @@ states:
   - name: HUMAN_REVIEW
     type: hitl
     assignee: "team-name"
-    form_schema: { type: object, properties: { approved: { type: boolean } } }
+    form_schema:
+      type: object
+      properties:
+        approved: { type: boolean }
+  - name: SELECT_OPTION
+    type: hitl
+    assignee: "team-name"
+    form_schema:
+      type: object
+      required: [selected_company]
+      properties:
+        selected_company: { type: string, title: "Select Company", enum_from_blackboard: "lei_candidates" }
 transitions:
   - from: START
     to: CALC_LOGIC
@@ -566,7 +583,18 @@ func (g *Generator) AssembleSystemPrompt(ctx context.Context, requestedServers [
 	sb.WriteString("  - name: HUMAN_REVIEW\n")
 	sb.WriteString("    type: hitl\n")
 	sb.WriteString("    assignee: \"team-name\"\n")
-	sb.WriteString("    form_schema: { type: object, properties: { approved: { type: boolean } } }\n")
+	sb.WriteString("    form_schema:\n")
+	sb.WriteString("      type: object\n")
+	sb.WriteString("      properties:\n")
+	sb.WriteString("        approved: { type: boolean }\n")
+	sb.WriteString("  - name: SELECT_OPTION\n")
+	sb.WriteString("    type: hitl\n")
+	sb.WriteString("    assignee: \"team-name\"\n")
+	sb.WriteString("    form_schema:\n")
+	sb.WriteString("      type: object\n")
+	sb.WriteString("      required: [selected_company]\n")
+	sb.WriteString("      properties:\n")
+	sb.WriteString("        selected_company: { type: string, title: \"Select Company\", enum_from_blackboard: \"lei_candidates\" }\n")
 	sb.WriteString("transitions:\n")
 	sb.WriteString("  - from: START\n")
 	sb.WriteString("    to: CALC_LOGIC\n")
@@ -707,4 +735,196 @@ func MarshalGenerateResult(r *GenerateResult) (map[string]interface{}, error) {
 		"definition":   defMap,
 		"interactions": r.Interactions,
 	}, nil
+}
+
+func postProcessWorkflow(def *asmtypes.WorkflowDef) {
+	if def == nil {
+		return
+	}
+	EnsureSingleUnconditionalInitialTransition(def)
+	EnsureTimeoutNodes(def)
+}
+
+func EnsureSingleUnconditionalInitialTransition(def *asmtypes.WorkflowDef) {
+	initialState := def.InitialState()
+	if initialState == nil {
+		return
+	}
+
+	transitions := def.TransitionsFrom(initialState.Name)
+
+	// Check if we need to adjust
+	needsAdjustment := len(transitions) > 1
+	if len(transitions) == 1 && (transitions[0].Guard != "" || (transitions[0].Trigger != "" && transitions[0].Trigger != "done")) {
+		needsAdjustment = true
+	}
+
+	if !needsAdjustment {
+		// If len(transitions) == 0 and there are other states, we should add a transition to the next state
+		if len(transitions) == 0 && len(def.States) > 1 {
+			var targetStateName string
+			for _, s := range def.States {
+				if s.Name != initialState.Name {
+					targetStateName = s.Name
+					break
+				}
+			}
+			if targetStateName != "" {
+				def.Transitions = append(def.Transitions, asmtypes.Transition{
+					From:    initialState.Name,
+					To:      targetStateName,
+					Trigger: "",
+				})
+			}
+		}
+		return
+	}
+
+	// Create a unique start node name
+	startName := "START"
+	for def.StateByName(startName) != nil {
+		startName = startName + "_NODE"
+	}
+
+	// Position calculation for START node
+	var pos *asmtypes.Position
+	if initialState.Position != nil {
+		pos = &asmtypes.Position{
+			X: initialState.Position.X - 180,
+			Y: initialState.Position.Y,
+		}
+		if pos.X < 0 {
+			pos.X = 20
+		}
+	} else {
+		pos = &asmtypes.Position{X: 100, Y: 150}
+	}
+
+	// Demote original initial state
+	if initialState.Script != nil {
+		initialState.Type = asmtypes.StateScript
+	} else if initialState.Code != nil {
+		initialState.Type = asmtypes.StateCode
+	} else if initialState.SubProcess != nil {
+		initialState.Type = asmtypes.StateSubProcess
+	} else if initialState.EmitEvent != nil {
+		initialState.Type = asmtypes.StateEmitEvent
+	} else if initialState.TelegramOutput != nil {
+		initialState.Type = asmtypes.StateTelegramOutput
+	} else if initialState.DiscordOutput != nil {
+		initialState.Type = asmtypes.StateDiscordOutput
+	} else if initialState.Assignee != "" || len(initialState.FormSchema) > 0 {
+		initialState.Type = asmtypes.StateHITL
+	} else {
+		initialState.Type = asmtypes.StatePrompt
+		if initialState.Agent == "" {
+			defaultAgent := "primary-agent"
+			if len(def.Agents) > 0 {
+				defaultAgent = def.Agents[0].Name
+			}
+			initialState.Agent = defaultAgent
+		}
+	}
+
+	// Add the new start state
+	newStart := asmtypes.StateDef{
+		Name:         startName,
+		Type:         asmtypes.StateInitial,
+		Instructions: "Initial workflow entry point.",
+		Position:     pos,
+	}
+	def.States = append([]asmtypes.StateDef{newStart}, def.States...)
+
+	// Add transition from newStart to original initial state
+	def.Transitions = append(def.Transitions, asmtypes.Transition{
+		From:    startName,
+		To:      initialState.Name,
+		Trigger: "done",
+	})
+
+	// Ensure all referenced agents are declared in def.Agents
+	for _, s := range def.States {
+		if s.Agent != "" {
+			found := false
+			for _, a := range def.Agents {
+				if a.Name == s.Agent {
+					found = true
+					break
+				}
+			}
+			if !found {
+				def.Agents = append(def.Agents, asmtypes.AgentDef{
+					Name: s.Agent,
+				})
+			}
+		}
+	}
+}
+
+func EnsureTimeoutNodes(def *asmtypes.WorkflowDef) {
+	hasTimeoutEnabledNode := false
+	timeoutTriggerName := "timeout" // default trigger/target name
+
+	for _, s := range def.States {
+		if s.Timeout != "" && s.OnTimeout != "" {
+			hasTimeoutEnabledNode = true
+			timeoutTriggerName = s.OnTimeout
+			break
+		}
+	}
+
+	if !hasTimeoutEnabledNode {
+		return
+	}
+
+	// Check if the timeout node exists
+	timeoutNode := def.StateByName(timeoutTriggerName)
+	if timeoutNode == nil {
+		var posX, posY float64 = 400, 400
+		var totalX, totalY float64
+		count := 0
+		for _, s := range def.States {
+			if s.Position != nil {
+				totalX += s.Position.X
+				totalY += s.Position.Y
+				count++
+			}
+		}
+		if count > 0 {
+			posX = totalX / float64(count)
+			posY = (totalY / float64(count)) + 200
+		}
+
+		newTimeoutNode := asmtypes.StateDef{
+			Name:                  timeoutTriggerName,
+			Type:                  asmtypes.StateTerminal,
+			Instructions:          "Workflow execution timed out.",
+			TechnicalRequirements: "Triggered when a step execution exceeds its configured timeout duration.",
+			Position:              &asmtypes.Position{X: posX, Y: posY},
+			IsTimeoutNode:         true,
+		}
+		def.States = append(def.States, newTimeoutNode)
+	} else {
+		timeoutNode.IsTimeoutNode = true
+	}
+
+	// Now check transitions
+	for _, s := range def.States {
+		if s.Timeout != "" && s.OnTimeout != "" {
+			hasTransition := false
+			for _, t := range def.Transitions {
+				if t.From == s.Name && t.To == s.OnTimeout && t.Trigger == s.OnTimeout {
+					hasTransition = true
+					break
+				}
+			}
+			if !hasTransition {
+				def.Transitions = append(def.Transitions, asmtypes.Transition{
+					From:    s.Name,
+					To:      s.OnTimeout,
+					Trigger: s.OnTimeout,
+				})
+			}
+		}
+	}
 }

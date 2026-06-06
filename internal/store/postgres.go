@@ -740,7 +740,7 @@ func (s *PostgresStore) GetHITL(ctx context.Context, runID string) (*asmtypes.HI
 	err := s.pool.QueryRow(ctx, `
 		SELECT hr.id, hr.run_id, hr.state_name, coalesce(hr.assignee,''), hr.timeout_at, hr.resolved,
 		       hr.resolved_at, coalesce(hr.resolution,''), coalesce(hr.resolver,''), hr.metadata, hr.form_schema, hr.created_at,
-		       wr.workflow_name, wr.blackboard,
+		       wr.workflow_name, wr.workflow_version, wr.blackboard,
 		       w.definition->'blackboard'->'schema'
 		FROM hitl_requests hr
 		JOIN workflow_runs wr ON wr.id = hr.run_id
@@ -748,7 +748,7 @@ func (s *PostgresStore) GetHITL(ctx context.Context, runID string) (*asmtypes.HI
 		WHERE hr.run_id=$1 AND hr.resolved=FALSE ORDER BY hr.created_at DESC LIMIT 1`, runID,
 	).Scan(&req.ID, &req.RunID, &req.StateName, &req.Assignee, &req.TimeoutAt, &req.Resolved,
 		&req.ResolvedAt, &req.Resolution, &req.Resolver, &meta, &fs, &req.CreatedAt,
-		&req.WorkflowName, &bb, &bbs)
+		&req.WorkflowName, &req.WorkflowVersion, &bb, &bbs)
 	if err != nil {
 		return nil, fmt.Errorf("no HITL request for run '%s': %w", runID, err)
 	}
@@ -778,7 +778,7 @@ func (s *PostgresStore) ListHITLs(ctx context.Context, filter HITLFilter) ([]*as
 
 	query := `
 		SELECT hr.id, hr.run_id, hr.state_name, coalesce(hr.assignee,''), hr.timeout_at, hr.metadata, hr.form_schema, hr.created_at,
-		       wr.workflow_name, wr.blackboard,
+		       wr.workflow_name, wr.workflow_version, wr.blackboard,
 		       w.definition->'blackboard'->'schema'
 		FROM hitl_requests hr
 		JOIN workflow_runs wr ON wr.id = hr.run_id
@@ -816,7 +816,7 @@ func (s *PostgresStore) ListHITLs(ctx context.Context, filter HITLFilter) ([]*as
 		var req asmtypes.HITLRequest
 		var meta, fs, bb, bbs []byte
 		err := rows.Scan(&req.ID, &req.RunID, &req.StateName, &req.Assignee, &req.TimeoutAt, &meta, &fs, &req.CreatedAt,
-			&req.WorkflowName, &bb, &bbs)
+			&req.WorkflowName, &req.WorkflowVersion, &bb, &bbs)
 		if err != nil {
 			return nil, err
 		}

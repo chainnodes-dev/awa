@@ -27,7 +27,7 @@ export const useLLMStore = defineStore('llm', () => {
     anthropic: 'claude-sonnet-4-5',
     openai:    'gpt-4o',
     grok:      'grok-3',
-    deepseek:  'deepseek-chat',
+    deepseek:  'deepseek-v4-flash',
     mistral:   'mistral-large-latest',
     groq:      'llama-3.1-70b-versatile',
     together:  'meta-llama/Llama-3-70b-chat-hf',

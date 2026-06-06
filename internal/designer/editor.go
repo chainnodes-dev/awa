@@ -2,6 +2,7 @@ package designer
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -12,6 +13,25 @@ import (
 // the LLM parameter extraction result in valid internal state.
 type WorkflowEditor struct {
 	Def *asmtypes.WorkflowDef
+}
+
+var nonAlphaNumRegexp = regexp.MustCompile(`[^a-z0-9-]+`)
+
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	s = nonAlphaNumRegexp.ReplaceAllString(s, "-")
+	s = strings.Trim(s, "-")
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	if len(s) > 63 {
+		s = s[:63]
+		s = strings.TrimSuffix(s, "-")
+	}
+	if s == "" {
+		return "generated-workflow"
+	}
+	return s
 }
 
 // NewWorkflowEditor creates a new editor. If the provided definition is empty,
@@ -28,6 +48,9 @@ func NewWorkflowEditor(def *asmtypes.WorkflowDef) *WorkflowEditor {
 	}
 	if def.Metadata.Version == "" {
 		def.Metadata.Version = "v1"
+	}
+	if def.Metadata.Name != "" {
+		def.Metadata.Name = slugify(def.Metadata.Name)
 	}
 	return &WorkflowEditor{Def: def}
 }
@@ -144,6 +167,40 @@ func (e *WorkflowEditor) SetStateAgent(name, agentName string, mcpServers []stri
 	return fmt.Errorf("state %q not found", name)
 }
 
+// SetStateTimeout sets the timeout and on_timeout trigger for a state.
+func (e *WorkflowEditor) SetStateTimeout(name, timeout, onTimeout string) error {
+	for i := range e.Def.States {
+		if e.Def.States[i].Name == name {
+			e.Def.States[i].Timeout = timeout
+			e.Def.States[i].OnTimeout = onTimeout
+			return nil
+		}
+	}
+	return fmt.Errorf("state %q not found", name)
+}
+
+// SetStateAssignee sets the assignee for a state.
+func (e *WorkflowEditor) SetStateAssignee(name, assignee string) error {
+	for i := range e.Def.States {
+		if e.Def.States[i].Name == name {
+			e.Def.States[i].Assignee = assignee
+			return nil
+		}
+	}
+	return fmt.Errorf("state %q not found", name)
+}
+
+// SetStateFormSchema sets the form schema for a state.
+func (e *WorkflowEditor) SetStateFormSchema(name string, schema map[string]interface{}) error {
+	for i := range e.Def.States {
+		if e.Def.States[i].Name == name {
+			e.Def.States[i].FormSchema = schema
+			return nil
+		}
+	}
+	return fmt.Errorf("state %q not found", name)
+}
+
 
 // AddTransition appends or updates a transition.
 func (e *WorkflowEditor) AddTransition(from, to, trigger, guard string) {
@@ -167,7 +224,7 @@ func (e *WorkflowEditor) AddTransition(from, to, trigger, guard string) {
 // SetMetadata updates the workflow metadata.
 func (e *WorkflowEditor) SetMetadata(name, abstract, description string) {
 	if name != "" {
-		e.Def.Metadata.Name = name
+		e.Def.Metadata.Name = slugify(name)
 	}
 	if abstract != "" {
 		e.Def.Metadata.Description = abstract

@@ -1,257 +1,274 @@
 <template>
   <div class="flex flex-col h-full overflow-hidden bg-surface-1 relative">
 
-    <!-- Loading Overlay -->
-    <div v-if="loading" class="absolute inset-0 z-50 bg-surface-1/80 backdrop-blur-sm flex flex-col items-center justify-center space-y-4">
-      <div class="relative">
-        <div class="w-12 h-12 border-4 border-violet-500/20 border-t-violet-500 rounded-full animate-spin"></div>
-        <div class="absolute inset-0 flex items-center justify-center">
-          <svg class="text-violet-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
+    <!-- Progress Indicator Row -->
+    <div class="px-4 py-2 border-b border-border bg-surface-1 flex items-center justify-between text-[11px] text-text-muted select-none shrink-0">
+      <div class="flex items-center gap-1.5">
+        <span class="font-bold uppercase tracking-wider text-violet-400">Step {{ props.pipelineStep < 4 ? props.pipelineStep + 1 : 4 }}/4:</span>
+        <span class="font-semibold text-text truncate max-w-[120px]">{{ props.pipelineStep < 4 ? pipelineSteps[props.pipelineStep].label : 'Complete' }}</span>
+      </div>
+      <div class="flex gap-1 shrink-0">
+        <div v-for="i in 4" :key="i"
+          :class="[
+            'w-1.5 h-1.5 rounded-full transition-all duration-300',
+            props.pipelineStep >= i ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-border/60'
+          ]"
+          :title="`Step ${i}: ${pipelineSteps[i-1].label}`"
+        />
+      </div>
+    </div>
+
+    <!-- Main Chat Console / History Stream -->
+    <div class="flex-1 flex flex-col min-h-0">
+      <div 
+        ref="refineScroll"
+        class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-surface-0/20"
+      >
+        <!-- Welcome empty state -->
+        <div v-if="!chatMessages.length" class="h-full flex flex-col items-center justify-center text-center py-8 px-4 space-y-3 select-none">
+          <div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-13.5 8.38 8.38 0 0 1 3.8.9L21 3z"/>
+            </svg>
+          </div>
+          <p class="text-xs font-semibold text-text">AI Generation & Design Chat</p>
+          <p class="text-[10px] text-text-muted leading-relaxed">
+            Type your process description in the input box below to trigger Auto Pilot, or write modifications to refine your visual layout.
+          </p>
+        </div>
+
+        <!-- Chat history rendering -->
+        <div v-else v-for="(item, i) in chatMessages" :key="i" class="space-y-1">
+          <!-- Monospace System Message Pill -->
+          <div v-if="item.isSystem" class="flex justify-center w-full my-2">
+            <div class="px-2.5 py-0.5 rounded-full border border-border bg-surface-2 text-[9px] font-mono text-text-muted flex items-center gap-1 shadow-sm">
+              <span :class="['inline-block w-1.5 h-1.5 rounded-full', item.content.startsWith('❌') ? 'bg-red-500' : 'bg-emerald-400']"></span>
+              {{ item.content }}
+            </div>
+          </div>
+
+          <!-- Normal Chat Bubble -->
+          <div v-else :class="['flex flex-col gap-1', item.role === 'user' ? 'items-end' : 'items-start']">
+            <span class="text-[8px] font-bold uppercase tracking-tighter text-text-muted px-1">
+              {{ item.isInitialDescription ? 'Process Description' : (item.role === 'user' ? 'You' : 'Designer') }}
+            </span>
+            <div 
+              :class="[
+                'max-w-[90%] px-3 py-2 rounded-xl text-xs leading-relaxed border',
+                item.isInitialDescription
+                  ? 'bg-violet-950/20 text-text border-violet-500/30 rounded-tr-none'
+                  : item.role === 'user' 
+                    ? 'bg-indigo-600/10 text-text border-indigo-500/25 rounded-tr-none' 
+                    : 'bg-surface-2 text-text border-border/50 rounded-tl-none'
+              ]"
+            >
+              <div class="whitespace-pre-wrap">{{ item.content }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inline Loader at the bottom of the chat history -->
+        <div v-if="loading" class="flex flex-col gap-1 items-start mt-2">
+          <span class="text-[8px] font-bold uppercase tracking-tighter text-text-muted px-1">
+            Designer
+          </span>
+          <div class="max-w-[90%] px-3 py-2 rounded-xl text-xs leading-relaxed border bg-surface-2 text-text border-border/50 rounded-tl-none flex items-center gap-2.5">
+            <div class="w-3.5 h-3.5 border-2 border-violet-500/20 border-t-violet-500 rounded-full animate-spin shrink-0"></div>
+            <div class="flex flex-col min-w-0">
+              <span class="text-[11px] font-semibold text-text truncate">{{ loadingLabel }}</span>
+              <span class="text-[9px] text-text-muted truncate mt-0.5">{{ loadingSubLabel }}</span>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="flex flex-col items-center">
-        <span class="text-sm font-semibold text-text">{{ loadingLabel }}</span>
-        <span class="text-[10px] text-text-muted animate-pulse">{{ loadingSubLabel }}</span>
+
+      <!-- Pipeline warning warning -->
+      <div v-if="props.pipelineWarning && props.pipelineStep < 4" class="px-4 py-1.5 bg-amber-500/10 border-t border-amber-500/20 text-amber-500 text-[10px] select-none shrink-0">
+        ⚠ Note: {{ props.pipelineWarning }}
       </div>
-      <button
-        @click="loading = false"
-        class="mt-4 px-3 py-1 text-[10px] text-text-muted hover:text-text border border-slate-700 hover:border-slate-500 rounded transition-colors"
+
+      <!-- Pipeline or Refine error -->
+      <div v-if="pipelineError || refineError" class="px-4 py-2 bg-red-500/10 border-t border-red-500/20 text-red-400 text-[10px] font-mono shrink-0">
+        {{ pipelineError || refineError }}
+      </div>
+
+      <!-- Input Resizer Divider -->
+      <div 
+        class="h-1 shrink-0 bg-border hover:bg-violet-500/80 active:bg-violet-500 cursor-row-resize transition-colors select-none z-10"
+        @mousedown="startInputResize"
+      />
+
+      <!-- Input Console Area -->
+      <div 
+        :style="{ height: inputAreaHeight + 'px' }"
+        class="p-3 bg-surface-1/50 border-t border-border/50 shrink-0 flex flex-col gap-2 min-h-[110px]"
       >
-        Dismiss Overlay
-      </button>
-    </div>
-
-    <!-- Tab Bar: Generate | Trace -->
-    <div class="flex border-b border-border shrink-0">
-      <button
-        @click="activeTab = 'generate'"
-        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors', activeTab === 'generate' ? 'text-violet-400 border-b-2 border-violet-400' : 'text-text-muted hover:text-text-muted']"
-      >Generate</button>
-      <button
-        @click="activeTab = 'trace'"
-        :class="['flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5', activeTab === 'trace' ? 'text-teal-400 border-b-2 border-teal-400' : 'text-text-muted hover:text-text-muted']"
-      >
-        Trace
-        <span v-if="interactions.length" class="flex h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" />
-      </button>
-    </div>
-
-    <!-- ── GENERATE TAB ──────────────────────────────────────────────── -->
-    <div v-if="activeTab === 'generate'" class="flex-1 flex flex-col min-h-0">
-      <div class="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar">
-
-        <!-- Model Provider -->
-        <div class="p-3 rounded-lg bg-surface-0/50 border border-border/50 space-y-1.5">
-          <div class="flex items-center justify-between">
-            <label class="text-[10px] text-text-muted uppercase font-bold tracking-tighter">Model Provider</label>
-            <span v-if="activeProviderLabel" class="text-[9px] text-violet-400 font-medium tracking-wide bg-violet-400/10 px-1.5 py-0.5 rounded">{{ activeProviderLabel }}</span>
-          </div>
-          <select
-            :value="provider"
-            @change="emit('update:provider', $event.target.value)"
-            class="input w-full text-[11px] h-8 bg-surface-1 border-border/40 focus:border-violet-500/50 transition-all font-sans"
+        <!-- Quick-action Step Pills -->
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+          <button 
+            v-for="(step, idx) in pipelineSteps" 
+            :key="idx"
+            @click="runStep(idx)"
+            :disabled="loading || (idx > 0 && !props.yamlSource)"
+            class="p-0.5 px-2 text-[9px] rounded-md bg-surface-2 hover:bg-violet-600/20 border border-border/60 hover:border-violet-500/40 text-text-muted hover:text-violet-300 transition-all outline-none disabled:opacity-30 disabled:hover:bg-surface-2 disabled:hover:text-text-muted disabled:hover:border-border/60 disabled:cursor-not-allowed shrink-0 font-semibold"
           >
-            <option value="">(Platform Default)</option>
-            <option v-for="p in enabledProviders" :key="p.id" :value="p.id">{{ p.label }}</option>
-          </select>
+            {{ idx + 1 }}: {{ step.label }}
+          </button>
         </div>
-
-        <!-- Process Description -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <label class="text-[10px] text-text-muted uppercase font-bold tracking-tighter">Process Description</label>
-            <button @click="emit('requestDescriptionModal')" class="text-text-muted hover:text-violet-400 transition-colors" title="Expand editor">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
-              </svg>
-            </button>
-          </div>
+        
+        <!-- Textarea input -->
+        <div class="flex-1 min-h-0">
           <textarea
-            :value="description"
-            @input="onDescriptionInput"
-            class="input text-sm h-28 resize-none font-sans leading-relaxed"
-            placeholder="Describe the end-to-end business process in detail..."
+            :value="prompt"
+            @input="emit('update:prompt', $event.target.value)"
+            @keydown.enter.exact.prevent="handleSubmit"
+            class="w-full h-full bg-surface-0 border border-border/40 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all leading-relaxed font-sans"
+            placeholder="Type process to run Auto Pilot, or ask for changes to refine..."
+            :disabled="loading"
           />
         </div>
 
-        <!-- Pipeline Steps -->
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <label class="text-[10px] text-text-muted uppercase font-bold tracking-tighter">Generation Pipeline</label>
-            <button
-              v-if="props.pipelineStep > 0"
-              @click="resetPipeline"
-              class="text-[9px] text-text-muted hover:text-red-400 uppercase font-bold underline decoration-dotted underline-offset-2"
-            >Reset</button>
-          </div>
-
-          <!-- Step indicators -->
-          <div class="flex items-center gap-1">
-            <div v-for="(step, i) in pipelineSteps" :key="i" class="flex-1 flex flex-col items-center gap-1">
-              <button
-                @click="runStep(i)"
-                :disabled="loading || (i > 0 && !description.trim())"
-                :class="[
-                  'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold transition-all',
-                  props.pipelineStep > i   ? 'bg-emerald-500 text-white cursor-pointer hover:scale-110 active:scale-95' :
-                  props.pipelineStep === i ? 'bg-violet-500 text-white ring-2 ring-violet-400/30 cursor-pointer hover:scale-110 active:scale-95' :
-                                             'bg-surface-0 text-text-muted border border-border cursor-pointer hover:border-violet-500/50 hover:text-text'
-                ]"
-                :title="`Run Step ${i + 1}: ${step.label}`"
-              >
-                <svg v-if="pipelineStep > i" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                <span v-else>{{ i + 1 }}</span>
-              </button>
-              <span :class="[
-                'text-[8px] text-center leading-tight transition-colors',
-                props.pipelineStep === i ? 'text-violet-400 font-bold' : 'text-text-muted'
-              ]">{{ step.label }}</span>
-            </div>
-          </div>
-
-          <!-- Current step description -->
-          <div v-if="props.pipelineStep < pipelineSteps.length" class="p-2.5 rounded bg-surface-0/60 border border-border/50">
-            <p class="text-[10px] text-text-muted leading-relaxed">
-              <span class="text-violet-400 font-semibold">Step {{ props.pipelineStep + 1 }}:</span>
-              {{ pipelineSteps[props.pipelineStep].description }}
-            </p>
-          </div>
-          <div v-else class="p-2.5 rounded bg-emerald-500/10 border border-emerald-500/20">
-            <p class="text-[10px] text-emerald-400 font-semibold">Pipeline complete — workflow is runnable.</p>
-          </div>
-        </div>
-
-        <!-- Pipeline error -->
-        <div v-if="pipelineError" class="p-2.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-mono">
-          {{ pipelineError }}
-        </div>
-
-        <!-- Soft validation warning (steps 1–3) -->
-        <div v-if="props.pipelineWarning && props.pipelineStep < 4" class="p-2.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px]">
-          <span class="font-semibold">Note:</span> {{ props.pipelineWarning }}
-        </div>
-
-        <!-- Pipeline action button -->
-        <div>
-          <button
-            v-if="props.pipelineStep < pipelineSteps.length"
-            @click="runStep(props.pipelineStep)"
-            :disabled="loading || !description.trim()"
-            class="w-full btn py-2 gap-1.5 text-xs font-semibold rounded-lg bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-900/20 transition-all disabled:opacity-40"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-            {{ props.pipelineStep === 0 ? 'Start: Decompose Process' : `Run Step ${props.pipelineStep + 1}: ${pipelineSteps[props.pipelineStep].label}` }}
-          </button>
-          <button
-            v-else
-            @click="resetPipeline"
-            class="w-full btn py-2 text-xs font-semibold rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-all"
-          >
-            Start Over
-          </button>
-        </div>
-
-        <!-- Divider -->
-        <div class="flex items-center gap-2 pt-1">
-          <div class="flex-1 h-px bg-border/50"/>
-          <span class="text-[9px] text-text-muted uppercase tracking-widest font-bold">Designer Chat</span>
-          <div class="flex-1 h-px bg-border/50"/>
-        </div>
-
-        <!-- Chat-like Refinement -->
-        <div class="flex-1 flex flex-col min-h-[300px] bg-surface-0/30 rounded-xl border border-border/50 overflow-hidden">
-          <!-- History Stream -->
-          <div 
-            ref="refineScroll"
-            class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar"
-          >
-            <div v-for="(item, i) in history" :key="i" 
-              :class="['flex flex-col gap-1', item.role === 'user' ? 'items-end' : 'items-start']"
+        <!-- Toolbar row: File Upload | Model Select | Auto Pilot | Reset | Send Button -->
+        <div class="flex items-center justify-between text-[11px] select-none gap-2 shrink-0 mt-1">
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <!-- File Upload -->
+            <button 
+              @click="triggerFileUpload" 
+              :disabled="loading"
+              class="p-1 rounded bg-transparent hover:bg-surface-2 text-text-muted hover:text-text transition-all border-0 outline-none cursor-pointer disabled:opacity-50 flex items-center justify-center shrink-0"
+              title="Upload text file"
             >
-              <span class="text-[8px] font-bold uppercase tracking-tighter text-text-muted px-1">
-                {{ item.role === 'user' ? 'You' : 'Designer' }}
-              </span>
-              <div 
-                :class="[
-                  'max-w-[90%] px-3 py-2 rounded-xl text-sm leading-relaxed',
-                  item.role === 'user' 
-                    ? 'bg-indigo-600 text-white rounded-tr-none' 
-                    : 'bg-surface-2 text-text border border-border/50 rounded-tl-none'
-                ]"
-              >
-                {{ item.content }}
-              </div>
-            </div>
-            
-            <div v-if="!history.length" class="h-full flex flex-col items-center justify-center text-center opacity-20 py-12">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mb-2">
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-13.5 8.38 8.38 0 0 1 3.8.9L21 3z"/>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              <p class="text-[10px]">Ask for changes, additions, or refactorings.</p>
-            </div>
+            </button>
+            <input ref="fileInput" type="file" accept=".txt,.md" class="hidden" @change="handleFileUpload"/>
+
+            <!-- Model Selection -->
+            <select
+              :value="provider"
+              @change="emit('update:provider', $event.target.value)"
+              :disabled="loading"
+              class="bg-surface-0 border border-border text-[10px] text-text rounded px-1.5 py-0.5 outline-none cursor-pointer focus:border-violet-500 transition-colors font-sans truncate w-full disabled:opacity-50"
+            >
+              <option value="">(Default)</option>
+              <option v-for="p in enabledProviders" :key="p.id" :value="p.id">{{ p.label }}</option>
+            </select>
           </div>
 
-          <!-- Input Area -->
-          <div class="p-3 bg-surface-1/50 border-t border-border/50">
-            <div class="relative">
-              <textarea
-                :value="prompt"
-                @input="emit('update:prompt', $event.target.value)"
-                @keydown.enter.meta.prevent="applyRefinement"
-                class="w-full bg-surface-0 border border-border/40 rounded-lg px-3 py-2 text-sm h-16 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all pr-10"
-                placeholder="e.g. Add error handling..."
-              />
-              <button 
-                @click="applyRefinement"
-                :disabled="loading || !prompt.trim()"
-                class="absolute right-2 bottom-2 p-1.5 rounded-md bg-indigo-600 text-white hover:bg-indigo-500 transition-all disabled:opacity-30"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                </svg>
-              </button>
-            </div>
-            <div class="flex items-center justify-between mt-2">
-              <span class="text-[8px] text-text-muted">⌘ + Enter to apply</span>
-              <button 
-                v-if="history.length"
-                @click="clearHistory"
-                class="text-[8px] text-text-muted hover:text-red-400 font-bold uppercase tracking-wider"
-              >Clear Chat</button>
-            </div>
-          </div>
-        </div>
+          <!-- Center: Auto Pilot Checkbox -->
+          <label class="flex items-center gap-1.5 text-[10px] text-text-muted hover:text-text cursor-pointer select-none font-semibold shrink-0">
+            <input 
+              type="checkbox" 
+              v-model="autoAdvance"
+              :disabled="loading"
+              class="accent-indigo-500 h-3 w-3 rounded border-border bg-surface-0 focus:ring-violet-500/50 disabled:opacity-50"
+            />
+            Auto Pilot
+          </label>
 
-        <!-- Refine error -->
-        <div v-if="refineError" class="p-2.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-mono">
-          {{ refineError }}
+          <!-- Right: Reset and Send Buttons -->
+          <div class="flex items-center gap-2 shrink-0">
+            <button 
+              v-if="chatMessages.length"
+              @click="clearHistory"
+              :disabled="loading"
+              class="text-[9px] text-text-muted hover:text-red-400 font-bold uppercase tracking-wider underline decoration-dotted underline-offset-1 border-0 bg-transparent cursor-pointer disabled:opacity-50"
+            >
+              Reset
+            </button>
+            
+            <button 
+              @click="handleSubmit"
+              :disabled="loading || !prompt.trim()"
+              class="h-7 w-7 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-all disabled:opacity-30 shadow-md shadow-indigo-900/10 border-0 outline-none flex items-center justify-center cursor-pointer shrink-0"
+              :class="{ 'cursor-not-allowed': loading }"
+              title="Send description / refinement request"
+            >
+              <svg v-if="loading" class="animate-spin text-white" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
       </div>
-    </div>
-
-    <!-- ── TRACE TAB ─────────────────────────────────────────────────── -->
-    <div v-else-if="activeTab === 'trace'" class="flex-1 min-h-0">
-      <TraceViewer :interactions="interactions" />
     </div>
 
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { api, useAuthStore } from '@/stores/auth'
 import { useLLMStore } from '@/stores/llm'
-import TraceViewer from './TraceViewer.vue'
 
 const authStore = useAuthStore()
 const llmStore = useLLMStore()
 
 const refineScroll = ref(null)
+const autoAdvance = ref(true)
+const fileInput = ref(null)
+
+// ── Input Area Resizing ──
+const inputAreaHeight = ref(150)
+let isDraggingInput = false
+let startInputY = 0
+let startInputHeight = 0
+
+function startInputResize(e) {
+  isDraggingInput = true
+  startInputY = e.clientY
+  startInputHeight = inputAreaHeight.value
+  document.addEventListener('mousemove', doInputResize)
+  document.addEventListener('mouseup', stopInputResize)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function doInputResize(e) {
+  if (!isDraggingInput) return
+  const deltaY = startInputY - e.clientY
+  let newHeight = startInputHeight + deltaY
+  
+  // Clamp height between 110px and 350px
+  if (newHeight < 110) newHeight = 110
+  if (newHeight > 350) newHeight = 350
+  
+  inputAreaHeight.value = newHeight
+}
+
+function stopInputResize() {
+  isDraggingInput = false
+  document.removeEventListener('mousemove', doInputResize)
+  document.removeEventListener('mouseup', stopInputResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
+function triggerFileUpload() {
+  fileInput.value?.click()
+}
+
+function handleFileUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const content = e.target?.result
+    if (typeof content === 'string') {
+      emit('update:prompt', content)
+    }
+  }
+  reader.readAsText(file)
+  
+  event.target.value = ''
+}
 
 const props = defineProps({
   yamlSource:              { type: String, default: '' },
@@ -277,10 +294,9 @@ const emit = defineEmits([
   'requestDescriptionModal',
 ])
 
-// ── Tabs ──────────────────────────────────────────────────────────────────────
-const activeTab = ref('generate')
+// ── Pipeline gears ──
+const stepToGear = ['decompose', 'categorise', 'wire', 'implement']
 
-// ── Pipeline state ────────────────────────────────────────────────────────────
 const pipelineSteps = [
   { label: 'Decompose',  endpoint: '/designer/pipeline/decompose',  description: 'Identify all states and add a description to every node. The canvas will show a skeleton workflow.' },
   { label: 'Categorise', endpoint: '/designer/pipeline/categorise', description: 'Assign the correct Chain Nodes type to every node (code, script, hitl, wait, etc.). No runnable logic yet.' },
@@ -288,45 +304,95 @@ const pipelineSteps = [
   { label: 'Implement',  endpoint: '/designer/pipeline/implement',  description: 'Generate final code for every node in parallel using specialised prompts. Produces a runnable workflow.' },
 ]
 
-// pipelineStep and pipelineWarning are lifted to the parent so they survive tab switches.
 const pipelineError = ref('')
+const refineError     = ref('')
 
-// ── Shared loading ────────────────────────────────────────────────────────────
+// ── Loading ──
 const loading         = ref(false)
 const loadingLabel    = ref('AI is thinking...')
 const loadingSubLabel = ref('')
-const refineError     = ref('')
 
-// ── Pipeline actions ──────────────────────────────────────────────────────────
+// ── Merged Chat Messages computed property ──
+const chatMessages = computed(() => {
+  const msgs = []
+  if (props.description && props.description.trim()) {
+    msgs.push({
+      role: 'user',
+      content: props.description,
+      isInitialDescription: true
+    })
+  }
+  props.history.forEach(item => {
+    // Avoid duplicating the initial description
+    if (item.role === 'user' && item.content === props.description) {
+      return
+    }
+    msgs.push(item)
+  })
+  return msgs
+})
+
+// Watch chat messages and loading state to auto-scroll
+watch([() => chatMessages.value, loading], async () => {
+  await nextTick()
+  if (refineScroll.value) {
+    refineScroll.value.scrollTop = refineScroll.value.scrollHeight
+  }
+}, { deep: true, immediate: true })
+
+// ── Unified submission (Auto Pilot on description, Refinement on subsequent) ──
+async function handleSubmit() {
+  const text = props.prompt.trim()
+  if (!text) return
+
+  if (!props.description || !props.description.trim()) {
+    emit('update:description', text)
+    emit('update:prompt', '')
+    nextTick(async () => {
+      await runAutoPilot()
+    })
+  } else {
+    await applyRefinement()
+  }
+}
+
+// ── Trigger Auto Pilot execution flow ──
+async function runAutoPilot() {
+  const text = props.prompt.trim()
+  if (text && (!props.description || !props.description.trim())) {
+    emit('update:description', text)
+    emit('update:prompt', '')
+  }
+  resetPipeline()
+  autoAdvance.value = true
+  nextTick(async () => {
+    await runStep(0)
+  })
+}
+
 function resetPipeline() {
   emit('update:pipelineStep', 0)
   emit('update:pipelineWarning', '')
   pipelineError.value = ''
+  refineError.value = ''
 }
 
-function onDescriptionInput(e) {
-  emit('update:description', e.target.value)
-  if (props.pipelineStep > 0) resetPipeline()
-}
-
+// ── Pipeline actions ──
 async function runStep(index) {
   const step = pipelineSteps[index]
   if (!step) return
 
-  // Prerequisite check: index 0 needs description, others need description + existing YAML
   if (index === 0 && !props.description.trim()) {
     pipelineError.value = "Process description is required."
     return
   }
   if (index > 0 && (!props.description.trim() || !props.yamlSource.trim())) {
-    pipelineError.value = index > 0 && !props.yamlSource.trim() 
-      ? "Existing YAML is required for this step. Run earlier steps first or import YAML."
-      : "Process description is required."
+    pipelineError.value = "Existing blueprint definition is required. Run earlier steps first."
     return
   }
 
   loading.value = true
-  loadingLabel.value = `Step ${index + 1}: ${step.label}…`
+  loadingLabel.value = `Running Step ${index + 1}: ${step.label}…`
   loadingSubLabel.value = step.description
   pipelineError.value = ''
   emit('update:pipelineWarning', '')
@@ -340,34 +406,61 @@ async function runStep(index) {
 
     if (data.validation_error) emit('update:pipelineWarning', data.validation_error)
 
+    // Log the step progression in the chat history
+    const feedback = parseLLMFeedback(index, data.interactions)
+    const newHistory = [
+      ...props.history,
+      { role: 'assistant', content: `⚙ [Step ${index + 1}/4] Complete: ${step.label}. Applied layout updates.`, isSystem: true }
+    ]
+    if (feedback) {
+      newHistory.push({ role: 'assistant', content: feedback })
+    }
+    emit('update:history', newHistory)
+
     emit('update:interactions', data.interactions || [])
     emit('apply', { yamlStr: data.yaml, definition: data.definition })
     
-    // Advance pipeline step if we just finished the current one
     if (index === props.pipelineStep) {
       emit('update:pipelineStep', index + 1)
+      
+      // Auto-run next step if enabled
+      if (autoAdvance.value && index + 1 < pipelineSteps.length) {
+        nextTick(() => {
+          setTimeout(() => {
+            if (autoAdvance.value && !pipelineError.value && loading.value === false) {
+              runStep(index + 1)
+            }
+          }, 1200)
+        })
+      }
     }
 
   } catch (e) {
-    pipelineError.value = e.response?.data?.error ?? e.message
+    const errMsg = e.response?.data?.error ?? e.message
+    pipelineError.value = errMsg
+    emit('update:history', [
+      ...props.history,
+      { role: 'assistant', content: `❌ [Step ${index + 1}/4] Failed: ${step.label}. Error: ${errMsg}`, isSystem: true }
+    ])
     if (e.response?.data?.interactions) emit('update:interactions', e.response.data.interactions)
   } finally {
     loading.value = false
   }
 }
 
-// ── Refine actions ────────────────────────────────────────────────────────────
+// ── Refine actions ──
 async function applyRefinement() {
   if (!props.prompt.trim()) return
 
+  const promptText = props.prompt
   loading.value = true
   loadingLabel.value = 'Applying refinement…'
-  loadingSubLabel.value = props.prompt.slice(0, 80)
+  loadingSubLabel.value = promptText.slice(0, 80)
   refineError.value = ''
 
   try {
     const { data } = await api.post('/designer/process/analyse', {
-      description:   props.prompt,
+      description:   promptText,
       history:       props.history,
       existing_yaml: props.yamlSource || '',
       provider:      props.provider || undefined,
@@ -375,19 +468,12 @@ async function applyRefinement() {
 
     emit('update:history', [
       ...props.history,
-      { role: 'user',      content: props.prompt },
+      { role: 'user',      content: promptText },
       { role: 'assistant', content: data.explanation || 'Workflow updated.' },
     ])
     emit('update:prompt', '')
     emit('update:interactions', data.interactions || [])
     emit('apply', { yamlStr: data.yaml, definition: data.definition })
-
-    // Auto-scroll chat
-    setTimeout(() => {
-      if (refineScroll.value) {
-        refineScroll.value.scrollTop = refineScroll.value.scrollHeight
-      }
-    }, 50)
 
   } catch (e) {
     refineError.value = e.response?.data?.error ?? e.message
@@ -400,9 +486,11 @@ async function applyRefinement() {
 function clearHistory() {
   emit('update:history', [])
   emit('update:interactions', [])
+  emit('update:description', '')
+  resetPipeline()
 }
 
-// ── LLM providers ─────────────────────────────────────────────────────────────
+// ── LLM providers ──
 const enabledProviders = computed(() =>
   llmStore.PROVIDERS.filter(p => {
     const cfg = llmStore.configs.find(c => c.provider === p.id)
@@ -410,9 +498,119 @@ const enabledProviders = computed(() =>
   })
 )
 
-const activeProviderLabel = computed(() =>
-  props.provider ? llmStore.PROVIDERS.find(p => p.id === props.provider)?.label || '' : ''
-)
+// ── Feedback Parsers ──
+function formatDecompose(obj) {
+  let text = `Decomposed Workflow: ${obj.name || ''}\n`
+  if (obj.abstract) text += `Summary: ${obj.abstract}\n`
+  if (obj.detailed_description) text += `\nDescription:\n${obj.detailed_description}\n`
+  
+  if (Array.isArray(obj.states) && obj.states.length) {
+    text += `\nIdentified States:\n`
+    obj.states.forEach(s => {
+      text += `• ${s.name}: ${s.instructions || ''}\n`
+      if (s.data_contract) {
+        const reads = s.data_contract.reads?.map(r => r.name).join(', ') || 'none'
+        const writes = s.data_contract.writes?.map(w => w.name).join(', ') || 'none'
+        text += `  (Reads: ${reads} | Writes: ${writes})\n`
+      }
+    })
+  }
+  return text
+}
+
+function formatCategorise(obj) {
+  let text = `Categorized State Nodes:\n\n`
+  if (Array.isArray(obj.states) && obj.states.length) {
+    obj.states.forEach(s => {
+      const typeStr = s.type ? `[${s.type.toUpperCase()}]` : ''
+      const agent = s.agent_name ? ` (Agent: ${s.agent_name})` : ''
+      const timeout = s.timeout ? ` [Timeout: ${s.timeout}]` : ''
+      text += `• ${s.name} ${typeStr}${agent}${timeout}\n`
+      if (s.instructions) {
+        text += `  Instructions: ${s.instructions}\n`
+      }
+    })
+  }
+  return text
+}
+
+function formatWire(obj) {
+  let text = `Wired Transitions & Guards:\n\n`
+  if (Array.isArray(obj.transitions) && obj.transitions.length) {
+    obj.transitions.forEach(t => {
+      const guard = t.guard ? ` (if ${t.guard})` : ''
+      text += `• ${t.from} ➔ ${t.to} [Trigger: ${t.trigger}]${guard}\n`
+    })
+  }
+  return text
+}
+
+function formatImplement(obj) {
+  let text = `Finalized Workflow Contract:\n\n`
+  if (obj.metadata && obj.metadata.detailed_description) {
+    text += `${obj.metadata.detailed_description}\n\n`
+  }
+  if (obj.blackboard_schema) {
+    text += `Shared Blackboard Schema:\n`
+    Object.entries(obj.blackboard_schema).forEach(([k, v]) => {
+      const req = v.required ? ' (required)' : ''
+      text += `• ${k} (${v.type || 'any'})${req}\n`
+    })
+  }
+  if (Array.isArray(obj.inputs) && obj.inputs.length) {
+    text += `\nInputs:\n`
+    obj.inputs.forEach(i => {
+      text += `• ${i.name} (${i.type || 'any'}): ${i.description || ''}\n`
+    })
+  }
+  if (Array.isArray(obj.outputs) && obj.outputs.length) {
+    text += `\nOutputs:\n`
+    obj.outputs.forEach(o => {
+      text += `• ${o.name} (${o.type || 'any'}): ${o.description || ''}\n`
+    })
+  }
+  return text
+}
+
+function parseLLMFeedback(index, interactions) {
+  if (!interactions || !interactions.length) return null
+  const assistantMsg = [...interactions].reverse().find(m => m.role === 'assistant')
+  if (!assistantMsg || !assistantMsg.content) return null
+
+  const content = assistantMsg.content
+  let obj = null
+  try {
+    obj = JSON.parse(content)
+  } catch (e) {
+    const match = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+    if (match) {
+      try {
+        obj = JSON.parse(match[1])
+      } catch (e2) {}
+    }
+    if (!obj) {
+      const start = content.indexOf('{')
+      const end = content.lastIndexOf('}')
+      if (start !== -1 && end !== -1 && end > start) {
+        try {
+          obj = JSON.parse(content.slice(start, end + 1))
+        } catch (e3) {}
+      }
+    }
+  }
+
+  if (!obj) return null
+
+  try {
+    if (index === 0) return formatDecompose(obj)
+    if (index === 1) return formatCategorise(obj)
+    if (index === 2) return formatWire(obj)
+    if (index === 3) return formatImplement(obj)
+  } catch (e) {
+    console.error("Failed to format step feedback", e)
+  }
+  return null
+}
 
 onMounted(() => {
   if (llmStore.configs.length === 0) llmStore.fetchAll()

@@ -43,6 +43,18 @@ const routes = [
     meta: { title: 'Designer' }
   },
   {
+    path: '/ai-designer',
+    name: 'AIDesignerNew',
+    component: () => import('@/views/AIDesigner.vue'),
+    meta: { title: 'AI Designer' }
+  },
+  {
+    path: '/ai-designer/:name/:version',
+    name: 'AIDesigner',
+    component: () => import('@/views/AIDesigner.vue'),
+    meta: { title: 'AI Designer' }
+  },
+  {
     path: '/monitor/:id',
     name: 'Monitor',
     component: () => import('@/views/Monitor.vue'),

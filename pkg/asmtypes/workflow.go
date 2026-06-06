@@ -123,6 +123,7 @@ type StateDef struct {
 	// FormSchema is an optional JSON Schema used to render a custom input form
 	// in the dashboard when type == "hitl".
 	FormSchema map[string]interface{} `yaml:"form_schema,omitempty" json:"form_schema,omitempty"`
+	IsTimeoutNode bool `yaml:"is_timeout_node,omitempty" json:"is_timeout_node,omitempty"`
 
 	// Shorthand transitions (synthesized into formal Transitions at load time)
 	To          string       `yaml:"to,omitempty"            json:"to,omitempty"`

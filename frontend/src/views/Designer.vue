@@ -232,8 +232,15 @@
           />
         </div>
 
+        <!-- Resizer Divider for Right Sidebar -->
+        <div 
+          v-if="view === 'canvas'"
+          class="w-1.5 shrink-0 bg-border hover:bg-violet-500/80 active:bg-violet-500 cursor-col-resize transition-colors select-none z-10"
+          @mousedown="startSidebarResize"
+        />
+
         <!-- Right panel with tabs (canvas view only) -->
-        <aside v-if="view === 'canvas'" class="w-80 border-l border-border flex flex-col overflow-hidden bg-surface-1">
+        <aside v-if="view === 'canvas'" :style="{ width: sidebarWidth + 'px' }" class="border-l border-border flex flex-col overflow-hidden bg-surface-1 shrink-0">
 
           <!-- Tab bar -->
           <div class="flex border-b border-border shrink-0">
@@ -804,18 +811,53 @@ async function handleImportYAML() {
   }
 }
 
+const sidebarWidth = ref(320)
+let isDraggingSidebar = false
+let startSidebarX = 0
+let startSidebarWidth = 0
+
+function startSidebarResize(e) {
+  isDraggingSidebar = true
+  startSidebarX = e.clientX
+  startSidebarWidth = sidebarWidth.value
+  document.addEventListener('mousemove', doSidebarResize)
+  document.addEventListener('mouseup', stopSidebarResize)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function doSidebarResize(e) {
+  if (!isDraggingSidebar) return
+  const deltaX = startSidebarX - e.clientX
+  let newWidth = startSidebarWidth + deltaX
+  if (newWidth < 280) newWidth = 280
+  if (newWidth > 600) newWidth = 600
+  sidebarWidth.value = newWidth
+}
+
+function stopSidebarResize() {
+  isDraggingSidebar = false
+  document.removeEventListener('mousemove', doSidebarResize)
+  document.removeEventListener('mouseup', stopSidebarResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
 // ── Load on mount ────────────────────────────────────────────────────────────
 
 onMounted(async () => {
+  sessionStorage.setItem('chainnodes_preferred_designer', 'legacy')
+
   // Check for AI-proposed fix from the Monitor
   const fixData = sessionStorage.getItem('chainnodes_ai_fix')
   if (fixData) {
     try {
       const { yaml: fixYaml, explanation } = JSON.parse(fixData)
-      onAIApply({ yamlStr: fixYaml })
+      await onAIApply({ yamlStr: fixYaml })
       sessionStorage.removeItem('chainnodes_ai_fix')
       // Show success toast or notification would be nice here
       console.log('AI fix applied:', explanation)
+      return
     } catch (e) {
       console.error('Failed to apply stored AI fix:', e)
     }

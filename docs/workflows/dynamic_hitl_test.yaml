@@ -1,0 +1,69 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: dynamic-hitl-test
+  version: 1
+  description: "Workflow to test dynamic selection lists and custom transitions."
+
+blackboard:
+  schema:
+    candidates:
+      type: object
+      is_output: true
+    selected_value:
+      type: string
+      is_output: true
+
+states:
+  - name: START
+    type: initial
+    to: INITIALIZE
+
+  - name: INITIALIZE
+    type: code
+    code:
+      language: javascript
+      code: |
+        bb.candidates = [
+          { "value": "opt1", "label": "Option 1 (Alpha)" },
+          { "value": "opt2", "label": "Option 2 (Beta)" },
+          { "value": "opt3", "label": "Option 3 (Gamma)" }
+        ];
+        return { trigger: "initialized" };
+
+  - name: CHOOSE_OPTION
+    type: hitl
+    form_schema:
+      type: object
+      required: ["selected_value"]
+      properties:
+        selected_value:
+          type: string
+          title: "Select dynamic candidate"
+          enum_from_blackboard: "candidates"
+
+  - name: ACCEPT_STATE
+    type: terminal
+
+  - name: REJECT_STATE
+    type: terminal
+
+  - name: ESCALATE_STATE
+    type: terminal
+
+transitions:
+  - from: INITIALIZE
+    to: CHOOSE_OPTION
+    trigger: initialized
+
+  - from: CHOOSE_OPTION
+    to: ACCEPT_STATE
+    trigger: accept
+
+  - from: CHOOSE_OPTION
+    to: REJECT_STATE
+    trigger: reject
+
+  - from: CHOOSE_OPTION
+    to: ESCALATE_STATE
+    trigger: escalate

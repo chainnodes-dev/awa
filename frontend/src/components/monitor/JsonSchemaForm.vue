@@ -12,6 +12,7 @@
         :name="propName"
         :schema="propSchema"
         :required="isRequired(propName)"
+        :blackboard="initialData"
         v-model="formData[propName]"
       />
     </div>
@@ -54,7 +55,11 @@ function isRequired(name) {
 function initializeForm() {
   const propsObj = properties.value
   for (const key in propsObj) {
-    formData[key] = props.initialData[key] ?? propsObj[key].default ?? undefined
+    if (props.initialData[key] !== undefined) {
+      formData[key] = props.initialData[key]
+    } else if (formData[key] === undefined) {
+      formData[key] = propsObj[key].default ?? undefined
+    }
     
     // Ensure booleans default to false if not specified
     if (propsObj[key].type === 'boolean' && formData[key] === undefined) {
@@ -63,7 +68,9 @@ function initializeForm() {
   }
 }
 
-onMounted(initializeForm)
+// Initialize immediately on creation to prevent child mount race condition
+initializeForm()
+
 watch(() => props.schema, initializeForm, { deep: true })
 watch(() => props.initialData, initializeForm, { deep: true })
 

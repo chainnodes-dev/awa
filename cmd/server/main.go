@@ -120,9 +120,21 @@ func main() {
 	api.SeedWorkflows(s, defaultTenant.ID)
 
 	llmRegistry, activeLLMProvider, _ := llm.BuildRegistryFromDB(tenantCtx, s)
+	generatorProvider := activeLLMProvider
+	if generatorProvider == "ollama" {
+		generatorProvider = ""
+		for name := range llmRegistry.Snapshot() {
+			if name != "ollama" {
+				generatorProvider = name
+				break
+			}
+		}
+	}
 	var gen *designer.Generator
-	if llmProv, _ := llmRegistry.Get(activeLLMProvider); llmProv != nil {
-		gen = designer.NewGenerator(llmProv, mcpEntries, s)
+	if generatorProvider != "" {
+		if llmProv, _ := llmRegistry.Get(generatorProvider); llmProv != nil {
+			gen = designer.NewGenerator(llmProv, mcpEntries, s)
+		}
 	}
 
 	var secretMgr secrets.SecretManager
@@ -156,6 +168,28 @@ func main() {
 	}()
 
 	sched.Start()
+
+	// Load existing workflow schedules on startup
+	slog.Info("Loading existing schedules from database...")
+	tenantsList, err := s.ListTenants(ctx)
+	if err == nil {
+		for _, t := range tenantsList {
+			tCtx := store.WithTenantID(ctx, t.ID)
+			defs, err := s.ListDefinitions(tCtx, store.DefinitionFilter{})
+			if err == nil {
+				for _, def := range defs {
+					if def.Metadata.Schedule != "" {
+						if err := sched.AddWorkflow(t.ID, def); err != nil {
+							slog.Error("Failed to register startup schedule", "workflow", def.Metadata.Name, "tenant", t.ID, "error", err)
+						}
+					}
+				}
+			}
+		}
+	} else {
+		slog.Warn("Failed to list tenants for scheduler startup initialization", "error", err)
+	}
+
 	if cfg.EnableTelemetry {
 		telemetry.Start(s)
 	}
