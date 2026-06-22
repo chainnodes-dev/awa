@@ -201,6 +201,26 @@ func (h *Handlers) DiscoverMCPServer(c *gin.Context) {
 	var closer func() error
 
 	if body.Transport == "stdio" {
+		// Ensure environment map is initialized
+		if body.EnvVars == nil {
+			body.EnvVars = make(map[string]string)
+		}
+		// Curate a list of common environment keys needed by MCP servers to boot
+		for _, key := range []string{
+			"BRAVE_API_KEY",
+			"NOTION_API_KEY",
+			"LINEAR_API_KEY",
+			"AIRTABLE_API_KEY",
+			"GITHUB_PERSONAL_ACCESS_TOKEN",
+			"DATABASE_URL",
+			"SLACK_BOT_TOKEN",
+			"EDGAR_USER_AGENT",
+		} {
+			if val, ok := body.EnvVars[key]; !ok || val == "" {
+				body.EnvVars[key] = "dummy"
+			}
+		}
+
 		clt, cl, err := h.mcpManager.TestStdioClientMap(body.Command, body.Args, body.EnvVars)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to start server: %v", err)})

@@ -1,7 +1,10 @@
 package asmtypes
 
 import (
+	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // WorkflowDef is the root of a workflow YAML manifest.
@@ -224,6 +227,55 @@ type AgentDef struct {
 	PromptTemplate string            `yaml:"prompt_template,omitempty" json:"prompt_template,omitempty"`
 	Rules          []string          `yaml:"rules,omitempty"           json:"rules,omitempty"`
 	Config         map[string]string `yaml:"config,omitempty"          json:"config,omitempty"`
+}
+
+func (a *AgentDef) UnmarshalYAML(value *yaml.Node) error {
+	type alias struct {
+		Name           string               `yaml:"name"`
+		Model          string               `yaml:"model,omitempty"`
+		TaskQueue      string               `yaml:"task_queue,omitempty"`
+		Tools          []string             `yaml:"tools,omitempty"`
+		PromptTemplate string               `yaml:"prompt_template,omitempty"`
+		Rules          []string             `yaml:"rules,omitempty"`
+		Config         map[string]yaml.Node `yaml:"config,omitempty"`
+	}
+
+	var tmp alias
+	if err := value.Decode(&tmp); err != nil {
+		return err
+	}
+
+	a.Name = tmp.Name
+	a.Model = tmp.Model
+	a.TaskQueue = tmp.TaskQueue
+	a.Tools = tmp.Tools
+	a.PromptTemplate = tmp.PromptTemplate
+	a.Rules = tmp.Rules
+
+	if tmp.Config != nil {
+		a.Config = make(map[string]string)
+		for k, node := range tmp.Config {
+			switch node.Kind {
+			case yaml.ScalarNode:
+				a.Config[k] = node.Value
+			case yaml.SequenceNode:
+				var items []string
+				if err := node.Decode(&items); err != nil {
+					return err
+				}
+				a.Config[k] = strings.Join(items, ",")
+			default:
+				var val string
+				if err := node.Decode(&val); err != nil {
+					a.Config[k] = node.Value
+				} else {
+					a.Config[k] = val
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // Helpers

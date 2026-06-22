@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/asm-platform/asm/internal/executor/llm"
@@ -51,6 +52,8 @@ type GenerateResult struct {
 	Definition *asmtypes.WorkflowDef `json:"definition"`
 	// Interactions is the full conversation trace for this generation.
 	Interactions []llm.Message `json:"interactions"`
+	// Explanation is the optional assistant explanation of the changes made.
+	Explanation string `json:"explanation,omitempty"`
 }
 
 // Generator uses an LLM to produce WorkflowDef YAML from a plain-language description.
@@ -121,7 +124,7 @@ func (g *Generator) getFullRegistry(ctx context.Context) []MCPServerEntry {
 				for _, d := range dynamic {
 					exists := false
 					for _, existing := range g.registry {
-						if existing.Name == d.Name {
+						if strings.EqualFold(existing.Name, d.Name) {
 							exists = true
 							break
 						}
@@ -200,18 +203,38 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 
 	interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
 
-	if isRefinement {
-		return g.handleRefinementResponse(req, resp.Content, interaction)
-	}
-
-	// Legacy/Initial extraction for new workflows
 	yamlStr, def, err := g.extractAndValidate(resp.Content)
 	if err != nil {
-		return &GenerateResult{
-			YAML:         yamlStr,
-			Definition:   def,
-			Interactions: interaction,
-		}, fmt.Errorf("generated workflow is invalid: %w", err)
+		slog.Warn("YAML validation failed on first attempt, retrying with self-healing", "error", err)
+
+		// Append the failure turn to history
+		messages = append(messages, llm.Message{Role: "assistant", Content: resp.Content})
+		retryMsg := fmt.Sprintf("The generated YAML is invalid. Please fix the following validation/parsing error and output the complete, corrected YAML:\n\n```\n%v\n```", err)
+		messages = append(messages, llm.Message{Role: "user", Content: retryMsg})
+
+		interaction = append(interaction, llm.Message{Role: "user", Content: retryMsg})
+
+		// Retry completion
+		resp, err = g.provider.Complete(ctx, llm.CompletionRequest{
+			SystemPrompt: system,
+			Messages:     messages,
+			MaxTokens:    g.provider.MaxOutputTokens(),
+		})
+		if err != nil {
+			return &GenerateResult{Interactions: interaction}, fmt.Errorf("LLM call failed during self-healing retry: %w", err)
+		}
+
+		interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
+
+		// Try validating again
+		yamlStr, def, err = g.extractAndValidate(resp.Content)
+		if err != nil {
+			return &GenerateResult{
+				YAML:         yamlStr,
+				Definition:   def,
+				Interactions: interaction,
+			}, fmt.Errorf("generated workflow is invalid after self-healing retry: %w", err)
+		}
 	}
 
 	// Ensure process description is persisted.
@@ -219,119 +242,17 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 		def.Metadata.ProcessDescription = req.Description
 	}
 
+	explanation := extractExplanation(resp.Content)
+
 	return &GenerateResult{
 		YAML:         yamlStr,
 		Definition:   def,
+		Explanation:  explanation,
 		Interactions: interaction,
 	}, nil
 }
 
-func (g *Generator) handleRefinementResponse(req GenerateRequest, content string, interactions []llm.Message) (*GenerateResult, error) {
-	var result struct {
-		Explanation string `json:"explanation"`
-		StateUpdates []struct {
-			Name                  string            `json:"name"`
-			Type                  string            `json:"type"`
-			Instructions          string            `json:"instructions"`
-			TechnicalRequirements string            `json:"technical_requirements"`
-			Code                  string            `json:"code"`
-			Script                struct {
-				Trigger string            `json:"trigger"`
-				Updates map[string]string `json:"updates"`
-			} `json:"script"`
-			Agent      string   `json:"agent"`
-			MCPServers []string `json:"mcp_servers"`
-		} `json:"state_updates"`
-		NewStates []struct {
-			Name                  string `json:"name"`
-			Type                  string `json:"type"`
-			Instructions          string `json:"instructions"`
-			TechnicalRequirements string `json:"technical_requirements"`
-		} `json:"new_states"`
-		DeletedStates     []string `json:"deleted_states"`
-		TransitionUpdates []struct {
-			From    string `json:"from"`
-			To      string `json:"to"`
-			Trigger string `json:"trigger"`
-			Guard   string `json:"guard"`
-		} `json:"transition_updates"`
-		WorkflowCapabilities    []string                    `json:"workflow_capabilities"`
-		BlackboardSchemaUpdates map[string]asmtypes.FieldDef `json:"blackboard_schema_updates"`
-	}
 
-	jsonStr, err := extractJSONBlock(content)
-	if err != nil {
-		return &GenerateResult{Interactions: interactions}, fmt.Errorf("failed to extract JSON from AI response: %w", err)
-	}
-
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		return &GenerateResult{Interactions: interactions}, fmt.Errorf("failed to parse AI refinement response: %w", err)
-	}
-
-	// Apply patches via WorkflowEditor
-	def, _, err := asmtypes.LoadFromYAML([]byte(req.ExistingYAML))
-	if err != nil {
-		return &GenerateResult{Interactions: interactions}, fmt.Errorf("failed to load current workflow for refinement: %w", err)
-	}
-	editor := NewWorkflowEditor(def)
-
-	// 1. Deleted States
-	for _, name := range result.DeletedStates {
-		editor.DeleteState(name)
-	}
-
-	// 2. New States
-	for _, s := range result.NewStates {
-		editor.AddState(s.Name, asmtypes.StateType(s.Type), s.Instructions, s.TechnicalRequirements)
-	}
-
-	// 3. State Updates
-	for _, s := range result.StateUpdates {
-		editor.UpdateState(s.Name, asmtypes.StateType(s.Type), s.Instructions, s.TechnicalRequirements)
-		if s.Type == string(asmtypes.StateCode) && s.Code != "" {
-			editor.SetStateCode(s.Name, s.Code)
-		}
-		if s.Type == string(asmtypes.StateScript) && s.Script.Trigger != "" {
-			editor.SetStateScript(s.Name, s.Script.Trigger, s.Script.Updates)
-		}
-		if s.Agent != "" {
-			editor.SetStateAgent(s.Name, s.Agent, s.MCPServers)
-		}
-	}
-
-	// 4. Transitions
-	for _, t := range result.TransitionUpdates {
-		editor.AddTransition(t.From, t.To, t.Trigger, t.Guard)
-	}
-
-	// 5. Workflow Capabilities
-	if len(result.WorkflowCapabilities) > 0 {
-		editor.SetCapabilities(result.WorkflowCapabilities)
-	}
-
-	// 6. Blackboard Schema
-	if len(result.BlackboardSchemaUpdates) > 0 {
-		if def.Blackboard.Schema == nil {
-			def.Blackboard.Schema = make(map[string]asmtypes.FieldDef)
-		}
-		for k, v := range result.BlackboardSchemaUpdates {
-			def.Blackboard.Schema[k] = v
-		}
-	}
-
-	postProcessWorkflow(def)
-
-	newYAML, err := yaml.Marshal(def)
-	if err != nil {
-		return &GenerateResult{Interactions: interactions}, fmt.Errorf("failed to marshal refined workflow: %w", err)
-	}
-
-	return &GenerateResult{
-		YAML:         string(newYAML),
-		Definition:   def,
-		Interactions: interactions,
-	}, nil
-}
 
 // DebugWorkflowRequest is the input to the AI debugger.
 type DebugWorkflowRequest struct {
@@ -536,9 +457,10 @@ transitions:
   - from: START
     to: CALC_LOGIC
     trigger: done
+capabilities:
+  - mcp_server: "server-name"
 agents:
   - name: primary-agent
-    config: { mcp_servers: ["server-name"] }
 ` + "```" + `
 
 ### Efficiency Rules
@@ -599,9 +521,10 @@ func (g *Generator) AssembleSystemPrompt(ctx context.Context, requestedServers [
 	sb.WriteString("  - from: START\n")
 	sb.WriteString("    to: CALC_LOGIC\n")
 	sb.WriteString("    trigger: done\n")
+	sb.WriteString("capabilities:\n")
+	sb.WriteString("  - mcp_server: \"server-name\"\n")
 	sb.WriteString("agents:\n")
 	sb.WriteString("  - name: primary-agent\n")
-	sb.WriteString("    config: { mcp_servers: [\"server-name\"] }\n")
 	sb.WriteString("```\n\n")
 
 	// 3. Reusable Process Catalog
@@ -722,7 +645,6 @@ func ToListItems(entries []MCPServerEntry) []MCPServerListItem {
 	return out
 }
 
-// MarshalGenerateResult serialises the result to JSON-friendly map for the API response.
 func MarshalGenerateResult(r *GenerateResult) (map[string]interface{}, error) {
 	defBytes, err := json.Marshal(r.Definition)
 	if err != nil {
@@ -730,11 +652,15 @@ func MarshalGenerateResult(r *GenerateResult) (map[string]interface{}, error) {
 	}
 	var defMap interface{}
 	_ = json.Unmarshal(defBytes, &defMap)
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"yaml":         r.YAML,
 		"definition":   defMap,
 		"interactions": r.Interactions,
-	}, nil
+	}
+	if r.Explanation != "" {
+		out["explanation"] = r.Explanation
+	}
+	return out, nil
 }
 
 func postProcessWorkflow(def *asmtypes.WorkflowDef) {
@@ -743,9 +669,25 @@ func postProcessWorkflow(def *asmtypes.WorkflowDef) {
 	}
 	EnsureSingleUnconditionalInitialTransition(def)
 	EnsureTimeoutNodes(def)
+	PromoteMCPServersToCapabilities(def)
 }
 
 func EnsureSingleUnconditionalInitialTransition(def *asmtypes.WorkflowDef) {
+	// Ensure that only at most one state has Type == StateInitial.
+	// Demote any additional initial states to prompt states.
+	initialCount := 0
+	for i := range def.States {
+		if def.States[i].Type == asmtypes.StateInitial {
+			initialCount++
+			if initialCount > 1 {
+				def.States[i].Type = asmtypes.StatePrompt
+				if def.States[i].Agent == "" {
+					def.States[i].Agent = "primary-agent"
+				}
+			}
+		}
+	}
+
 	initialState := def.InitialState()
 	if initialState == nil {
 		return
@@ -924,6 +866,135 @@ func EnsureTimeoutNodes(def *asmtypes.WorkflowDef) {
 					To:      s.OnTimeout,
 					Trigger: s.OnTimeout,
 				})
+			}
+		}
+	}
+
+	DeduplicateTimeoutNodes(def)
+}
+
+func DeduplicateTimeoutNodes(def *asmtypes.WorkflowDef) {
+	// Find all states that act as a timeout node.
+	// A state is a timeout node if:
+	// - IsTimeoutNode is true
+	// - OR (Type == StateTerminal and Name contains "timeout")
+	var timeoutNodeNames []string
+	var primaryNodeName string
+
+	for _, s := range def.States {
+		isTimeout := s.IsTimeoutNode || (s.Type == asmtypes.StateTerminal && strings.Contains(strings.ToLower(s.Name), "timeout"))
+		if isTimeout {
+			timeoutNodeNames = append(timeoutNodeNames, s.Name)
+			if primaryNodeName == "" {
+				primaryNodeName = s.Name
+			}
+		}
+	}
+
+	// If no timeout node was identified, check if any state has OnTimeout.
+	if primaryNodeName == "" {
+		for _, s := range def.States {
+			if s.OnTimeout != "" {
+				primaryNodeName = s.OnTimeout
+				timeoutNodeNames = append(timeoutNodeNames, s.OnTimeout)
+				break
+			}
+		}
+	}
+
+	if primaryNodeName == "" {
+		return
+	}
+
+	// Standardize on primaryNodeName (prefer "timeout" if it exists in the list)
+	for _, name := range timeoutNodeNames {
+		if name == "timeout" {
+			primaryNodeName = "timeout"
+			break
+		}
+	}
+
+	// Map all duplicate timeout node names to the primary one
+	renameMap := make(map[string]string)
+	for _, name := range timeoutNodeNames {
+		if name != primaryNodeName {
+			renameMap[name] = primaryNodeName
+		}
+	}
+
+	if len(renameMap) == 0 {
+		return
+	}
+
+	// 1. Update all OnTimeout fields on states
+	for i := range def.States {
+		if newName, ok := renameMap[def.States[i].OnTimeout]; ok {
+			def.States[i].OnTimeout = newName
+		}
+	}
+
+	// 2. Update all transitions pointing to the renamed nodes
+	for i := range def.Transitions {
+		if newTo, ok := renameMap[def.Transitions[i].To]; ok {
+			def.Transitions[i].To = newTo
+		}
+		if def.Transitions[i].Trigger != "" {
+			if newTrigger, ok := renameMap[def.Transitions[i].Trigger]; ok {
+				def.Transitions[i].Trigger = newTrigger
+			}
+		}
+		for j, toNode := range def.Transitions[i].ToNodes {
+			if newTo, ok := renameMap[toNode]; ok {
+				def.Transitions[i].ToNodes[j] = newTo
+			}
+		}
+	}
+
+	// 3. Filter out the duplicate timeout states from def.States
+	var keptStates []asmtypes.StateDef
+	seenKept := make(map[string]bool)
+	for _, s := range def.States {
+		if _, isDuplicate := renameMap[s.Name]; isDuplicate {
+			continue
+		}
+		if s.Name == primaryNodeName {
+			s.IsTimeoutNode = true
+		}
+		if !seenKept[s.Name] {
+			keptStates = append(keptStates, s)
+			seenKept[s.Name] = true
+		}
+	}
+	def.States = keptStates
+}
+
+func PromoteMCPServersToCapabilities(def *asmtypes.WorkflowDef) {
+	// Find all MCP servers listed in agent configs
+	seen := make(map[string]bool)
+	for _, cap := range def.Capabilities {
+		if cap.MCPServer != "" {
+			seen[cap.MCPServer] = true
+		}
+	}
+
+	for i := range def.Agents {
+		if def.Agents[i].Config != nil {
+			if list, ok := def.Agents[i].Config["mcp_servers"]; ok && list != "" {
+				servers := strings.Split(list, ",")
+				for _, s := range servers {
+					s = strings.TrimSpace(s)
+					if s != "" && !seen[s] {
+						def.Capabilities = append(def.Capabilities, asmtypes.CapabilityDecl{
+							MCPServer: s,
+						})
+						seen[s] = true
+					}
+				}
+				// Remove mcp_servers from the agent config
+				delete(def.Agents[i].Config, "mcp_servers")
+				if len(def.Agents[i].Config) == 0 {
+					def.Agents[i].Config = nil
+				}
 			}
 		}
 	}

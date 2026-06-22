@@ -188,14 +188,15 @@ func (p *OpenAIProvider) convertMessage(m Message) []map[string]interface{} {
 		var text string
 		var msgs []map[string]interface{}
 		for _, b := range blocks {
-			if b.Type == "tool_result" {
+			switch b.Type {
+			case "tool_result":
 				resultBytes, _ := json.Marshal(b.Output)
 				msgs = append(msgs, map[string]interface{}{
 					"role":         "tool",
 					"tool_call_id": b.ToolUseID,
 					"content":      string(resultBytes),
 				})
-			} else if b.Type == "text" {
+			case "text":
 				text += b.Text
 			}
 		}

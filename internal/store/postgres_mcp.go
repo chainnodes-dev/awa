@@ -11,6 +11,7 @@ import (
 )
 
 func (s *PostgresStore) CreateMCPServer(ctx context.Context, srv *MCPServer) error {
+	srv.Name = NormalizeMCPServerName(srv.Name)
 	if srv.ID == "" {
 		srv.ID = uuid.NewString()
 	}
@@ -97,6 +98,7 @@ func (s *PostgresStore) ListMCPServers(ctx context.Context) ([]*MCPServer, error
 }
 
 func (s *PostgresStore) UpdateMCPServer(ctx context.Context, srv *MCPServer) error {
+	srv.Name = NormalizeMCPServerName(srv.Name)
 	envVars, _ := json.Marshal(srv.EnvVars)
 	if len(envVars) == 0 {
 		envVars = []byte("{}")

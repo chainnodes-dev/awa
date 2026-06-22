@@ -1,10 +1,14 @@
 package events
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -22,15 +26,33 @@ type LocalBus struct {
 	mu          sync.RWMutex
 	subscribers map[int]chan Event
 	next        int
+	forwardURL  string
+	token       string
+	client      *http.Client
 }
 
 func NewLocalBus() *LocalBus {
 	return &LocalBus{subscribers: make(map[int]chan Event)}
 }
 
-func (b *LocalBus) Publish(_ context.Context, event Event) error {
+func NewLocalBusWithForwarding(forwardURL string, token string) *LocalBus {
+	return &LocalBus{
+		subscribers: make(map[int]chan Event),
+		forwardURL:  forwardURL,
+		token:       token,
+		client: &http.Client{
+			Timeout: 5 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 100,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
+	}
+}
+
+func (b *LocalBus) Publish(ctx context.Context, event Event) error {
 	b.mu.RLock()
-	defer b.mu.RUnlock()
 	for _, ch := range b.subscribers {
 		select {
 		case ch <- event:
@@ -38,6 +60,31 @@ func (b *LocalBus) Publish(_ context.Context, event Event) error {
 			// drop if subscriber is slow
 		}
 	}
+	b.mu.RUnlock()
+
+	if b.forwardURL != "" {
+		go func() {
+			data, err := json.Marshal(event)
+			if err != nil {
+				return
+			}
+			req, err := http.NewRequestWithContext(context.Background(), "POST", b.forwardURL, bytes.NewReader(data))
+			if err != nil {
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+			if b.token != "" {
+				req.Header.Set("X-Internal-Token", b.token)
+			}
+			resp, err := b.client.Do(req)
+			if err != nil {
+				return
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}()
+	}
+
 	return nil
 }
 

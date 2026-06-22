@@ -269,3 +269,8 @@ func EvalGuard(expression string, bb map[string]interface{}) (bool, error) {
 	}
 	return b, nil
 }
+
+// PublishEvent publishes an event to the engine's event bus.
+func (e *Engine) PublishEvent(ctx context.Context, event events.Event) error {
+	return e.bus.Publish(ctx, event)
+}

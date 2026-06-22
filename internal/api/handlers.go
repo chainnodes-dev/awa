@@ -14,6 +14,7 @@ import (
 	"github.com/asm-platform/asm/internal/config"
 	"github.com/asm-platform/asm/internal/designer"
 	"github.com/asm-platform/asm/internal/enterprise"
+	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/orchestrator"
@@ -29,12 +30,25 @@ type SchedulerAdder interface {
 	RemoveWorkflow(tenantID, name, version string)
 }
 
+// TriggerManagerAdder handles workflow level trigger updates.
 type TriggerManagerAdder interface {
 	AddWorkflow(ctx context.Context, tenantID string, def *asmtypes.WorkflowDef) error
 	RemoveWorkflow(ctx context.Context, tenantID, workflowName, version string)
 	HandleWebhook(ctx context.Context, tenantID, workflowName, version, triggerName string, payload map[string]interface{}) (*asmtypes.WorkflowRun, error)
 }
 
+// Handlers bundles all API endpoint controllers and their shared dependencies.
+//
+// Architectural Note:
+// Handlers has a relatively high count of fields (outbound containment count/God Object metric).
+// This is a deliberate design choice for HTTP route handlers in this application:
+//  1. By consolidating shared dependencies (store, engine, token services, config, managers)
+//     in a single container, we avoid constructing and passing dozens of separate handler objects
+//     during router registration.
+//  2. It keeps the routes definition file (routes.go) clean, centralized, and straightforward.
+//  3. Individual handlers are split cleanly across separate files (designer_handlers.go,
+//     auth_handlers.go, llm_handlers.go, etc.) sharing this common receiver, which maintains
+//     excellent file-level separation of concerns without introducing over-abstraction.
 type Handlers struct {
 	engine      *orchestrator.Engine
 	store       store.Store
@@ -51,6 +65,7 @@ type Handlers struct {
 	cfg             *config.Config
 	secretMgr       secrets.SecretManager
 }
+
 
 func (h *Handlers) ReloadLicenseKeys(ctx context.Context) error {
 	pubKeyPEM, err := h.store.GetSystemSetting(ctx, "license_public_key")
@@ -421,6 +436,27 @@ func (h *Handlers) GetMCPLogs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, logs)
+}
+
+func (h *Handlers) PublishInternalEvent(c *gin.Context) {
+	token := c.GetHeader("X-Internal-Token")
+	if token == "" || token != h.cfg.JWTSecret {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var event events.Event
+	if err := c.ShouldBindJSON(&event); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.engine.PublishEvent(c.Request.Context(), event); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 // -- License Gating Helpers --
 

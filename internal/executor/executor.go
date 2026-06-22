@@ -280,18 +280,23 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 
 			_ = e.bus.Publish(ctx, events.New(events.AgentToolCall, events.AgentToolCallPayload{
 				RunID:     task.RunID,
+				StateName: task.StateDef.Name,
 				AgentName: agent.Name,
 				ToolName:  tc.Name,
 				Input:     tc.Input,
 			}))
 
+			toolStart := time.Now()
 			var resultJSON json.RawMessage
+			var toolErr error
+
 			if cached, hit := toolCallCache[cacheKey]; hit {
 				slog.Debug("Tool call cache hit", "tool", tc.Name)
 				resultJSON = cached
 			} else {
 				// We pass tc.ID so sub-workflows can generate a deterministic temporalID.
-				raw, toolErr := e.executeTool(ctx, activeRegistry, tc.Name, inputJSON, task.RunID, tc.ID)
+				var raw []byte
+				raw, toolErr = e.executeTool(ctx, activeRegistry, tc.Name, inputJSON, task.RunID, tc.ID)
 				if toolErr != nil {
 					slog.Warn("Tool error", "tool", tc.Name, "error", toolErr)
 					raw, _ = json.Marshal(fmt.Sprintf("error: %v", toolErr))
@@ -303,12 +308,22 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 			var resultVal interface{}
 			_ = json.Unmarshal(resultJSON, &resultVal)
 
+			durationMs := int(time.Since(toolStart).Milliseconds())
+			var errMsg string
+			if toolErr != nil {
+				errMsg = toolErr.Error()
+			}
+
 			_ = e.bus.Publish(ctx, events.New(events.AgentToolCall, events.AgentToolCallPayload{
-				RunID:     task.RunID,
-				AgentName: agent.Name,
-				ToolName:  tc.Name,
-				Input:     tc.Input,
-				Output:    resultVal,
+				RunID:      task.RunID,
+				StateName:  task.StateDef.Name,
+				AgentName:  agent.Name,
+				ToolName:   tc.Name,
+				Input:      tc.Input,
+				Output:     resultVal,
+				DurationMs: durationMs,
+				IsError:    toolErr != nil,
+				ErrorMsg:   errMsg,
 			}))
 
 			toolResultBlocks = append(toolResultBlocks, llm.ContentBlock{

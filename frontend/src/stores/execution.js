@@ -180,6 +180,42 @@ export const useExecutionStore = defineStore('execution', () => {
         break
       }
 
+      case 'agent.tool_call': {
+        console.debug('[debug] agent.tool_call received', data.run_id, data.tool_name)
+        if (!data.output) {
+          // Start of tool call, wait for the completion event.
+          break
+        }
+        if (!mcpLogs[data.run_id]) {
+          mcpLogs[data.run_id] = []
+        }
+        const exists = mcpLogs[data.run_id].some(
+          log => log.tool_name === data.tool_name &&
+                 log.state_name === data.state_name &&
+                 log.agent_name === data.agent_name &&
+                 JSON.stringify(log.input) === JSON.stringify(data.input) &&
+                 JSON.stringify(log.output) === JSON.stringify(data.output)
+        )
+        if (!exists) {
+          mcpLogs[data.run_id].push({
+            id: `live-mcp-${data.tool_name}-${Date.now()}`,
+            run_id: data.run_id,
+            state_name: data.state_name,
+            agent_name: data.agent_name,
+            server_url: 'MCP Server',
+            method: 'tools/call',
+            tool_name: data.tool_name,
+            input: data.input,
+            output: data.output,
+            duration_ms: data.duration_ms,
+            is_error: data.is_error,
+            error_msg: data.error_msg,
+            created_at: event.timestamp
+          })
+        }
+        break
+      }
+
       case 'agent.prompt': {
         console.debug('[debug] agent.prompt received', data.run_id, data.agent_name, data.state_name)
         if (!llmCalls[data.run_id]) llmCalls[data.run_id] = []

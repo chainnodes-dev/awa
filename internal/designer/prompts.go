@@ -215,58 +215,30 @@ func DefaultRefinePrompt() string {
 	return `You are an expert workflow architect. Your goal is to refine an EXISTING workflow based on new user instructions.
 
 ### Your Task
-Produce a structured JSON payload describing the changes. 
-- **Atomic Patches**: Do NOT return the whole YAML. Only return the components that need to change.
-- **Context Awareness**: Review both 'instructions' (human-readable) and 'technical_requirements' (machine-readable) to understand the current logic. If 'technical_requirements' is missing, treat 'instructions' as the source of truth.
-- **Consistency**: Ensure any new states or transitions remain consistent with the existing flow.
-- **Human Review (HITL) Nodes**: When defining or refining ` + "`" + `hitl` + "`" + ` states, remember that outgoing transitions originating from the state define action buttons in the UI. For dynamic selection from a blackboard key, configure ` + "`" + `enum_from_blackboard: "blackboard_key_name"` + "`" + ` on the select field in the ` + "`" + `form_schema` + "`" + `.
+Review the existing workflow YAML, the process description, and the user's refinement instructions. 
+Produce the ENTIRE updated workflow YAML containing the requested changes.
+
+### Guidelines
+1. **Preserve Existing Structure**: Retain all unchanged states, transitions, agents, and blackboard schemas unless explicitly requested to add, modify, or remove them. Do not lose existing instructions, code, or configurations.
+2. **YAML Schema Consistency**: Ensure the returned YAML strictly adheres to the schema.
+   - Every non-terminal state must transition to at least one next state.
+   - For 'hitl' states, define assignee and form_schema.
+   - For 'subprocess' states, define the subprocess block (process_ref, input_mappings, output_mappings).
+3. **Deterministic Logic**: Prefer 'script' or 'code' for deterministic calculations.
+4. **Timeouts**: Configured timeouts on non-terminal states must transition to the terminal timeout node.
 
 ### Output Format
-Return ONLY a valid JSON block with the following schema:
+First, output a brief explanation of the changes you made.
+Then, return ONLY a valid YAML code block containing the complete, updated workflow.
 
-` + "```json" + `
-{
-  "explanation": "Brief description of the changes applied.",
-  "state_updates": [
-    {
-      "name": "EXISTING_STATE_NAME",
-      "type": "prompt | script | code | hitl | wait | subprocess",
-      "instructions": "Updated human instructions.",
-      "technical_requirements": "Updated machine-readable logic.",
-      "code": "Updated JavaScript (for 'code' nodes).",
-      "script": {
-        "trigger": "Updated trigger expression",
-        "updates": { "field": "Updated update expression" }
-      },
-      "agent": "agent-name",
-      "mcp_servers": ["server1"]
-    }
-  ],
-  "new_states": [
-    {
-      "name": "NEW_STATE_NAME",
-      "type": "prompt",
-      "instructions": "...",
-      "technical_requirements": "..."
-    }
-  ],
-  "deleted_states": ["STATE_NAME_TO_REMOVE"],
-  "transition_updates": [
-    {
-      "from": "FROM_STATE",
-      "to": "TO_STATE",
-      "trigger": "trigger_name",
-      "guard": "Optional guard expression"
-    }
-  ],
-  "workflow_capabilities": ["server-name"],
-  "blackboard_schema_updates": {
-    "field_name": {
-      "type": "string | number | bool | object",
-      "required": true
-    }
-  }
-}
+Example Output:
+I have removed the specified state and updated the transitions.
+
+` + "```yaml" + `
+apiVersion: chainnodes/v1
+metadata:
+  name: example-workflow
+...
 ` + "```" + `
 `
 }
@@ -341,8 +313,8 @@ Review the workflow states and determine the optimal execution type for each.
 - Prefer 'script' over 'code' for simple boolean checks.
 - Use 'prompt' ONLY when LLM intelligence or an MCP server is actually required.
 - **HITL Form Schema & Assignee**: Every 'hitl' state MUST have a non-empty 'form_schema' (defining type, required fields, and properties) and an 'assignee' (string name of the team/role responsible, e.g. "compliance-officer").
-- **Timeouts**: Every non-terminal node (especially 'prompt' and 'hitl' nodes) MUST have a timeout configured. You must specify a 'timeout' string (e.g. '2m', '10m', '24h') and 'on_timeout' (the name of the transition trigger to fire when the timeout occurs). If no specific timeout is requested in the process description, use the standard timeout of '2m' with 'on_timeout: "timeout"'.
-- **Timeout Nodes**: If you add a timeout (transitioning to "timeout"), you must also define a corresponding terminal state (e.g. name: "timeout", type: "terminal") with "is_timeout_node": true in the states list.
+- **Timeouts**: Every non-terminal node (especially 'prompt' and 'hitl' nodes) MUST have a timeout configured. You must specify a 'timeout' string (e.g. '2m', '10m', '24h') and 'on_timeout' (the name of the transition trigger to fire when the timeout occurs). If a specific timeout trigger name (e.g. "terminal_timeout" or "timeout") is requested in the process description, use that requested name for 'on_timeout' on all nodes. Otherwise, use the standard trigger name "timeout" with a '2m' duration.
+- **Timeout Nodes**: Define exactly ONE corresponding terminal state in the states list (matching the trigger name used, e.g., name: "timeout" or "terminal_timeout", type: "terminal") with "is_timeout_node": true. Do NOT define multiple timeout terminal states.
  
 ### Output Format
 **IMPORTANT**: Return ONLY a valid JSON block defining the type and timeout settings for each state. 

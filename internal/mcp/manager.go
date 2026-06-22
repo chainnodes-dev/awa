@@ -62,8 +62,9 @@ func (m *Manager) findServer(ctx context.Context, name string) (*store.MCPServer
 	if err != nil {
 		return nil, err
 	}
+	normName := store.NormalizeMCPServerName(name)
 	for _, s := range servers {
-		if s.Name == name {
+		if store.NormalizeMCPServerName(s.Name) == normName {
 			return s, nil
 		}
 	}

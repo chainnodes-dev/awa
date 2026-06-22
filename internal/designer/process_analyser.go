@@ -101,12 +101,36 @@ func (g *Generator) AnalyseProcess(ctx context.Context, req ProcessAnalyseReques
 
 	yamlStr, def, err := g.extractAndValidate(resp.Content)
 	if err != nil {
-		// No automatic retry.
-		return &ProcessAnalyseResult{
-			YAML:         yamlStr,
-			Definition:   def,
-			Interactions: interaction,
-		}, fmt.Errorf("generated workflow is invalid: %w", err)
+		slog.Warn("YAML validation failed on first attempt, retrying with self-healing", "error", err)
+
+		// Append the failure turn to history
+		messages = append(messages, llm.Message{Role: "assistant", Content: resp.Content})
+		retryMsg := fmt.Sprintf("The generated YAML is invalid. Please fix the following validation/parsing error and output the complete, corrected YAML:\n\n```\n%v\n```", err)
+		messages = append(messages, llm.Message{Role: "user", Content: retryMsg})
+
+		interaction = append(interaction, llm.Message{Role: "user", Content: retryMsg})
+
+		// Retry completion
+		resp, err = g.provider.Complete(ctx, llm.CompletionRequest{
+			SystemPrompt: system,
+			Messages:     messages,
+			MaxTokens:    g.provider.MaxOutputTokens(),
+		})
+		if err != nil {
+			return &ProcessAnalyseResult{Interactions: interaction}, fmt.Errorf("LLM call failed during self-healing retry: %w", err)
+		}
+
+		interaction = append(interaction, llm.Message{Role: "assistant", Content: resp.Content})
+
+		// Try validating again
+		yamlStr, def, err = g.extractAndValidate(resp.Content)
+		if err != nil {
+			return &ProcessAnalyseResult{
+				YAML:         yamlStr,
+				Definition:   def,
+				Interactions: interaction,
+			}, fmt.Errorf("generated workflow is invalid after self-healing retry: %w", err)
+		}
 	}
 
 	explanation := extractExplanation(resp.Content)

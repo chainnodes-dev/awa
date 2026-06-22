@@ -3,3 +3,10 @@
 # Standard defaults (node_modules, vendor, testdata, *.test, etc.) are ignored automatically.
 
 .vitepress
+.cache
+frontend/node_modules
+temporal-config
+website
+data
+migrations
+

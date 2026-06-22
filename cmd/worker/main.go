@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -46,16 +47,16 @@ func main() {
 			pingCancel()
 		}
 		if err != nil {
-			slog.Warn("Redis unavailable, falling back to local bus — WebSocket events will NOT reach the API server",
+			slog.Warn("Redis unavailable, falling back to local bus with forwarding",
 				"url", cfg.RedisURL, "error", err)
-			bus = events.NewLocalBus()
+			bus = events.NewLocalBusWithForwarding(fmt.Sprintf("http://127.0.0.1:%s/api/v1/internal/events", cfg.Port), cfg.JWTSecret)
 		} else {
 			bus = redisBus
 			slog.Info("Event bus: Redis (events will reach the API server WebSocket hub)", "url", cfg.RedisURL)
 		}
 	} else {
-		slog.Warn("REDIS_URL not set — using local bus, WebSocket events will NOT reach the API server")
-		bus = events.NewLocalBus()
+		slog.Warn("REDIS_URL not set — using local bus with forwarding")
+		bus = events.NewLocalBusWithForwarding(fmt.Sprintf("http://127.0.0.1:%s/api/v1/internal/events", cfg.Port), cfg.JWTSecret)
 	}
 
 	// -- Store --

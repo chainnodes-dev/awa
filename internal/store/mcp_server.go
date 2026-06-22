@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -63,3 +64,25 @@ type MCPServerStore interface {
 	// ListMCPCalls returns the audit trail for a specific run.
 	ListMCPCalls(ctx context.Context, runID string) ([]*asmtypes.MCPAuditLog, error)
 }
+
+// NormalizeMCPServerName normalizes the name to lowercase kebab-case.
+func NormalizeMCPServerName(name string) string {
+	name = strings.ToLower(name)
+	var sb strings.Builder
+	lastWasHyphen := false
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			sb.WriteRune(r)
+			lastWasHyphen = false
+		} else {
+			if !lastWasHyphen && sb.Len() > 0 {
+				sb.WriteByte('-')
+				lastWasHyphen = true
+			}
+		}
+	}
+	res := sb.String()
+	res = strings.Trim(res, "-")
+	return res
+}
+

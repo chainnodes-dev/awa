@@ -13,10 +13,20 @@ import (
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
-// MemoryStore is an in-memory implementation for development and testing.
+// MemoryStore is an in-memory implementation for development, testing, and local fallback.
+//
+// Architectural Note:
+// MemoryStore combines all the individual entity sub-stores (WorkflowStore, RunStore,
+// HITLStore, UserStore, etc.) into a single concrete struct. While this creates a high 
+// outbound containment count (God Object metric), it is a deliberate and pragmatic design choice:
+//  1. It allows test suites and local development environments to pass a single, unified database
+//     handle around easily.
+//  2. It simplifies transaction-like locking across different entity maps using a single mutex (s.mu).
+//  3. It matches the PostgresStore structure, maintaining symmetry between the two storage drivers.
 type MemoryStore struct {
 	mu            sync.RWMutex
 	tenants       map[string]*Tenant  // key: id
+
 	tenantsBySlug map[string]string   // slug → id
 	idpConfigs    map[string]*IDPConfig
 	definitions   map[string]*defEntry       // key: tenantID:name@version

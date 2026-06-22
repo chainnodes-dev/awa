@@ -1,6 +1,6 @@
 # ContextShrinker Architecture Health Report
 
-Generated on: Thu, 28 May 2026 16:43:00 CEST
+Generated on: Sun, 21 Jun 2026 21:08:40 CEST
 Target Workspace: `/Users/egongemmel/dev/claude/asm-platform`
 
 ---
@@ -10,15 +10,15 @@ Identifies classes/structs containing the highest count of fields, functions, or
 
 | Class/Struct | File | Outbound Containment Count |
 |---|---|---|
-| `StateDef` | `pkg/asmtypes/workflow.go` | 26 |
+| `StateDef` | `pkg/asmtypes/workflow.go` | 27 |
 | `Config` | `internal/config/config.go` | 25 |
 | `step1Response` | `internal/designer/pipeline.go` | 22 |
 | `MemoryStore` | `internal/store/memory.go` | 19 |
-| `HITLRequest` | `pkg/asmtypes/runtime.go` | 15 |
-| `MCPServer` | `internal/store/mcp_server.go` | 13 |
-| `MarketEntry` | `internal/mcp/marketplace.go` | 13 |
+| `HITLRequest` | `pkg/asmtypes/runtime.go` | 16 |
 | `Handlers` | `internal/api/handlers.go` | 13 |
 | `MCPAuditLog` | `pkg/asmtypes/workflow.go` | 13 |
+| `MarketEntry` | `internal/mcp/marketplace.go` | 13 |
+| `MCPServer` | `internal/store/mcp_server.go` | 13 |
 | `WorkflowRun` | `pkg/asmtypes/runtime.go` | 12 |
 
 ## 2. Inbound Coupling hotspots (Black Holes)
@@ -26,15 +26,15 @@ Identifies functions called heavily from elsewhere in the codebase, highlighting
 
 | Function | File | Inbound Call Count |
 |---|---|---|
-| `TenantIDFromContext` | `internal/store/interfaces.go` | 68 |
+| `TenantIDFromContext` | `internal/store/interfaces.go` | 67 |
+| `do` | `internal/api/handlers_test.go` | 45 |
 | `col` | `scripts/load_test.py` | 36 |
-| `do` | `internal/api/handlers_test.go` | 35 |
+| `Publish` | `internal/events/bus.go` | 30 |
 | `NewMemoryStore` | `internal/store/memory.go` | 28 |
-| `Publish` | `internal/events/bus.go` | 28 |
+| `jsonBody` | `internal/api/handlers_test.go` | 25 |
 | `getEnv` | `internal/config/config.go` | 25 |
-| `jsonBody` | `internal/api/handlers_test.go` | 22 |
-| `testRouter` | `internal/api/handlers_test.go` | 21 |
-| `Complete` | `internal/executor/executor_test.go` | 18 |
+| `testRouter` | `internal/api/handlers_test.go` | 23 |
+| `Complete` | `internal/executor/executor_test.go` | 22 |
 | `New` | `internal/events/types.go` | 17 |
 
 ## 3. Cyclic Import Dependencies
@@ -58,4 +58,16 @@ Identifies unexported functions that have zero inbound callers.
 | `main` | `cmd/worker/main.go` |
 | `init` | `internal/api/handlers_test.go` |
 | `main` | `scratch/gen_license.go` |
+| `main` | `scratch/register_test_workflow.go` |
+| `main` | `scratch/test_mcp.go` |
+
+## 5. AI-Generated Code Audit Metrics
+Assesses structural duplication, unused boilerplate, and boundaries violations introduced in the codebase.
+
+| Metric | Value | Danger Threshold | Status |
+|---|---|---|---|
+| **Structural Clone Ratio (SCR)** | `16.40%` (152/927 cloned functions) | `>10.00%` | ⚠️ Danger |
+| **Dead Code Ratio (DCR)** | `1.40%` (13/927 dead functions) | `>5.00%` | ✅ Pass |
+| **Boundary Violations Index (BVI)** | `0` violations | `>0` | ✅ Pass |
+| **Abstraction Overkill Index (AOI)** | `0.00` (0 interfaces vs 210 concrete) | `>0.50` | ✅ Pass |
 

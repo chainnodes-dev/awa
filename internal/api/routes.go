@@ -38,6 +38,9 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 		// Webhook Triggers
 		v1.POST("/triggers/webhook/:tenant_id/:workflow_name/:version/:trigger_name", h.HandleWebhook)
 
+		// Internal Event Sync (from worker to server)
+		v1.POST("/internal/events", h.PublishInternalEvent)
+
 		// 2. PROTECTED API (Requires JWT)
 		protected := v1.Group("", auth.RequireAuth(jwtSvc))
 		{

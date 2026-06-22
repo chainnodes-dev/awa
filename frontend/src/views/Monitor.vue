@@ -915,9 +915,7 @@ function syncFromTweakJson(data) {
 async function loadRun() {
   const r = await execStore.fetchRun(route.params.id)
   await execStore.fetchHistory(route.params.id)
-  if (authStore.hasRole('admin')) {
-    await execStore.fetchMCPLogs(route.params.id)
-  }
+  await execStore.fetchMCPLogs(route.params.id)
   if (r) {
     const { definition, yaml: src } = await wfStore
       .fetchOne(r.workflow_name, r.workflow_version)

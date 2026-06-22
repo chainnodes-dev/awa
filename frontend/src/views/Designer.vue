@@ -245,10 +245,6 @@
           <!-- Tab bar -->
           <div class="flex border-b border-border shrink-0">
             <button
-              @click="rightTab = 'properties'"
-              :class="['flex-1 py-2 text-xs font-medium transition-colors', rightTab === 'properties' ? 'text-text border-b-2 border-accent' : 'text-text-muted hover:text-text-muted']"
-            >Properties</button>
-            <button
               @click="rightTab = 'generate'"
               :class="['flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5', rightTab === 'generate' ? 'text-text border-b-2 border-violet-400' : 'text-text-muted hover:text-text-muted']"
             >
@@ -257,6 +253,10 @@
               </svg>
               Generate
             </button>
+            <button
+              @click="rightTab = 'properties'"
+              :class="['flex-1 py-2 text-xs font-medium transition-colors', rightTab === 'properties' ? 'text-text border-b-2 border-accent' : 'text-text-muted hover:text-text-muted']"
+            >Properties</button>
           </div>
 
           <!-- Properties tab -->
@@ -467,7 +467,7 @@ const bbSchema = reactive({})
 const versions = ref([])
 
 const view              = ref('canvas')
-const rightTab          = ref('properties')
+const rightTab          = ref('generate')
 const yamlSource        = ref('')
 const yamlErrors        = ref([])
 const saving            = ref(false)

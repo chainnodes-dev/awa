@@ -387,3 +387,66 @@ func TestMemoryStore_ListHITLs(t *testing.T) {
 		t.Errorf("expected 0 pending for alice, got %d", len(alicePending))
 	}
 }
+
+func TestNormalizeMCPServerName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"Brave Search", "brave-search"},
+		{"brave-search", "brave-search"},
+		{"brave_search", "brave-search"},
+		{"LEI (GLEIF)", "lei-gleif"},
+		{"Wikipedia", "wikipedia"},
+		{"  Spaces  And--Dashes__ ", "spaces-and-dashes"},
+	}
+
+	for _, tc := range tests {
+		got := NormalizeMCPServerName(tc.input)
+		if got != tc.expected {
+			t.Errorf("NormalizeMCPServerName(%q): got %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+func TestMemoryStore_CreateMCPServer_NormalizesName(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+
+	srv1 := &MCPServer{
+		TenantID:  "tenant-1",
+		Name:      "Brave Search",
+		Transport: "stdio",
+		Command:   "npx",
+	}
+
+	if err := s.CreateMCPServer(ctx, srv1); err != nil {
+		t.Fatalf("CreateMCPServer: %v", err)
+	}
+
+	// Verify the name was normalized
+	got, err := s.GetMCPServer(ctx, srv1.ID)
+	if err != nil {
+		t.Fatalf("GetMCPServer: %v", err)
+	}
+	if got.Name != "brave-search" {
+		t.Errorf("expected name to be normalized to 'brave-search', got %q", got.Name)
+	}
+
+	// Try to add a server with a duplicate name that would normalize to the same value
+	srv2 := &MCPServer{
+		TenantID:  "tenant-1",
+		Name:      "brave_search",
+		Transport: "stdio",
+		Command:   "npx",
+	}
+
+	if err := s.CreateMCPServer(ctx, srv2); err != nil {
+		t.Fatalf("CreateMCPServer with duplicate name: %v", err)
+	}
+
+	// Because of upsert behavior on duplicate, it should update srv1's record
+	if srv2.ID != srv1.ID {
+		t.Errorf("expected duplicate server registration to upsert and match ID %q, got %q", srv1.ID, srv2.ID)
+	}
+}

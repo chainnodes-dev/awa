@@ -99,6 +99,30 @@ func TestEnsureSingleUnconditionalInitialTransition_MultipleTransitions(t *testi
 	}
 }
 
+func TestEnsureSingleUnconditionalInitialTransition_MultipleInitialStates(t *testing.T) {
+	def := &asmtypes.WorkflowDef{
+		States: []asmtypes.StateDef{
+			{Name: "START1", Type: asmtypes.StateInitial},
+			{Name: "START2", Type: asmtypes.StateInitial},
+			{Name: "STEP1", Type: asmtypes.StatePrompt},
+		},
+		Transitions: []asmtypes.Transition{
+			{From: "START1", To: "STEP1", Trigger: ""},
+			{From: "START2", To: "STEP1", Trigger: ""},
+		},
+	}
+
+	EnsureSingleUnconditionalInitialTransition(def)
+
+	// The second initial state should be demoted to prompt
+	if def.States[0].Name != "START1" || def.States[0].Type != asmtypes.StateInitial {
+		t.Errorf("Expected first state to remain initial, got %v", def.States[0])
+	}
+	if def.States[1].Name != "START2" || def.States[1].Type != asmtypes.StatePrompt {
+		t.Errorf("Expected second initial state to be demoted to prompt, got %v", def.States[1])
+	}
+}
+
 func TestEnsureTimeoutNodes_Injected(t *testing.T) {
 	def := &asmtypes.WorkflowDef{
 		States: []asmtypes.StateDef{
@@ -258,5 +282,97 @@ func TestWorkflowEditorAssigneeAndFormSchema(t *testing.T) {
 	}
 	if state.FormSchema == nil || state.FormSchema["type"] != "object" {
 		t.Errorf("Expected form schema type object, got %v", state.FormSchema)
+	}
+}
+
+func TestDeduplicateTimeoutNodes(t *testing.T) {
+	def := &asmtypes.WorkflowDef{
+		States: []asmtypes.StateDef{
+			{Name: "STEP1", Type: asmtypes.StatePrompt, Timeout: "2m", OnTimeout: "timeout"},
+			{Name: "STEP2", Type: asmtypes.StatePrompt, Timeout: "5m", OnTimeout: "terminal_timeout"},
+			{Name: "timeout", Type: asmtypes.StateTerminal, IsTimeoutNode: true},
+			{Name: "terminal_timeout", Type: asmtypes.StateTerminal, IsTimeoutNode: true},
+		},
+		Transitions: []asmtypes.Transition{
+			{From: "STEP1", To: "timeout", Trigger: "timeout"},
+			{From: "STEP2", To: "terminal_timeout", Trigger: "terminal_timeout"},
+		},
+	}
+
+	DeduplicateTimeoutNodes(def)
+
+	// Verify only 1 timeout node remains
+	timeoutCount := 0
+	for _, s := range def.States {
+		if s.IsTimeoutNode || s.Name == "timeout" || s.Name == "terminal_timeout" {
+			timeoutCount++
+		}
+	}
+	if timeoutCount != 1 {
+		t.Errorf("Expected exactly 1 timeout node, got %d", timeoutCount)
+	}
+
+	// Verify all states/transitions point to "timeout"
+	for _, s := range def.States {
+		if s.Timeout != "" && s.OnTimeout != "timeout" {
+			t.Errorf("Expected state %s OnTimeout to be 'timeout', got %q", s.Name, s.OnTimeout)
+		}
+	}
+
+	for _, tr := range def.Transitions {
+		if tr.To != "timeout" {
+			t.Errorf("Expected transition from %s to point to 'timeout', got %q", tr.From, tr.To)
+		}
+	}
+}
+
+func TestPromoteMCPServersToCapabilities(t *testing.T) {
+	def := &asmtypes.WorkflowDef{
+		Capabilities: []asmtypes.CapabilityDecl{
+			{MCPServer: "wikipedia"},
+		},
+		Agents: []asmtypes.AgentDef{
+			{
+				Name: "agent-1",
+				Config: map[string]string{
+					"mcp_servers": "slack,brave-search",
+				},
+			},
+			{
+				Name: "agent-2",
+				Config: map[string]string{
+					"mcp_servers": "wikipedia,postgres",
+				},
+			},
+		},
+	}
+
+	PromoteMCPServersToCapabilities(def)
+
+	// Verify workflow capabilities are populated correctly without duplicates
+	expectedCaps := map[string]bool{
+		"wikipedia":    true,
+		"slack":        true,
+		"brave-search": true,
+		"postgres":     true,
+	}
+
+	if len(def.Capabilities) != 4 {
+		t.Errorf("Expected 4 capabilities, got %d", len(def.Capabilities))
+	}
+
+	for _, cap := range def.Capabilities {
+		if !expectedCaps[cap.MCPServer] {
+			t.Errorf("Unexpected capability: %q", cap.MCPServer)
+		}
+	}
+
+	// Verify mcp_servers configs are removed from agents
+	for _, a := range def.Agents {
+		if a.Config != nil {
+			if _, exists := a.Config["mcp_servers"]; exists {
+				t.Errorf("Agent %s config still contains mcp_servers key", a.Name)
+			}
+		}
 	}
 }

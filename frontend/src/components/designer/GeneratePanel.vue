@@ -101,7 +101,7 @@
       <!-- Input Console Area -->
       <div 
         :style="{ height: inputAreaHeight + 'px' }"
-        class="p-3 bg-surface-1/50 border-t border-border/50 shrink-0 flex flex-col gap-2 min-h-[110px]"
+        class="p-3 bg-surface-1/50 border-t border-border/50 shrink-0 flex flex-col gap-2 min-h-[150px]"
       >
         <!-- Quick-action Step Pills -->
         <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
@@ -110,8 +110,16 @@
             :key="idx"
             @click="runStep(idx)"
             :disabled="loading || (idx > 0 && !props.yamlSource)"
-            class="p-0.5 px-2 text-[9px] rounded-md bg-surface-2 hover:bg-violet-600/20 border border-border/60 hover:border-violet-500/40 text-text-muted hover:text-violet-300 transition-all outline-none disabled:opacity-30 disabled:hover:bg-surface-2 disabled:hover:text-text-muted disabled:hover:border-border/60 disabled:cursor-not-allowed shrink-0 font-semibold"
+            :class="[
+              'p-0.5 px-2 text-[9px] rounded-md border transition-all outline-none disabled:opacity-30 disabled:cursor-not-allowed shrink-0 font-semibold',
+              idx < props.pipelineStep 
+                ? 'bg-green-600/10 border-green-500/30 text-green-400 hover:bg-green-600/20 hover:border-green-500/50' 
+                : idx === props.pipelineStep 
+                  ? 'bg-amber-600/15 border-amber-500/50 text-amber-500 hover:bg-amber-600/25 hover:border-amber-500/70 font-bold shadow-[0_0_8px_rgba(245,158,11,0.15)]' 
+                  : 'bg-surface-2 border-border/60 hover:bg-violet-600/20 hover:border-violet-500/40 text-text-muted hover:text-violet-300'
+            ]"
           >
+            <span v-if="idx < props.pipelineStep" class="mr-0.5 font-bold">✓</span>
             {{ idx + 1 }}: {{ step.label }}
           </button>
         </div>
@@ -215,7 +223,7 @@ const autoAdvance = ref(true)
 const fileInput = ref(null)
 
 // ── Input Area Resizing ──
-const inputAreaHeight = ref(150)
+const inputAreaHeight = ref(280)
 let isDraggingInput = false
 let startInputY = 0
 let startInputHeight = 0
@@ -235,9 +243,9 @@ function doInputResize(e) {
   const deltaY = startInputY - e.clientY
   let newHeight = startInputHeight + deltaY
   
-  // Clamp height between 110px and 350px
-  if (newHeight < 110) newHeight = 110
-  if (newHeight > 350) newHeight = 350
+  // Clamp height between 150px and 550px
+  if (newHeight < 150) newHeight = 150
+  if (newHeight > 550) newHeight = 550
   
   inputAreaHeight.value = newHeight
 }
@@ -364,7 +372,6 @@ async function runAutoPilot() {
     emit('update:prompt', '')
   }
   resetPipeline()
-  autoAdvance.value = true
   nextTick(async () => {
     await runStep(0)
   })

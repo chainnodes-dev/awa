@@ -69,11 +69,15 @@ type AgentThinkingPayload struct {
 }
 
 type AgentToolCallPayload struct {
-	RunID     string      `json:"run_id"`
-	AgentName string      `json:"agent_name"`
-	ToolName  string      `json:"tool_name"`
-	Input     interface{} `json:"input"`
-	Output    interface{} `json:"output,omitempty"`
+	RunID      string      `json:"run_id"`
+	StateName  string      `json:"state_name"`
+	AgentName  string      `json:"agent_name"`
+	ToolName   string      `json:"tool_name"`
+	Input      interface{} `json:"input"`
+	Output     interface{} `json:"output,omitempty"`
+	DurationMs int         `json:"duration_ms,omitempty"`
+	IsError    bool        `json:"is_error,omitempty"`
+	ErrorMsg   string      `json:"error_msg,omitempty"`
 }
 
 // AgentPromptPayload carries the exact request sent to the LLM for one agent

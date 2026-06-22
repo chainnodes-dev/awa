@@ -14,6 +14,7 @@ import (
 func (s *MemoryStore) CreateMCPServer(_ context.Context, srv *MCPServer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	srv.Name = NormalizeMCPServerName(srv.Name)
 	if srv.ID == "" {
 		srv.ID = uuid.NewString()
 	}
@@ -67,6 +68,7 @@ func (s *MemoryStore) ListMCPServers(ctx context.Context) ([]*MCPServer, error) 
 func (s *MemoryStore) UpdateMCPServer(_ context.Context, srv *MCPServer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	srv.Name = NormalizeMCPServerName(srv.Name)
 	existing, ok := s.mcpServers[srv.ID]
 	if !ok {
 		return fmt.Errorf("MCP server %q not found", srv.ID)

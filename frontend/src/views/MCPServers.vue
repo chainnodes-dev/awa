@@ -171,9 +171,9 @@
               
               <div class="flex items-center gap-4 pt-2">
                 <button @click="installFromMarket(item)" 
-                        :disabled="isInstalled(item.name)"
+                        :disabled="isInstalled(item)"
                         class="btn-primary px-6 py-2 h-9 text-[11px] uppercase tracking-widest font-bold disabled:bg-surface-2 disabled:text-text-muted disabled:border-border">
-                  {{ isInstalled(item.name) ? 'Already Installed' : 'Install Server' }}
+                  {{ isInstalled(item) ? 'Already Installed' : 'Install Server' }}
                 </button>
                 <a v-if="item.doc_url" :href="item.doc_url" target="_blank" class="text-[11px] font-bold text-indigo-500 hover:underline">Documentation</a>
               </div>
@@ -184,7 +184,7 @@
     </main>
 
     <!-- Modals -->
-    <MCPServerModal v-if="modalServer !== undefined" :server="modalServer" @close="modalServer = undefined" @saved="onSaved" @deleted="onDeleted" />
+    <MCPServerModal v-if="modalServer !== undefined" :server="modalServer" :servers="servers" @close="modalServer = undefined" @saved="onSaved" @deleted="onDeleted" />
   </div>
 </template>
 
@@ -286,8 +286,19 @@ function onDeleted(srvID) {
 
 
 
-function isInstalled(name) {
-  return servers.value.some(s => s.name === name)
+const normalize = (val) => {
+  if (!val) return ''
+  return val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '')
+}
+
+function isInstalled(item) {
+  if (!item) return false
+  const normItemName = normalize(item.name)
+  const normItemId = normalize(item.id)
+  return servers.value.some(s => {
+    const normSrvName = normalize(s.name)
+    return normSrvName === normItemName || normSrvName === normItemId
+  })
 }
 
 function exportToYaml() {
@@ -359,7 +370,10 @@ import { defineComponent, h, ref } from 'vue'
 import { api } from '@/stores/auth'
 
 export const MCPServerModal = defineComponent({
-  props: { server: { default: null } },
+  props: {
+    server: { default: null },
+    servers: { type: Array, default: () => [] }
+  },
   emits: ['close', 'saved', 'deleted'],
   setup(p, { emit }) {
     console.log('MCPServerModal setup, server:', p.server)
@@ -443,6 +457,12 @@ export const MCPServerModal = defineComponent({
 
     async function save() {
       if (!form.value.name) { error.value = 'Name is required'; return }
+      const normName = form.value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '')
+      const duplicate = p.servers.some(s => s.id !== p.server?.id && s.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '') === normName)
+      if (duplicate) {
+        error.value = `An MCP server named "${form.value.name}" is already registered.`
+        return
+      }
       saving.value = true; error.value = ''
       try {
         const payload = {
