@@ -666,7 +666,7 @@ async function downloadModel() {
   downloadProgress.total = '0 B'
 
   try {
-    const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('access_token')
     const response = await fetch('/api/v1/llm-configs/local/models/pull', {
       method: 'POST',
       headers: {

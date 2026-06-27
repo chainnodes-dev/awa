@@ -40,6 +40,8 @@ type MCPServer struct {
 	DocURL string `json:"doc_url,omitempty"`
 	// Tools is the list of discovered tools cached from the server.
 	Tools     []MCPTool `json:"tools,omitempty"`
+	// Scopes explicitly binds the server's permissions (e.g. read-only, write).
+	Scopes    []string  `json:"scopes,omitempty"`
 	CreatedBy string    `json:"created_by,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }

@@ -10,8 +10,32 @@ export const api = axios.create({ baseURL: '/api/v1' })
 // Track whether a refresh is in flight to avoid concurrent refresh races.
 let refreshPromise = null
 
-api.interceptors.request.use(config => {
-  const token = sessionStorage.getItem('access_token')
+function isTokenExpired(token) {
+  if (!token) return true
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return true
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    if (!payload.exp) return true
+    return Date.now() / 1000 >= payload.exp - 10
+  } catch (e) {
+    return true
+  }
+}
+
+api.interceptors.request.use(async config => {
+  let token = sessionStorage.getItem('access_token')
+  if (token && isTokenExpired(token)) {
+    try {
+      if (!refreshPromise) {
+        refreshPromise = useAuthStore().refresh().finally(() => { refreshPromise = null })
+      }
+      await refreshPromise
+      token = sessionStorage.getItem('access_token')
+    } catch (e) {
+      // Let it fall through to be handled by backend auth / response interceptor
+    }
+  }
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })

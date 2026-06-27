@@ -67,9 +67,11 @@ type PortDef struct {
 	Required    bool   `yaml:"required,omitempty"    json:"required,omitempty"`
 }
 
-// CapabilityDecl declares a dependency on a named MCP server.
+// CapabilityDecl declares a dependency on an MCP server or abstract capability.
 type CapabilityDecl struct {
-	MCPServer string `yaml:"mcp_server" json:"mcp_server"`
+	MCPServer string `yaml:"mcp_server,omitempty" json:"mcp_server,omitempty"`
+	Type      string `yaml:"type,omitempty" json:"type,omitempty"`
+	Scope     string `yaml:"scope,omitempty" json:"scope,omitempty"`
 }
 
 // StateType classifies the role of a state in the machine.

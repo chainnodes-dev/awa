@@ -26,10 +26,14 @@ func (s *PostgresStore) CreateMCPServer(ctx context.Context, srv *MCPServer) err
 	if len(srv.Tools) == 0 {
 		tools = []byte("[]")
 	}
+	scopes, _ := json.Marshal(srv.Scopes)
+	if len(srv.Scopes) == 0 {
+		scopes = []byte("[]")
+	}
 
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO mcp_servers (id, tenant_id, name, transport, url, command, args, env_vars, description, created_by, created_at, doc_url, tools)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, $13)
+		`INSERT INTO mcp_servers (id, tenant_id, name, transport, url, command, args, env_vars, description, created_by, created_at, doc_url, tools, scopes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, $13, $14)
          ON CONFLICT (tenant_id, name) DO UPDATE SET
              transport = EXCLUDED.transport,
              url = EXCLUDED.url,
@@ -38,8 +42,9 @@ func (s *PostgresStore) CreateMCPServer(ctx context.Context, srv *MCPServer) err
              env_vars = EXCLUDED.env_vars,
              description = EXCLUDED.description,
              doc_url = EXCLUDED.doc_url,
-             tools = EXCLUDED.tools`,
-		srv.ID, srv.TenantID, srv.Name, srv.Transport, srv.URL, srv.Command, srv.Args, envVars, srv.Description, srv.CreatedBy, srv.CreatedAt, srv.DocURL, tools,
+             tools = EXCLUDED.tools,
+             scopes = EXCLUDED.scopes`,
+		srv.ID, srv.TenantID, srv.Name, srv.Transport, srv.URL, srv.Command, srv.Args, envVars, srv.Description, srv.CreatedBy, srv.CreatedAt, srv.DocURL, tools, scopes,
 	)
 	if err != nil {
 		return fmt.Errorf("create/upsert MCP server: %w", err)
@@ -51,10 +56,11 @@ func (s *PostgresStore) GetMCPServer(ctx context.Context, id string) (*MCPServer
 	var srv MCPServer
 	var envVarsBytes []byte
 	var toolsBytes []byte
+	var scopesBytes []byte
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, tenant_id, name, transport, COALESCE(url, ''), COALESCE(command, ''), COALESCE(args, '{}'), env_vars, COALESCE(description, ''), created_by, created_at, COALESCE(doc_url, ''), tools
+		`SELECT id, tenant_id, name, transport, COALESCE(url, ''), COALESCE(command, ''), COALESCE(args, '{}'), env_vars, COALESCE(description, ''), created_by, created_at, COALESCE(doc_url, ''), tools, scopes
          FROM mcp_servers WHERE id=$1`, id,
-	).Scan(&srv.ID, &srv.TenantID, &srv.Name, &srv.Transport, &srv.URL, &srv.Command, &srv.Args, &envVarsBytes, &srv.Description, &srv.CreatedBy, &srv.CreatedAt, &srv.DocURL, &toolsBytes)
+	).Scan(&srv.ID, &srv.TenantID, &srv.Name, &srv.Transport, &srv.URL, &srv.Command, &srv.Args, &envVarsBytes, &srv.Description, &srv.CreatedBy, &srv.CreatedAt, &srv.DocURL, &toolsBytes, &scopesBytes)
 	if err != nil {
 		return nil, fmt.Errorf("MCP server %q not found: %w", id, err)
 	}
@@ -64,13 +70,16 @@ func (s *PostgresStore) GetMCPServer(ctx context.Context, id string) (*MCPServer
 	if len(toolsBytes) > 0 {
 		_ = json.Unmarshal(toolsBytes, &srv.Tools)
 	}
+	if len(scopesBytes) > 0 {
+		_ = json.Unmarshal(scopesBytes, &srv.Scopes)
+	}
 	return &srv, nil
 }
 
 func (s *PostgresStore) ListMCPServers(ctx context.Context) ([]*MCPServer, error) {
 	tenantID := TenantIDFromContext(ctx)
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, tenant_id, name, transport, COALESCE(url, ''), COALESCE(command, ''), COALESCE(args, '{}'), env_vars, COALESCE(description, ''), created_by, created_at, COALESCE(doc_url, ''), tools
+		`SELECT id, tenant_id, name, transport, COALESCE(url, ''), COALESCE(command, ''), COALESCE(args, '{}'), env_vars, COALESCE(description, ''), created_by, created_at, COALESCE(doc_url, ''), tools, scopes
          FROM mcp_servers WHERE tenant_id=$1 ORDER BY name`, tenantID,
 	)
 	if err != nil {
@@ -82,8 +91,9 @@ func (s *PostgresStore) ListMCPServers(ctx context.Context) ([]*MCPServer, error
 		var srv MCPServer
 		var envVarsBytes []byte
 		var toolsBytes []byte
+		var scopesBytes []byte
 		if err := rows.Scan(&srv.ID, &srv.TenantID, &srv.Name, &srv.Transport, &srv.URL, &srv.Command, &srv.Args, &envVarsBytes,
-			&srv.Description, &srv.CreatedBy, &srv.CreatedAt, &srv.DocURL, &toolsBytes); err != nil {
+			&srv.Description, &srv.CreatedBy, &srv.CreatedAt, &srv.DocURL, &toolsBytes, &scopesBytes); err != nil {
 			return nil, err
 		}
 		if len(envVarsBytes) > 0 {
@@ -91,6 +101,9 @@ func (s *PostgresStore) ListMCPServers(ctx context.Context) ([]*MCPServer, error
 		}
 		if len(toolsBytes) > 0 {
 			_ = json.Unmarshal(toolsBytes, &srv.Tools)
+		}
+		if len(scopesBytes) > 0 {
+			_ = json.Unmarshal(scopesBytes, &srv.Scopes)
 		}
 		out = append(out, &srv)
 	}
@@ -107,10 +120,14 @@ func (s *PostgresStore) UpdateMCPServer(ctx context.Context, srv *MCPServer) err
 	if len(srv.Tools) == 0 {
 		tools = []byte("[]")
 	}
+	scopes, _ := json.Marshal(srv.Scopes)
+	if len(srv.Scopes) == 0 {
+		scopes = []byte("[]")
+	}
 
 	_, err := s.pool.Exec(ctx,
-		`UPDATE mcp_servers SET name=$1, transport=$2, url=$3, command=$4, args=$5, env_vars=$6, description=$7, doc_url=$8, tools=$9 WHERE id=$10`,
-		srv.Name, srv.Transport, srv.URL, srv.Command, srv.Args, envVars, srv.Description, srv.DocURL, tools, srv.ID,
+		`UPDATE mcp_servers SET name=$1, transport=$2, url=$3, command=$4, args=$5, env_vars=$6, description=$7, doc_url=$8, tools=$9, scopes=$10 WHERE id=$11`,
+		srv.Name, srv.Transport, srv.URL, srv.Command, srv.Args, envVars, srv.Description, srv.DocURL, tools, scopes, srv.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update MCP server: %w", err)

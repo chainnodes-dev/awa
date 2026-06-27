@@ -23,6 +23,7 @@ type WorkflowRun struct {
 	Status          RunStatus              `json:"status"`
 	CurrentState    string                 `json:"current_state"`
 	Blackboard      map[string]interface{} `json:"blackboard"`
+	DryRun          bool                   `json:"dry_run,omitempty"`
 	TemporalID      string                 `json:"temporal_id,omitempty"`
 	// FailureReason is set when Status == RunFailed; contains the error message
 	// from the executor or engine so it is visible in the UI without digging in logs.

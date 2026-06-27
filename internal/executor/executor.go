@@ -351,6 +351,7 @@ type mcpToolWrapper struct {
 	description string
 	inputSchema json.RawMessage
 	observer    func(method string, toolName string, input, output interface{}, dur time.Duration, err error)
+	dryRun      bool
 }
 
 func (t *mcpToolWrapper) Name() string                 { return t.name }
@@ -363,6 +364,22 @@ func (t *mcpToolWrapper) Execute(ctx context.Context, input json.RawMessage) (js
 	var rawInput interface{}
 	if err := json.Unmarshal(input, &rawInput); err != nil {
 		rawInput = string(input)
+	}
+
+	if t.dryRun {
+		lowerName := strings.ToLower(t.name)
+		isWrite := strings.Contains(lowerName, "create") || strings.Contains(lowerName, "update") || 
+			strings.Contains(lowerName, "delete") || strings.Contains(lowerName, "write") || 
+			strings.Contains(lowerName, "execute") || strings.Contains(lowerName, "post")
+
+		if isWrite {
+			output := fmt.Sprintf("Mocked success (Dry-Run Mode intercepted write action: %s)", t.name)
+			if t.observer != nil {
+				t.observer("tools/call", t.name, rawInput, output, time.Since(start), nil)
+			}
+			wrapped, _ := json.Marshal(output)
+			return wrapped, nil
+		}
 	}
 
 	var result struct {
@@ -425,6 +442,13 @@ func (t *mcpToolWrapper) Execute(ctx context.Context, input json.RawMessage) (js
 func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, task orchestrator.AgentTask) (*tools.Registry, error) {
 	reg := tools.NewRegistry()
 
+	var dryRun bool
+	if e.store != nil {
+		if run, err := e.store.GetRun(ctx, task.RunID); err == nil && run != nil {
+			dryRun = run.DryRun
+		}
+	}
+
 	// 1. Collect all requested MCP servers
 	var rawServers []string
 	
@@ -437,6 +461,26 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 	for _, cap := range task.Def.Capabilities {
 		if cap.MCPServer != "" {
 			rawServers = append(rawServers, cap.MCPServer)
+		} else if cap.Type != "" {
+			if e.store != nil {
+				if dynamic, err := e.store.ListMCPServers(ctx); err == nil {
+					for _, d := range dynamic {
+						hasScope := false
+						for _, s := range d.Scopes {
+							if strings.EqualFold(s, cap.Scope) {
+								hasScope = true
+								break
+							}
+						}
+						if cap.Scope == "" || hasScope {
+							if strings.Contains(strings.ToLower(d.Name), strings.ToLower(cap.Type)) || strings.Contains(strings.ToLower(d.Description), strings.ToLower(cap.Type)) {
+								rawServers = append(rawServers, d.Name)
+								break
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -544,6 +588,7 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 				description: t.Description,
 				inputSchema: schema,
 				observer:    observer,
+				dryRun:      dryRun,
 			})
 		}
 	}

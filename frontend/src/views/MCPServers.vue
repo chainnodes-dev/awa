@@ -98,7 +98,12 @@
             </p>
 
             <div class="flex items-center justify-between pt-3 border-t border-border/30">
-              <span class="text-[9px] font-bold text-accent/80 uppercase tracking-widest">{{ srv.transport }}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-[9px] font-bold text-accent/80 uppercase tracking-widest">{{ srv.transport }}</span>
+                <div v-if="srv.scopes && srv.scopes.length" class="flex gap-1">
+                  <span v-for="scope in srv.scopes" :key="scope" class="px-1.5 py-0.5 rounded bg-surface-2 text-text text-[9px] border border-border uppercase tracking-widest">{{ scope }}</span>
+                </div>
+              </div>
               <span v-if="healthLatency[srv.id]" class="text-[9px] font-mono text-green-500/80">{{ healthLatency[srv.id] }}ms</span>
               <a v-if="srv.doc_url" :href="srv.doc_url" target="_blank" class="text-text-muted hover:text-accent">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -392,6 +397,7 @@ export const MCPServerModal = defineComponent({
       args:        Array.isArray(p.server?.args) ? p.server.args.join(' ') : (p.server?.args ?? ''),
       description: p.server?.description ?? '',
       doc_url:     p.server?.doc_url     ?? '',
+      scopes:      Array.isArray(p.server?.scopes) ? p.server.scopes.join(', ') : '',
     })
 
     const discoveredTools = ref(p.server?.tools ?? [])
@@ -469,7 +475,8 @@ export const MCPServerModal = defineComponent({
           ...form.value,
           args: form.value.args.match(/(?:[^\s"]+|"[^"]*")+/g)?.map(s => s.replace(/^"|"$/g, '')) || [],
           env_vars: getEnvMap(),
-          tools: discoveredTools.value
+          tools: discoveredTools.value,
+          scopes: form.value.scopes.split(',').map(s => s.trim()).filter(Boolean)
         }
         let res
         if (isEdit) res = await api.put('/mcp-servers/' + p.server.id, payload)
@@ -497,12 +504,12 @@ export const MCPServerModal = defineComponent({
     }
 
     return () => h('div', { class: 'fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] p-4' }, [
-      h('div', { class: 'card w-full max-w-xl p-8 space-y-6 shadow-2xl border-border max-h-[90vh] overflow-y-auto' }, [
+      h('form', { class: 'card w-full max-w-xl p-8 space-y-6 shadow-2xl border-border max-h-[90vh] overflow-y-auto', onSubmit: e => { e.preventDefault(); save() } }, [
         h('div', { class: 'flex justify-between items-center' }, [
           h('h3', { class: 'text-lg font-bold text-text uppercase tracking-tight' }, isEdit ? 'Configure Server' : 'Install Server'),
           h('div', { class: 'flex gap-2' }, [
-            !isEdit && h('button', { class: 'text-[10px] font-bold text-indigo-500 border border-indigo-500/20 px-2 py-1 rounded hover:bg-indigo-500/10', onClick: () => showImport.value = !showImport.value }, 'Import JSON'),
-            h('button', { class: 'text-text-muted hover:text-text p-1', onClick: () => emit('close') }, '\u2715')
+            !isEdit && h('button', { type: 'button', class: 'text-[10px] font-bold text-indigo-500 border border-indigo-500/20 px-2 py-1 rounded hover:bg-indigo-500/10', onClick: () => showImport.value = !showImport.value }, 'Import JSON'),
+            h('button', { type: 'button', class: 'text-text-muted hover:text-text p-1', onClick: () => emit('close') }, '\u2715')
           ])
         ]),
 
@@ -515,8 +522,8 @@ export const MCPServerModal = defineComponent({
             onInput: e => importText.value = e.target.value
           }),
           h('div', { class: 'flex justify-end gap-2' }, [
-            h('button', { class: 'text-[10px] font-bold text-text-muted', onClick: () => showImport.value = false }, 'Cancel'),
-            h('button', { class: 'text-[10px] font-bold text-indigo-500', onClick: handleImport }, 'Apply Config')
+            h('button', { type: 'button', class: 'text-[10px] font-bold text-text-muted', onClick: () => showImport.value = false }, 'Cancel'),
+            h('button', { type: 'button', class: 'text-[10px] font-bold text-indigo-500', onClick: handleImport }, 'Apply Config')
           ])
         ]),
 
@@ -553,11 +560,16 @@ export const MCPServerModal = defineComponent({
             h('input', { class: 'input font-mono text-sm', value: form.value.url, onInput: e => form.value.url = e.target.value }),
           ]),
         ],
+        
+        h('div', { class: 'space-y-1.5' }, [
+          h('label', { class: 'text-[10px] uppercase font-bold text-text-muted tracking-widest' }, 'Scopes (comma separated)'),
+          h('input', { class: 'input font-mono text-sm', placeholder: 'e.g. read-only, write', value: form.value.scopes, onInput: e => form.value.scopes = e.target.value }),
+        ]),
 
         h('div', { class: 'space-y-3' }, [
           h('div', { class: 'flex justify-between items-center' }, [
             h('label', { class: 'text-[10px] uppercase font-bold text-text-muted tracking-widest' }, 'Environment Variables'),
-            h('button', { class: 'text-[10px] font-bold text-indigo-500', onClick: () => envList.value.push({key:'',val:''}) }, '+ Add')
+            h('button', { type: 'button', class: 'text-[10px] font-bold text-indigo-500', onClick: () => envList.value.push({key:'',val:''}) }, '+ Add')
           ]),
           envList.value.map((e, idx) => h('div', { class: 'flex gap-2' }, [
             h('input', { 
@@ -575,7 +587,7 @@ export const MCPServerModal = defineComponent({
               autocomplete: 'new-password',
               onInput: v => e.val = v.target.value 
             }),
-            h('button', { class: 'p-2 text-text-muted hover:text-red-500', onClick: () => envList.value.splice(idx, 1) }, '\u2715')
+            h('button', { type: 'button', class: 'p-2 text-text-muted hover:text-red-500', onClick: () => envList.value.splice(idx, 1) }, '\u2715')
           ]))
         ]),
 
@@ -592,12 +604,12 @@ export const MCPServerModal = defineComponent({
         ]),
 
         h('div', { class: 'flex gap-3 pt-4 items-center' }, [
-          h('button', { class: 'btn-ghost text-xs px-4 border border-border', onClick: discover, disabled: discovering.value }, discovering.value ? 'Discovering...' : 'Discover Tools'),
-          isEdit && h('button', { class: 'btn-ghost text-red-500 text-xs px-4 border border-red-500/20 hover:bg-red-500/10', onClick: remove, disabled: saving.value }, 'Delete'),
+          h('button', { type: 'button', class: 'btn-ghost text-xs px-4 border border-border', onClick: discover, disabled: discovering.value }, discovering.value ? 'Discovering...' : 'Discover Tools'),
+          isEdit && h('button', { type: 'button', class: 'btn-ghost text-red-500 text-xs px-4 border border-red-500/20 hover:bg-red-500/10', onClick: remove, disabled: saving.value }, 'Delete'),
           h('div', { class: 'flex-1' }, [
             savedSuccess.value && h('span', { class: 'text-[10px] font-bold text-green-500 animate-pulse' }, '✓ Saved Successfully')
           ]),
-          h('button', { class: 'btn-primary px-8 font-bold text-[10px] uppercase tracking-widest', onClick: save, disabled: saving.value }, saving.value ? 'Saving...' : 'Save Configuration'),
+          h('button', { type: 'submit', class: 'btn-primary px-8 font-bold text-[10px] uppercase tracking-widest', disabled: saving.value }, saving.value ? 'Saving...' : 'Save Configuration'),
         ])
       ])
     ])
