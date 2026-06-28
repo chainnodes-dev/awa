@@ -220,6 +220,15 @@ func (h *Handlers) DiscoverMCPServer(c *gin.Context) {
 				body.EnvVars[key] = "dummy"
 			}
 		}
+		if val, ok := body.EnvVars["MATTERMOST_URL"]; !ok || val == "" {
+			body.EnvVars["MATTERMOST_URL"] = "http://dummy"
+		}
+		if val, ok := body.EnvVars["MATTERMOST_TOKEN"]; !ok || val == "" {
+			body.EnvVars["MATTERMOST_TOKEN"] = "dummy"
+		}
+		if val, ok := body.EnvVars["MATTERMOST_TEAM_ID"]; !ok || val == "" {
+			body.EnvVars["MATTERMOST_TEAM_ID"] = "dummy"
+		}
 
 		clt, cl, err := h.mcpManager.TestStdioClientMap(body.Command, body.Args, body.EnvVars)
 		if err != nil {

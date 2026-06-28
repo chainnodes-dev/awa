@@ -363,18 +363,7 @@
               />
             </div>
 
-            <div v-if="subprocessDef?.capabilities?.length" class="space-y-2 pt-2 border-t border-border/50">
-              <label class="text-xs text-text-muted font-bold uppercase tracking-wider">Subprocess Capability Mappings</label>
-              <div v-for="cap in subprocessDef.capabilities" :key="cap.type" class="space-y-1">
-                <div class="flex items-center justify-between text-xs">
-                  <span class="font-mono text-indigo-300">{{ cap.type }} <span class="text-text-muted text-[10px]">({{ cap.scope || 'any scope' }})</span></span>
-                </div>
-                <select class="input text-xs" :value="getCapabilityMapping(cap.type)" @change="setCapabilityMapping(cap.type, $event.target.value)">
-                  <option value="">-- Select Registered MCP Server --</option>
-                  <option v-for="s in mcpServers" :key="s.id" :value="s.name">{{ s.name }}</option>
-                </select>
-              </div>
-            </div>
+
           </div>
         </div>
       </template>
@@ -503,21 +492,7 @@
           <input class="input font-mono text-xs" v-model="agentForm.task_queue" placeholder="chainnodes-workers" />
         </div>
 
-        <div class="space-y-1">
-          <div class="flex items-center justify-between">
-            <label class="text-xs text-text-muted">Active MCP Tools</label>
-            <div class="group relative">
-               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-text-muted cursor-help">
-                 <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-               </svg>
-               <div class="absolute right-0 bottom-full mb-2 w-48 p-2 rounded bg-surface-2 border border-border text-[9px] text-text-muted leading-relaxed hidden group-hover:block z-50 shadow-2xl">
-                 <p class="font-bold mb-1 text-accent uppercase">MCP Stdio Servers:</p>
-                 <p class="opacity-70 italic">Add MCP server names and arguments to enable tools.</p>
-               </div>
-            </div>
-          </div>
-          <MCPServerPicker v-model="agentForm.mcp_servers" />
-        </div>
+
 
         <!-- Convert to Script block -->
         <div class="pt-3 border-t border-border space-y-2">

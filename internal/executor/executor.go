@@ -452,6 +452,15 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 	// 1. Collect all requested MCP servers
 	var rawServers []string
 	
+	// Load all installed MCP servers from the database so all agents have global access
+	if e.store != nil {
+		if dynamic, err := e.store.ListMCPServers(ctx); err == nil {
+			for _, d := range dynamic {
+				rawServers = append(rawServers, d.Name)
+			}
+		}
+	}
+	
 	// Node/Agent level
 	if list := agent.Config["mcp_servers"]; list != "" {
 		rawServers = append(rawServers, strings.Split(list, ",")...)

@@ -791,21 +791,26 @@
     "command": "npx",
     "args": [
       "-y",
-      "mcp-server-mattermost"
+      "@donach/mattermost-mcp"
     ],
     "env_vars": [
       {
         "name": "MATTERMOST_URL",
-        "description": "URL of the Mattermost server (e.g. http://localhost:8065)",
+        "description": "URL of the Mattermost server API (e.g. http://localhost:8065/api/v4)",
         "required": true
       },
       {
         "name": "MATTERMOST_TOKEN",
         "description": "Mattermost Personal Access Token",
         "required": true
+      },
+      {
+        "name": "MATTERMOST_TEAM_ID",
+        "description": "Mattermost Team ID (e.g. q4ycdnkbotfqtkgtum4nqcktmr)",
+        "required": true
       }
     ],
     "is_verified": true,
-    "doc_url": "https://github.com/cloud-ru-tech/mcp-server-mattermost"
+    "doc_url": "https://github.com/donach/mattermost-mcp"
   }
 ]

@@ -18,6 +18,8 @@ services:
     environment:
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://mmuser:mmpassword@mattermost-postgres:5432/mattermost?sslmode=disable
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS: "true"
     depends_on:
       mattermost-postgres:
         condition: service_healthy
