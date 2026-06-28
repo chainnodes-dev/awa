@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -117,9 +119,17 @@ func (a *Activities) CreateHITL(ctx context.Context, p CreateHITLParams) error {
 	if p.Notify != nil {
 		switch p.Notify.Service {
 		case "slack":
-			_ = a.sendSlackNotification(ctx, p.TenantID, p.Request.ID, p.Notify)
+			if err := a.sendSlackNotification(ctx, p.TenantID, p.Request.RunID, p.Notify); err != nil {
+				slog.Error("Failed to send Slack notification for HITL request", "hitl_id", p.Request.RunID, "error", err)
+			}
 		case "teams":
-			_ = a.sendTeamsNotification(ctx, p.Request.ID, p.Notify)
+			if err := a.sendTeamsNotification(ctx, p.Request.RunID, p.Notify); err != nil {
+				slog.Error("Failed to send Teams notification for HITL request", "hitl_id", p.Request.RunID, "error", err)
+			}
+		case "mattermost":
+			if err := a.sendMattermostNotification(ctx, p.TenantID, p.Request.RunID, p.Notify); err != nil {
+				slog.Error("Failed to send Mattermost notification for HITL request", "hitl_id", p.Request.RunID, "error", err)
+			}
 		}
 	}
 
@@ -200,6 +210,116 @@ func (a *Activities) sendSlackNotification(ctx context.Context, tenantID, hitlID
 		return err
 	}
 	defer resp.Body.Close()
+	return nil
+}
+
+func (a *Activities) sendMattermostNotification(ctx context.Context, tenantID, hitlID string, n *asmtypes.HITLNotify) error {
+	mCtx := store.WithTenantID(ctx, tenantID)
+	servers, err := a.Store.ListMCPServers(mCtx)
+	if err != nil {
+		return err
+	}
+
+	var urlVal, tokenVal, teamID string
+	for _, s := range servers {
+		if strings.EqualFold(s.Name, "mattermost") {
+			urlVal = s.EnvVars["MATTERMOST_URL"]
+			tokenVal = s.EnvVars["MATTERMOST_TOKEN"]
+			teamID = s.EnvVars["MATTERMOST_TEAM_ID"]
+			break
+		}
+	}
+
+	if urlVal == "" || tokenVal == "" || teamID == "" {
+		slog.Error("Mattermost credentials or Team ID not configured for HITL notification")
+		return fmt.Errorf("mattermost credentials or Team ID not configured")
+	}
+
+	// Normalize URL
+	apiURL := strings.TrimSuffix(urlVal, "/")
+	if !strings.HasSuffix(apiURL, "/api/v4") {
+		apiURL = apiURL + "/api/v4"
+	}
+
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+
+	msgText := n.Message
+	if msgText == "" {
+		msgText = "A manual task is waiting for human-in-the-loop approval."
+	}
+
+	// Format message with markdown links
+	fullMessage := fmt.Sprintf(
+		"### ⚠️ HITL Manual Approval Required\n\n%s\n\n* [Approve](%s/api/v1/hitl/%s/click-resolve?resolution=approved&resolver=Mattermost)\n* [Reject](%s/api/v1/hitl/%s/click-resolve?resolution=rejected&resolver=Mattermost)",
+		msgText,
+		baseURL,
+		hitlID,
+		baseURL,
+		hitlID,
+	)
+
+	channelName := strings.TrimPrefix(n.Channel, "#")
+	if channelName == "" {
+		channelName = "town-square"
+	}
+
+	// Get channel ID by name
+	getChanURL := fmt.Sprintf("%s/teams/%s/channels/name/%s", apiURL, teamID, channelName)
+	req, err := http.NewRequestWithContext(ctx, "GET", getChanURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenVal))
+
+	resp, err := activityHTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to lookup Mattermost channel %s: status %d", channelName, resp.StatusCode)
+	}
+
+	var chanResp struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&chanResp); err != nil {
+		return err
+	}
+
+	// Post message
+	postPayload := map[string]interface{}{
+		"channel_id": chanResp.ID,
+		"message":    fullMessage,
+	}
+	postBytes, err := json.Marshal(postPayload)
+	if err != nil {
+		return err
+	}
+
+	postURL := fmt.Sprintf("%s/posts", apiURL)
+	postReq, err := http.NewRequestWithContext(ctx, "POST", postURL, bytes.NewReader(postBytes))
+	if err != nil {
+		return err
+	}
+	postReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenVal))
+	postReq.Header.Set("Content-Type", "application/json")
+
+	postResp, err := activityHTTPClient.Do(postReq)
+	if err != nil {
+		return err
+	}
+	defer postResp.Body.Close()
+
+	if postResp.StatusCode != http.StatusCreated && postResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to post Mattermost message: status %d", postResp.StatusCode)
+	}
+
+	slog.Info("Successfully sent HITL notification to Mattermost", "channel", channelName)
 	return nil
 }
 

@@ -2,84 +2,116 @@ apiVersion: chainnodes/v1
 kind: Workflow
 metadata:
   name: devops-gatekeeper
-  version: 1
+  version: v6
   description: |
     DevOps Incident Gatekeeper. Receives alerts from GoAlert/PagerDuty, acknowledges the incident,
     triages the issue category, and invokes the appropriate AgSOP child process.
-
-triggers:
-  - name: acknowledged
-    type: webhook
-
+  system_prompt: ''
+  schedule: ''
+  process_description: ''
+  reusable: false
 blackboard:
   schema:
-    incident_id: { type: string, required: true }
-    service_name: { type: string, required: true }
-    alert_title: { type: string, required: true }
-    status: { type: string }
-    assigned_agsop: { type: string }
-    triage_reason: { type: string }
-    analysis_result: { type: string }
-    suggested_fix: { type: string }
-
+    alert_title:
+      type: string
+      required: true
+      is_output: false
+    analysis_result:
+      type: string
+      required: false
+      is_output: false
+    assigned_agsop:
+      type: string
+      required: false
+      is_output: false
+    incident_id:
+      type: string
+      required: true
+      is_output: false
+    service_name:
+      type: string
+      required: true
+      is_output: false
+    status:
+      type: string
+      required: false
+      is_output: false
+    suggested_fix:
+      type: string
+      required: false
+      is_output: false
+    triage_reason:
+      type: string
+      required: false
+      is_output: false
+triggers:
+  - name: webhook_trigger
+    type: webhook
+    config: {}
 states:
   - name: ACKNOWLEDGE
     type: initial
-    agent: gatekeeper-agent
     instructions: |
       You are the L1 SRE on-call gatekeeper.
       Use the pagerduty/opsgenie capability to acknowledge the incident (incident_id).
       Set status: "ACKNOWLEDGED".
       Trigger: "acknowledged".
-
+    agent: gatekeeper-agent
+    position:
+      x: 320
+      'y': 60
   - name: TRIAGE
     type: prompt
-    agent: gatekeeper-agent
-    instructions: |
+    instructions: >
       Analyze the alert_title and service_name.
-      Determine which AgSOP is required:
-      - If it is a container, crash, pod, or deployment issue: set assigned_agsop: "k8s-pod-crash-resolver"
-      - If it is a database, query lock, connection pool, or high CPU spike issue: set assigned_agsop: "db-cpu-spike-investigator"
-      - Otherwise: set assigned_agsop: "escalate-manual"
-      Write a short triage_reason explaining your routing choice.
-      Trigger: "triage_complete".
 
+      Determine which AgSOP is required:
+
+      - If it is a container, crash, pod, or deployment issue: set assigned_agsop: "k8s-pod-crash-resolver"
+
+      - If it is a database, query lock, connection pool, or high CPU spike issue: set assigned_agsop:
+      "db-cpu-spike-investigator"
+
+      - Otherwise: set assigned_agsop: "escalate-manual"
+
+      Write a short triage_reason explaining your routing choice.
+
+      Trigger: "triage_complete".
+    agent: gatekeeper-agent
+    position:
+      x: 320
+      'y': 252
   - name: SPAWN_REMEDIATION
     type: prompt
     script:
-      # Dynamically invokes the child AgSOP workflow based on triage
-      trigger: "assigned_agsop == 'escalate-manual' ? 'manual' : 'auto'"
+      trigger: 'assigned_agsop == ''escalate-manual'' ? ''manual'' : ''auto'''
       updates:
-        status: "assigned_agsop == 'escalate-manual' ? 'MANUAL_ESCALATION' : 'REMEDIATION_IN_PROGRESS'"
-
+        status: 'assigned_agsop == ''escalate-manual'' ? ''MANUAL_ESCALATION'' : ''REMEDIATION_IN_PROGRESS'''
+    position:
+      x: 320
+      'y': 444
   - name: RUN_K8S_SOP
     type: subprocess
     subprocess:
-      name: k8s-pod-crash-resolver
-      inputs:
-        incident_id: "incident_id"
-        service_name: "service_name"
+      process_ref: ''
       output_mappings:
-        root_cause: "analysis_result"
-        recommended_fix: "suggested_fix"
-
+        recommended_fix: suggested_fix
+        root_cause: analysis_result
+    position:
+      x: 60
+      'y': 636
   - name: RUN_DB_SOP
     type: subprocess
     subprocess:
-      name: db-cpu-spike-investigator
-      inputs:
-        incident_id: "incident_id"
-        service_name: "service_name"
+      process_ref: ''
       output_mappings:
-        root_cause: "analysis_result"
-        recommended_remediation: "suggested_fix"
-
+        recommended_remediation: suggested_fix
+        root_cause: analysis_result
+    position:
+      x: 320
+      'y': 636
   - name: NOTIFY_CHAT
     type: prompt
-    agent: gatekeeper-agent
-    capabilities:
-      - name: mattermost
-        type: mattermost
     instructions: |
       Use the mattermost capability to post a summary of the incident analysis to the chat channel.
       Format the message nicely in Markdown containing:
@@ -88,25 +120,98 @@ states:
       - The recommended remediation steps (suggested_fix)
       Set status: "NOTIFIED".
       Trigger: "notified".
-
+    agent: gatekeeper-agent
+    position:
+      x: 190
+      'y': 828
   - name: MANUAL_ESCALATION
     type: terminal
-
+    position:
+      x: 580
+      'y': 880
+  - name: WAIT_MANUAL_APPROVAL
+    type: hitl
+    instructions: "Please approve or reject the manual escalation."
+    notify:
+      service: mattermost
+      channel: town-square
+      message: "Incident Gatekeeper: manual escalation is waiting for approval. Please approve or reject it."
+    position:
+      x: 580
+      'y': 760
   - name: COMPLETED
     type: terminal
-
+    position:
+      x: 190
+      'y': 1120
+  - name: WAIT_APPROVAL
+    type: hitl
+    instructions: "Please approve or reject the suggested fix before completing the incident ticket."
+    notify:
+      service: mattermost
+      channel: town-square
+      message: "Incident Gatekeeper: suggested fix is waiting for approval. Please approve or reject it."
+    position:
+      x: 190
+      'y': 920
+  - name: REJECTED
+    type: terminal
+    position:
+      x: 320
+      'y': 1020
+  - name: NOTIFY
+    type: prompt
+    instructions: |
+      Use the mattermost capability to post a summary of the incident analysis to the chat channel.
+      Format the message nicely in Markdown containing:
+      - The Incident ID and Service Name
+      - The diagnosed root cause (analysis_result)
+      - The recommended remediation steps (suggested_fix)
+      Set status: "USER_INFORMED".
+      Trigger: "user_informed".
+    agent: gatekeeper-agent
+    position:
+      x: 580
+      'y': 636
 transitions:
-  - { from: ACKNOWLEDGE, to: TRIAGE, trigger: acknowledged }
-  - { from: TRIAGE, to: SPAWN_REMEDIATION, trigger: triage_complete }
-  - { from: SPAWN_REMEDIATION, to: RUN_K8S_SOP, trigger: auto, guard: "assigned_agsop == 'k8s-pod-crash-resolver'" }
-  - { from: SPAWN_REMEDIATION, to: RUN_DB_SOP, trigger: auto, guard: "assigned_agsop == 'db-cpu-spike-investigator'" }
-  - { from: SPAWN_REMEDIATION, to: MANUAL_ESCALATION, trigger: manual }
-  - { from: RUN_K8S_SOP, to: NOTIFY_CHAT, trigger: completed }
-  - { from: RUN_DB_SOP, to: NOTIFY_CHAT, trigger: completed }
-  - { from: NOTIFY_CHAT, to: COMPLETED, trigger: notified }
-
+  - from: ACKNOWLEDGE
+    to: TRIAGE
+    trigger: acknowledged
+  - from: TRIAGE
+    to: SPAWN_REMEDIATION
+    trigger: triage_complete
+  - from: SPAWN_REMEDIATION
+    to_nodes:
+      - RUN_K8S_SOP
+      - RUN_DB_SOP
+    trigger: auto
+    guard: assigned_agsop == 'k8s-pod-crash-resolver'
+  - from: RUN_K8S_SOP
+    to: NOTIFY_CHAT
+    trigger: completed
+  - from: RUN_DB_SOP
+    to: NOTIFY_CHAT
+    trigger: completed
+  - from: NOTIFY_CHAT
+    to: WAIT_APPROVAL
+    trigger: notified
+  - from: WAIT_APPROVAL
+    to: COMPLETED
+    trigger: approved
+  - from: WAIT_APPROVAL
+    to: REJECTED
+    trigger: rejected
+  - from: SPAWN_REMEDIATION
+    to: NOTIFY
+    trigger: manual
+  - from: NOTIFY
+    to: WAIT_MANUAL_APPROVAL
+    trigger: user_informed
+  - from: WAIT_MANUAL_APPROVAL
+    to: MANUAL_ESCALATION
+    trigger: approved
+  - from: WAIT_MANUAL_APPROVAL
+    to: REJECTED
+    trigger: rejected
 agents:
   - name: gatekeeper-agent
-    rules:
-      - "Strict JSON output only."
-      - "Always act as a professional site reliability engineer."

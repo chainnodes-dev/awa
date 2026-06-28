@@ -139,3 +139,39 @@ func (h *Handlers) HandleSlackResolve(c *gin.Context) {
 		"text": fmt.Sprintf("✓ HITL Request *%s* has been %s by %s.", hitlReq.StateName, statusText, resolver),
 	})
 }
+
+// HandleClickResolve allows resolving a HITL request via a simple GET request (e.g. clicking a link in chat).
+func (h *Handlers) HandleClickResolve(c *gin.Context) {
+	id := c.Param("id")
+	resolution := c.Query("resolution") // "approved" or "rejected"
+	resolver := c.Query("resolver")
+	if resolver == "" {
+		resolver = "Chat Link"
+	}
+
+	hitlReq, err := h.store.GetHITL(c.Request.Context(), id)
+	if err != nil {
+		c.String(http.StatusNotFound, "HITL request not found")
+		return
+	}
+
+	if hitlReq.Resolved {
+		c.String(http.StatusOK, "This HITL request has already been resolved.")
+		return
+	}
+
+	sig := asmtypes.HITLSignal{
+		RunID:      hitlReq.RunID,
+		Resolution: resolution,
+		Resolver:   resolver,
+		Comment:    "Resolved via chat link click",
+	}
+
+	if err := h.engine.SignalHITL(c.Request.Context(), sig); err != nil {
+		c.String(http.StatusInternalServerError, "Failed to resolve HITL: %v", err)
+		return
+	}
+
+	c.String(http.StatusOK, "✓ HITL request successfully resolved: %s", resolution)
+}
+

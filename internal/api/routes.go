@@ -40,6 +40,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 		
 		// Headless HITL (ChatOps)
 		v1.POST("/hitl/:id/chat-resolve", h.HandleChatOpsResolve)
+		v1.GET("/hitl/:id/click-resolve", h.HandleClickResolve)
 		v1.POST("/hitl/slack-resolve", h.HandleSlackResolve)
 
 		// Internal Event Sync (from worker to server)
