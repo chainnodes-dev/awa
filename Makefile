@@ -1,4 +1,4 @@
-.PHONY: dev-infra stop reset-db server worker frontend dev migrate tidy test build docker-build stack stack-down frontend-install k8s-apply k8s-delete k8s-status specialist
+.PHONY: dev-infra stop reset-db server worker frontend dev migrate tidy test build docker-build stack stack-down frontend-install k8s-apply k8s-delete k8s-status specialist demo demo-down
 
 # Start infrastructure only (for development)
 dev-infra:
@@ -86,6 +86,19 @@ stack:
 # Stop all Chain Nodes-related containers
 stack-down:
 	docker compose down
+
+# Start demo stack (Grafana + Mattermost)
+demo:
+	docker compose -f docker-compose.demo.yaml up -d
+	@echo ""
+	@echo "  Demo integrations are booting (Grafana + Mattermost)."
+	@echo "  Grafana    →  http://localhost:3000"
+	@echo "  Mattermost →  http://localhost:8065"
+	@echo ""
+
+# Stop demo stack
+demo-down:
+	docker compose -f docker-compose.demo.yaml down -v
 
 # Install frontend deps
 frontend-install:

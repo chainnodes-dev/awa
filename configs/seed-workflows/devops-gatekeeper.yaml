@@ -1,0 +1,112 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: devops-gatekeeper
+  version: 1
+  description: |
+    DevOps Incident Gatekeeper. Receives alerts from GoAlert/PagerDuty, acknowledges the incident,
+    triages the issue category, and invokes the appropriate AgSOP child process.
+
+triggers:
+  - name: acknowledged
+    type: webhook
+
+blackboard:
+  schema:
+    incident_id: { type: string, required: true }
+    service_name: { type: string, required: true }
+    alert_title: { type: string, required: true }
+    status: { type: string }
+    assigned_agsop: { type: string }
+    triage_reason: { type: string }
+    analysis_result: { type: string }
+    suggested_fix: { type: string }
+
+states:
+  - name: ACKNOWLEDGE
+    type: initial
+    agent: gatekeeper-agent
+    instructions: |
+      You are the L1 SRE on-call gatekeeper.
+      Use the pagerduty/opsgenie capability to acknowledge the incident (incident_id).
+      Set status: "ACKNOWLEDGED".
+      Trigger: "acknowledged".
+
+  - name: TRIAGE
+    type: prompt
+    agent: gatekeeper-agent
+    instructions: |
+      Analyze the alert_title and service_name.
+      Determine which AgSOP is required:
+      - If it is a container, crash, pod, or deployment issue: set assigned_agsop: "k8s-pod-crash-resolver"
+      - If it is a database, query lock, connection pool, or high CPU spike issue: set assigned_agsop: "db-cpu-spike-investigator"
+      - Otherwise: set assigned_agsop: "escalate-manual"
+      Write a short triage_reason explaining your routing choice.
+      Trigger: "triage_complete".
+
+  - name: SPAWN_REMEDIATION
+    type: prompt
+    script:
+      # Dynamically invokes the child AgSOP workflow based on triage
+      trigger: "assigned_agsop == 'escalate-manual' ? 'manual' : 'auto'"
+      updates:
+        status: "assigned_agsop == 'escalate-manual' ? 'MANUAL_ESCALATION' : 'REMEDIATION_IN_PROGRESS'"
+
+  - name: RUN_K8S_SOP
+    type: subprocess
+    subprocess:
+      name: k8s-pod-crash-resolver
+      inputs:
+        incident_id: "incident_id"
+        service_name: "service_name"
+      output_mappings:
+        root_cause: "analysis_result"
+        recommended_fix: "suggested_fix"
+
+  - name: RUN_DB_SOP
+    type: subprocess
+    subprocess:
+      name: db-cpu-spike-investigator
+      inputs:
+        incident_id: "incident_id"
+        service_name: "service_name"
+      output_mappings:
+        root_cause: "analysis_result"
+        recommended_remediation: "suggested_fix"
+
+  - name: NOTIFY_CHAT
+    type: prompt
+    agent: gatekeeper-agent
+    capabilities:
+      - name: mattermost
+        type: mattermost
+    instructions: |
+      Use the mattermost capability to post a summary of the incident analysis to the chat channel.
+      Format the message nicely in Markdown containing:
+      - The Incident ID and Service Name
+      - The diagnosed root cause (analysis_result)
+      - The recommended remediation steps (suggested_fix)
+      Set status: "NOTIFIED".
+      Trigger: "notified".
+
+  - name: MANUAL_ESCALATION
+    type: terminal
+
+  - name: COMPLETED
+    type: terminal
+
+transitions:
+  - { from: ACKNOWLEDGE, to: TRIAGE, trigger: acknowledged }
+  - { from: TRIAGE, to: SPAWN_REMEDIATION, trigger: triage_complete }
+  - { from: SPAWN_REMEDIATION, to: RUN_K8S_SOP, trigger: auto, guard: "assigned_agsop == 'k8s-pod-crash-resolver'" }
+  - { from: SPAWN_REMEDIATION, to: RUN_DB_SOP, trigger: auto, guard: "assigned_agsop == 'db-cpu-spike-investigator'" }
+  - { from: SPAWN_REMEDIATION, to: MANUAL_ESCALATION, trigger: manual }
+  - { from: RUN_K8S_SOP, to: NOTIFY_CHAT, trigger: completed }
+  - { from: RUN_DB_SOP, to: NOTIFY_CHAT, trigger: completed }
+  - { from: NOTIFY_CHAT, to: COMPLETED, trigger: notified }
+
+agents:
+  - name: gatekeeper-agent
+    rules:
+      - "Strict JSON output only."
+      - "Always act as a professional site reliability engineer."

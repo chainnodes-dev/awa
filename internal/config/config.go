@@ -75,7 +75,7 @@ func Load() *Config {
 		LogLevel:          getEnv("LOG_LEVEL", "info"),
 		LicensePublicKey:  getEnv("LICENSE_PUBLIC_KEY", ""),
 		LicensePrivateKey: getEnv("LICENSE_PRIVATE_KEY", ""),
-		MCPMarketSource:   getEnv("MCP_MARKET_SOURCE", "mcp_registry.yaml"),
+		MCPMarketSource:   getEnv("MCP_MARKET_SOURCE", "configs/mcp-market.json"),
 		EnableTelemetry:   getEnv("ENABLE_TELEMETRY", "false") == "true",
 	}
 }

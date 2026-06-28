@@ -35,8 +35,8 @@
           <option value="script">Script (Expressions)</option>
           <option value="code">Code (JavaScript)</option>
           <optgroup label="──────────────"></optgroup>
-          <option value="subprocess" :disabled="!entStore.hasFeature('subprocesses')">
-            Subprocess {{ entStore.hasFeature('subprocesses') ? '(Pro)' : '(Pro - Locked)' }}
+          <option value="subprocess">
+            Subprocess
           </option>
           <optgroup label="──────────────"></optgroup>
           <option value="telegram_output">Send Telegram message</option>
@@ -259,6 +259,31 @@
               </button>
             </div>
           </div>
+
+          <div class="space-y-2 pt-2 border-t border-border">
+            <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider">ChatOps Notification (Optional)</div>
+            
+            <div class="space-y-1">
+              <label class="text-[10px] text-text-muted font-medium">Service</label>
+              <select class="input text-xs" v-model="form.hitl_notify_service">
+                <option value="">None (Dashboard only)</option>
+                <option value="slack">Slack Channel</option>
+                <option value="teams">Teams Webhook</option>
+              </select>
+            </div>
+
+            <div v-if="form.hitl_notify_service" class="space-y-1">
+              <label class="text-[10px] text-text-muted font-medium">
+                {{ form.hitl_notify_service === 'slack' ? 'Channel Name or ID' : 'Webhook URL' }}
+              </label>
+              <input class="input text-xs font-mono" v-model="form.hitl_notify_channel" :placeholder="form.hitl_notify_service === 'slack' ? '#incidents' : 'https://outlook.office.com/webhook/...'" />
+            </div>
+
+            <div v-if="form.hitl_notify_service" class="space-y-1">
+              <label class="text-[10px] text-text-muted font-medium">Message Alert Template</label>
+              <textarea class="input text-xs leading-relaxed resize-none h-16" v-model="form.hitl_notify_message" placeholder="Optional custom message..." />
+            </div>
+          </div>
         </div>
       </template>
 
@@ -276,15 +301,7 @@
       <!-- SUBPROCESS -->
       <template v-if="form.type === 'subprocess'">
         <div class="space-y-3">
-          <!-- License lock check -->
-          <div v-if="!entStore.hasFeature('subprocesses')" class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-1">
-            <span class="badge bg-amber-500/15 text-amber-500 text-[9px] font-bold tracking-widest uppercase">Pro Feature</span>
-            <p class="text-[10px] text-amber-500/80 leading-relaxed font-medium">
-              Subprocesses are locked on your current tier.
-            </p>
-          </div>
-
-          <div :class="{ 'opacity-40 grayscale pointer-events-none select-none': !entStore.hasFeature('subprocesses') }">
+          <div>
             <div class="flex gap-2">
               <div class="space-y-1 flex-[2]">
                 <label class="text-xs text-text-muted">Reusable Process</label>
@@ -344,6 +361,19 @@
                 :child-options="subprocessOutputs"
                 :parent-options="Object.keys(bbSchema)"
               />
+            </div>
+
+            <div v-if="subprocessDef?.capabilities?.length" class="space-y-2 pt-2 border-t border-border/50">
+              <label class="text-xs text-text-muted font-bold uppercase tracking-wider">Subprocess Capability Mappings</label>
+              <div v-for="cap in subprocessDef.capabilities" :key="cap.type" class="space-y-1">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-mono text-indigo-300">{{ cap.type }} <span class="text-text-muted text-[10px]">({{ cap.scope || 'any scope' }})</span></span>
+                </div>
+                <select class="input text-xs" :value="getCapabilityMapping(cap.type)" @change="setCapabilityMapping(cap.type, $event.target.value)">
+                  <option value="">-- Select Registered MCP Server --</option>
+                  <option v-for="s in mcpServers" :key="s.id" :value="s.name">{{ s.name }}</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -614,7 +644,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed, watch } from 'vue'
+import { reactive, ref, computed, watch, onMounted } from 'vue'
 import { api } from '@/stores/auth'
 import { useEnterpriseStore } from '@/stores/enterprise'
 import AgentCombobox from './AgentCombobox.vue'
@@ -667,6 +697,18 @@ function mappingsToArray(obj) {
   return Object.entries(obj).map(([name, bbField]) => ({ name, bbField }))
 }
 
+function capabilityMappingsToArray(obj) {
+  if (!obj) return []
+  return Object.entries(obj).map(([name, serverName]) => ({ name, serverName }))
+}
+
+function capabilityMappingsToObject(arr) {
+  if (!arr || !arr.length) return undefined
+  const filtered = arr.filter(m => m.name && m.serverName)
+  if (!filtered.length) return undefined
+  return Object.fromEntries(filtered.map(m => [m.name, m.serverName]))
+}
+
 // Form parameters reactive setup
 const form = reactive({
   name:           props.node.name         ?? '',
@@ -689,6 +731,7 @@ const form = reactive({
   failure_trigger:    props.node.subprocess?.failure_trigger    || '',
   input_mappings:     mappingsToArray(props.node.subprocess?.input_mappings),
   output_mappings:    mappingsToArray(props.node.subprocess?.output_mappings),
+  capability_mappings: capabilityMappingsToArray(props.node.subprocess?.capability_mappings),
   form_schema: props.node.form_schema ? JSON.stringify(props.node.form_schema, null, 2) : '',
   telegram_chat_id: props.node.telegram_output?.chat_id ?? '{{bb.chat_id}}',
   telegram_message_text: props.node.telegram_output?.message_text ?? '',
@@ -696,6 +739,9 @@ const form = reactive({
   discord_message_text: props.node.discord_output?.message_text ?? '',
   triggerType: props.node.triggerType ?? '',
   triggerConfig: props.node.triggerConfig ? JSON.stringify(props.node.triggerConfig, null, 2) : '{}',
+  hitl_notify_service: props.node.notify?.service ?? '',
+  hitl_notify_channel: props.node.notify?.channel ?? '',
+  hitl_notify_message: props.node.notify?.message ?? '',
 })
 
 const agentForm = reactive({
@@ -708,6 +754,20 @@ const agentForm = reactive({
 
 const availableVersions = ref([])
 const subprocessDef    = ref(null)
+const mcpServers       = ref([])
+
+async function fetchMcpServers() {
+  try {
+    const { data } = await api.get('/mcp-servers')
+    mcpServers.value = data || []
+  } catch (e) {
+    console.error('Failed to fetch mcp servers', e)
+  }
+}
+
+onMounted(() => {
+  fetchMcpServers()
+})
 
 const subprocessRequiredInputs = computed(() => {
   const s = subprocessDef.value?.blackboard?.schema
@@ -859,6 +919,7 @@ function onProcessSelected(p) {
   if (!p) return
   subprocessDef.value = p
   form.process_version = ''
+  form.capability_mappings = []
   
   if (p.blackboard?.schema) {
     const schema = p.blackboard.schema
@@ -965,6 +1026,24 @@ function copyScript() {
   navigator.clipboard.writeText(JSON.stringify(scaffoldScript.value, null, 2))
 }
 
+function getCapabilityMapping(type) {
+  const found = form.capability_mappings.find(m => m.name === type)
+  return found ? found.serverName : ''
+}
+
+function setCapabilityMapping(type, serverName) {
+  const idx = form.capability_mappings.findIndex(m => m.name === type)
+  if (idx !== -1) {
+    if (serverName) {
+      form.capability_mappings[idx].serverName = serverName
+    } else {
+      form.capability_mappings.splice(idx, 1)
+    }
+  } else if (serverName) {
+    form.capability_mappings.push({ name: type, serverName })
+  }
+}
+
 function mappingsToObject(arr) {
   if (!arr || !arr.length) return undefined
   const filtered = arr.filter(m => m.name)
@@ -1013,6 +1092,7 @@ function onApply() {
     failure_trigger:    form.failure_trigger    || undefined,
     input_mappings:     mappingsToObject(form.input_mappings),
     output_mappings:    mappingsToObject(form.output_mappings),
+    capability_mappings: capabilityMappingsToObject(form.capability_mappings),
   } : undefined
 
   const telegramOutputDef = form.type === 'telegram_output' ? {
@@ -1037,6 +1117,11 @@ function onApply() {
     on_timeout:      (form.type !== 'terminal' && form.type !== 'timeout_node') ? (form.on_timeout || undefined) : undefined,
     subprocess:      subprocessDef,
     form_schema:     form.type === 'hitl' && form.form_schema ? JSON.parse(form.form_schema) : undefined,
+    notify:          (form.type === 'hitl' && form.hitl_notify_service) ? {
+      service: form.hitl_notify_service,
+      channel: form.hitl_notify_channel,
+      message: form.hitl_notify_message || undefined,
+    } : undefined,
     telegram_output: telegramOutputDef,
     discord_output:  discordOutputDef,
     triggerType:     form.type === 'initial' ? (form.triggerType || undefined) : undefined,

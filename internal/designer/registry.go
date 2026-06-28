@@ -1,8 +1,10 @@
 package designer
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -44,6 +46,13 @@ func loadMCPRegistryFromFile(path string) ([]MCPServerEntry, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read MCP registry file '%s': %w", path, err)
+	}
+	if filepath.Ext(path) == ".json" {
+		var entries []MCPServerEntry
+		if err := json.Unmarshal(data, &entries); err != nil {
+			return nil, fmt.Errorf("parse MCP registry JSON: %w", err)
+		}
+		return entries, nil
 	}
 	var reg mcpRegistryFile
 	if err := yaml.Unmarshal(data, &reg); err != nil {

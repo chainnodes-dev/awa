@@ -135,18 +135,12 @@
                 <div
                   v-for="node in paletteLogic"
                   :key="node.type"
-                  :draggable="!(node.type === 'subprocess' && !entStore.hasFeature('subprocesses'))"
-                  @dragstart="node.type === 'subprocess' && !entStore.hasFeature('subprocesses') ? $event.preventDefault() : onDragStart($event, node)"
-                  class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface-0 transition-colors group text-xs text-text"
-                  :class="[
-                    (node.type === 'subprocess' && !entStore.hasFeature('subprocesses'))
-                      ? 'opacity-40 grayscale cursor-not-allowed select-none'
-                      : 'hover:bg-surface-2 cursor-grab active:cursor-grabbing'
-                  ]"
+                  draggable="true"
+                  @dragstart="onDragStart($event, node)"
+                  class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface-0 transition-colors group text-xs text-text hover:bg-surface-2 cursor-grab active:cursor-grabbing"
                 >
                   <div :class="['w-2 h-2 rounded-full shrink-0', node.dot]"/>
                   <span class="truncate flex-1">{{ node.label }}</span>
-                  <span v-if="node.type === 'subprocess' && !entStore.hasFeature('subprocesses')" class="text-[9px] text-amber-500 font-bold uppercase shrink-0">Pro</span>
                 </div>
               </div>
             </div>
@@ -162,22 +156,6 @@
                   class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface-0 hover:bg-surface-2 cursor-grab active:cursor-grabbing text-xs text-text transition-colors group"
                 >
                   <div :class="['w-2 h-2 rounded-full shrink-0 bg-emerald-400']"/>
-                  <span class="truncate flex-1">{{ node.label }}</span>
-                </div>
-              </div>
-            </div>
-            <!-- actions (low code) -->
-            <div class="space-y-1.5">
-              <div class="text-[10px] text-text-muted font-bold uppercase tracking-wider px-1">Actions (Low-Code)</div>
-              <div class="grid grid-cols-1 gap-1.5">
-                <div
-                  v-for="node in paletteActions"
-                  :key="node.type"
-                  draggable="true"
-                  @dragstart="onDragStart($event, node)"
-                  class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface-0 hover:bg-surface-2 cursor-grab active:cursor-grabbing text-xs text-text transition-colors group"
-                >
-                  <div :class="['w-2 h-2 rounded-full shrink-0 bg-blue-400']"/>
                   <span class="truncate flex-1">{{ node.label }}</span>
                 </div>
               </div>
@@ -300,13 +278,11 @@
                   <div class="space-y-1">
                     <div class="flex items-center justify-between px-1">
                       <label class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Modular Workflow</label>
-                      <span v-if="!entStore.hasFeature('subprocesses')" class="badge bg-amber-500/10 text-amber-500 text-[9px] font-bold tracking-widest uppercase">Pro Feature</span>
                     </div>
                     <label 
                       class="flex items-center gap-2 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20 cursor-pointer hover:bg-indigo-500/10 transition-colors group"
-                      :class="{ 'opacity-40 grayscale pointer-events-none select-none': !entStore.hasFeature('subprocesses') }"
                     >
-                      <input type="checkbox" v-model="meta.reusable" class="accent-indigo-500" @change="isDirty=true" :disabled="!entStore.hasFeature('subprocesses')" />
+                      <input type="checkbox" v-model="meta.reusable" class="accent-indigo-500" @change="isDirty=true" />
                       <div class="flex-1">
                         <div class="text-xs font-semibold text-indigo-300 group-hover:text-indigo-200 transition-colors">Mark as Reusable</div>
                         <div class="text-[10px] text-text-muted leading-tight">Enables this workflow to be called as a sub-process by other workflows.</div>
@@ -525,8 +501,6 @@ const paletteLogic = [
   { type: 'hitl', label: 'HITL (Human)', dot: 'bg-amber-500' },
   { type: 'wait', label: 'Wait Node', dot: 'bg-slate-500' },
   { type: 'subprocess', label: 'Subprocess', dot: 'bg-violet-400' },
-  { type: 'emit_event', label: 'Emit Event', dot: 'bg-blue-400' },
-  { type: 'timeout_node', label: 'Timeout Node', dot: 'bg-red-500' },
   { type: 'terminal', label: 'Terminal (End)', dot: 'bg-indigo-400' },
 ]
 
@@ -537,10 +511,7 @@ const paletteTriggers = [
   { isTrigger: true, triggerType: 'webhook', label: 'Webhook Trigger' },
 ]
 
-const paletteActions = [
-  { type: 'telegram_output', label: 'Send Telegram' },
-  { type: 'discord_output', label: 'Send Discord' },
-]
+const paletteActions = []
 
 function onDragStart(event, node) {
   event.dataTransfer.setData('application/vueflow', JSON.stringify(node))
@@ -568,10 +539,7 @@ function onDrop(event) {
   let name = ''
   let type = paletteNode.type || 'prompt'
 
-  if (type === 'subprocess' && !entStore.hasFeature('subprocesses')) {
-    alert('Subprocess node is a Pro Feature and is locked in the Community Edition.')
-    return
-  }
+
 
   if (paletteNode.isTrigger) {
     type = 'initial'

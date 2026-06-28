@@ -581,10 +581,9 @@ export const MCPServerModal = defineComponent({
             }),
             h('input', { 
               class: 'input text-xs font-mono flex-1', 
-              type: 'password', 
               value: e.val, 
               placeholder: 'VALUE', 
-              autocomplete: 'new-password',
+              autocomplete: 'off',
               onInput: v => e.val = v.target.value 
             }),
             h('button', { type: 'button', class: 'p-2 text-text-muted hover:text-red-500', onClick: () => envList.value.splice(idx, 1) }, '\u2715')

@@ -37,10 +37,8 @@ COPY --from=builder /app/bin/app ./app
 # Create data directory for local filesystem MCP servers
 RUN mkdir -p ./data
 
-# mcp_registry.yaml is resolved at runtime relative to the project root.
-# The server binary has the compile-time path /app/cmd/server/main.go embedded,
-# so runtime.Caller resolves the project root to /app — matching this COPY target.
-COPY mcp_registry.yaml ./mcp_registry.yaml
+# configs is resolved at runtime relative to the project root.
+COPY configs ./configs
 
 EXPOSE 8080
 

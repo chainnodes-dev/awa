@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -113,6 +114,161 @@ func (a *Activities) CreateHITL(ctx context.Context, p CreateHITLParams) error {
 		Assignee:  p.Request.Assignee,
 	}))
 
+	if p.Notify != nil {
+		switch p.Notify.Service {
+		case "slack":
+			_ = a.sendSlackNotification(ctx, p.TenantID, p.Request.ID, p.Notify)
+		case "teams":
+			_ = a.sendTeamsNotification(ctx, p.Request.ID, p.Notify)
+		}
+	}
+
+	return nil
+}
+
+func (a *Activities) sendSlackNotification(ctx context.Context, tenantID, hitlID string, n *asmtypes.HITLNotify) error {
+	token, err := a.SecretMgr.GetSecret(ctx, tenantID, "SLACK_BOT_TOKEN")
+	if err != nil || token == "" {
+		return fmt.Errorf("slack token not configured: %w", err)
+	}
+
+	msgText := n.Message
+	if msgText == "" {
+		msgText = "A task is waiting for human-in-the-loop approval."
+	}
+
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+
+	blocks := []map[string]interface{}{
+		{
+			"type": "section",
+			"text": map[string]interface{}{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf("*Approval Required*\n%s", msgText),
+			},
+		},
+		{
+			"type": "actions",
+			"elements": []map[string]interface{}{
+				{
+					"type": "button",
+					"text": map[string]interface{}{
+						"type": "plain_text",
+						"text": "Approve",
+					},
+					"style": "primary",
+					"value": fmt.Sprintf("approved:%s", hitlID),
+					"action_id": "approve_btn",
+				},
+				{
+					"type": "button",
+					"text": map[string]interface{}{
+						"type": "plain_text",
+						"text": "Reject",
+					},
+					"style": "danger",
+					"value": fmt.Sprintf("rejected:%s", hitlID),
+					"action_id": "reject_btn",
+				},
+			},
+		},
+	}
+
+	payload := map[string]interface{}{
+		"channel": n.Channel,
+		"text":    "Human-in-the-loop Approval Needed",
+		"blocks":  blocks,
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://slack.com/api/chat.postMessage", bytes.NewReader(bodyBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := activityHTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (a *Activities) sendTeamsNotification(ctx context.Context, hitlID string, n *asmtypes.HITLNotify) error {
+	webhookURL := n.Channel
+	if webhookURL == "" {
+		return fmt.Errorf("teams webhook url not specified")
+	}
+
+	msgText := n.Message
+	if msgText == "" {
+		msgText = "A task is waiting for human-in-the-loop approval."
+	}
+
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+
+	payload := map[string]interface{}{
+		"@type":      "MessageCard",
+		"@context":   "http://schema.org/extensions",
+		"themeColor": "0076D7",
+		"summary":    "Human-in-the-loop Approval",
+		"sections": []map[string]interface{}{
+			{
+				"activityTitle":    "Approval Gate Required",
+				"activitySubtitle": msgText,
+				"markdown":         true,
+			},
+		},
+		"potentialAction": []map[string]interface{}{
+			{
+				"@type": "HttpPOST",
+				"name":  "Approve",
+				"target": fmt.Sprintf("%s/api/v1/hitl/%s/chat-resolve", baseURL, hitlID),
+				"body":   "{\"resolution\":\"approved\",\"resolver\":\"Teams ChatOps\"}",
+				"headers": []map[string]interface{}{
+					{"name": "Content-Type", "value": "application/json"},
+				},
+			},
+			{
+				"@type": "HttpPOST",
+				"name":  "Reject",
+				"target": fmt.Sprintf("%s/api/v1/hitl/%s/chat-resolve", baseURL, hitlID),
+				"body":   "{\"resolution\":\"rejected\",\"resolver\":\"Teams ChatOps\"}",
+				"headers": []map[string]interface{}{
+					{"name": "Content-Type", "value": "application/json"},
+				},
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := activityHTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 	return nil
 }
 
@@ -149,12 +305,13 @@ func (a *Activities) ExecuteAgent(ctx context.Context, p ExecuteAgentParams) (*a
 	}()
 
 	return a.Executor.Execute(ctx, orchestrator.AgentTask{
-		RunID:      p.RunID,
-		TenantID:   p.TenantID,
-		AgentDef:   p.AgentDef,
-		StateDef:   p.StateDef,
-		Blackboard: p.Blackboard,
-		Def:        p.Def,
+		RunID:              p.RunID,
+		TenantID:           p.TenantID,
+		AgentDef:           p.AgentDef,
+		StateDef:           p.StateDef,
+		Blackboard:         p.Blackboard,
+		Def:                p.Def,
+		CapabilityMappings: p.CapabilityMappings,
 	})
 }
 

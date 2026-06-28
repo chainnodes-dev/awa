@@ -1,0 +1,74 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: k8s-pod-crash-resolver
+  version: 1
+  description: |
+    AgSOP for diagnosing crashing Kubernetes pods. Fetches container logs, reads GitHub commits,
+    correlates events to identify the culprit, and recommends the fix to the team.
+
+blackboard:
+  schema:
+    incident_id: { type: string, required: true }
+    service_name: { type: string, required: true }
+    pod_logs: { type: string }
+    recent_commits: { type: string }
+    root_cause: { type: string }
+    recommended_fix: { type: string }
+    report_status: { type: string }
+
+states:
+  - name: DIAGNOSE
+    type: initial
+    agent: sre-diagnostic-agent
+    capabilities:
+      - name: kubernetes
+        type: kubernetes
+        scope: read-only
+      - name: github
+        type: github
+        scope: read-only
+    instructions: |
+      Use the kubernetes capability to fetch logs and details for pods matching service_name.
+      Use the github capability to retrieve recent commits on the repository matching service_name.
+      Correlate the logs and commits to determine the root cause of the crash.
+      Set root_cause with your analysis.
+      Trigger: "diagnosed".
+
+  - name: ANALYZE_AND_RECOMMEND
+    type: prompt
+    agent: sre-diagnostic-agent
+    instructions: |
+      Based on root_cause, formulate a recommended fix (e.g. specific line revert, config adjustments).
+      Set recommended_fix with a detailed, actionable description of what the engineer should change.
+      Trigger: "analysis_done".
+
+  - name: POST_DIAGNOSTIC_REPORT
+    type: hitl
+    instructions: "Review the diagnostic summary and culprit hint before resolving the ticket."
+
+  - name: MARK_RESOLVED
+    type: prompt
+    agent: sre-diagnostic-agent
+    instructions: |
+      Update status and set report_status: "SENT_TO_ENGINEER".
+      Trigger: "notified".
+
+  - name: COMPLETED
+    type: terminal
+
+  - name: REJECTED
+    type: terminal
+
+transitions:
+  - { from: DIAGNOSE, to: ANALYZE_AND_RECOMMEND, trigger: diagnosed }
+  - { from: ANALYZE_AND_RECOMMEND, to: POST_DIAGNOSTIC_REPORT, trigger: analysis_done }
+  - { from: POST_DIAGNOSTIC_REPORT, to: MARK_RESOLVED, trigger: approved }
+  - { from: POST_DIAGNOSTIC_REPORT, to: REJECTED, trigger: rejected }
+  - { from: MARK_RESOLVED, to: COMPLETED, trigger: notified }
+
+agents:
+  - name: sre-diagnostic-agent
+    rules:
+      - "Never execute write operations."
+      - "Always provide detailed logs, line numbers, and commit hashes."

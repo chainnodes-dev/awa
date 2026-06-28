@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/health"
 	"github.com/asm-platform/asm/internal/logger"
+	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/migrate"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/scheduler"
@@ -114,8 +117,18 @@ func main() {
 	
 	_, filename, _, _ := runtime.Caller(0)
 	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
-	registryPath := filepath.Join(projectRoot, "mcp_registry.yaml")
+	registryPath := filepath.Join(projectRoot, "configs", "mcp-market.json")
 	mcpEntries, _ := designer.LoadMCPRegistry(registryPath)
+
+	// Seed MCP Marketplace Source from configs/mcp-market.json if not set in DB or if stale (missing doc_urls)
+	if dbSource, err := s.GetSystemSetting(context.Background(), "mcp_market_source"); err != nil || dbSource == "" || !strings.Contains(dbSource, "https://github.com/containers/kubernetes-mcp-server") {
+		if entries, err := mcp.FetchMarketplace(context.Background(), registryPath); err == nil {
+			if serialized, err := json.Marshal(entries); err == nil {
+				_ = s.SetSystemSetting(context.Background(), "mcp_market_source", string(serialized))
+				slog.Info("Successfully seeded/updated MCP marketplace database catalog from json config", "path", registryPath)
+			}
+		}
+	}
 
 	api.SeedWorkflows(s, defaultTenant.ID)
 

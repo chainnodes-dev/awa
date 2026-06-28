@@ -1,0 +1,83 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: db-cpu-spike-investigator
+  version: 1
+  description: |
+    AgSOP for investigating database CPU spikes. Analyzes Prometheus metrics, inspects pg_stat_activity
+    via Postgres MCP, and recommends optimization indexes or query terminations to the team.
+
+blackboard:
+  schema:
+    incident_id: { type: string, required: true }
+    service_name: { type: string, required: true }
+    cpu_metrics: { type: string }
+    active_queries: { type: string }
+    root_cause: { type: string }
+    recommended_remediation: { type: string }
+    report_status: { type: string }
+
+states:
+  - name: METRIC_ANALYSIS
+    type: initial
+    agent: db-diagnostic-agent
+    capabilities:
+      - name: prometheus
+        type: prometheus
+        scope: read-only
+    instructions: |
+      Fetch timeseries metrics for CPU usage history over the last 1 hour.
+      Set cpu_metrics with the trend summary.
+      Trigger: "metrics_fetched".
+
+  - name: DB_INSPECTION
+    type: prompt
+    agent: db-diagnostic-agent
+    capabilities:
+      - name: database
+        type: database
+        scope: read-only
+    instructions: |
+      Inspect active sessions and locks in the database (e.g. pg_stat_activity).
+      Identify long-running queries or query locks causing the CPU spike.
+      Set active_queries and root_cause.
+      Trigger: "inspected".
+
+  - name: PLAN_RECOMMENDATION
+    type: prompt
+    agent: db-diagnostic-agent
+    instructions: |
+      Determine the best remediation action (e.g., specific index SQL, query PID to kill).
+      Set recommended_remediation.
+      Trigger: "remediation_ready".
+
+  - name: POST_OPTIMIZATION_HINT
+    type: hitl
+    instructions: "Review the database query diagnostic summary and optimization SQL hint."
+
+  - name: NOTIFY_SRE
+    type: prompt
+    agent: db-diagnostic-agent
+    instructions: |
+      Format the optimization proposal (e.g. target query PID, SQL statement) and set report_status: "SENT".
+      Trigger: "notified".
+
+  - name: COMPLETED
+    type: terminal
+
+  - name: REJECTED
+    type: terminal
+
+transitions:
+  - { from: METRIC_ANALYSIS, to: DB_INSPECTION, trigger: metrics_fetched }
+  - { from: DB_INSPECTION, to: PLAN_RECOMMENDATION, trigger: inspected }
+  - { from: PLAN_RECOMMENDATION, to: POST_OPTIMIZATION_HINT, trigger: remediation_ready }
+  - { from: POST_OPTIMIZATION_HINT, to: NOTIFY_SRE, trigger: approved }
+  - { from: POST_OPTIMIZATION_HINT, to: REJECTED, trigger: rejected }
+  - { from: NOTIFY_SRE, to: COMPLETED, trigger: notified }
+
+agents:
+  - name: db-diagnostic-agent
+    rules:
+      - "Never execute write queries."
+      - "Always explain the lock or query issue before recommending remediation."

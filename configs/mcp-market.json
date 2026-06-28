@@ -1,218 +1,811 @@
 [
   {
     "id": "brave-search",
-    "name": "Brave Search",
-    "description": "Real-time web search. Tools: search(query).",
+    "name": "brave-search",
+    "description": "High-quality, private web search for real-time information.",
     "icon": "search",
-    "category": "Search & Knowledge",
+    "author": "Model Context Protocol",
+    "category": "Search",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-    "env_vars": [{ "name": "BRAVE_API_KEY", "required": true }]
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-brave-search"
+    ],
+    "env_vars": [
+      {
+        "name": "BRAVE_API_KEY",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search"
+  },
+  {
+    "id": "duckduckgo",
+    "name": "duckduckgo",
+    "description": "DuckDuckGo web search and content retrieval (no API key required).",
+    "icon": "search",
+    "author": "zhsama",
+    "category": "Search",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "duckduckgo-mcp-server"
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/zhsama/duckduckgo-mcp-server"
+  },
+  {
+    "id": "open-websearch",
+    "name": "open-websearch",
+    "description": "Multi-engine web search (Bing, DuckDuckGo, Brave, etc.) and scraping (no API key required).",
+    "icon": "search",
+    "author": "Aas-ee",
+    "category": "Search",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "open-websearch"
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/aas-ee/open-websearch"
   },
   {
     "id": "wikipedia",
-    "name": "Wikipedia",
-    "description": "Search and retrieve Wikipedia articles. Tools: search_wikipedia(query), get_article(title).",
+    "name": "wikipedia",
+    "description": "Search and retrieve full-text articles from Wikipedia.",
     "icon": "book",
-    "category": "Search & Knowledge",
+    "author": "shelm",
+    "category": "Knowledge",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-wikipedia"]
+    "args": [
+      "-y",
+      "@shelm/wikipedia-mcp-server"
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/shelm/wikipedia-mcp-server"
   },
   {
-    "id": "google-sheets",
-    "name": "Google Sheets",
-    "description": "Manage Google Sheets. Tools: read_spreadsheet(id), update_cell(id, range, value).",
-    "icon": "table",
+    "id": "notion",
+    "name": "notion",
+    "description": "Access and manage Notion pages, databases, and blocks.",
+    "icon": "book-open",
+    "author": "Notion",
     "category": "Productivity",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-google-sheets"]
+    "args": [
+      "-y",
+      "@notionhq/notion-mcp-server"
+    ],
+    "env_vars": [
+      {
+        "name": "NOTION_API_KEY",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/notionhq/notion-mcp-server"
   },
   {
-    "id": "google-drive",
-    "name": "Google Drive",
-    "description": "Access Google Drive files. Tools: list_files(), download_file(id).",
-    "icon": "hard-drive",
+    "id": "linear",
+    "name": "linear",
+    "description": "Manage issues and projects in Linear.",
+    "icon": "check-square",
+    "author": "Linear",
     "category": "Productivity",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-google-drive"]
+    "args": [
+      "-y",
+      "mcp-linear"
+    ],
+    "env_vars": [
+      {
+        "name": "LINEAR_API_KEY",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/linear/mcp-linear"
   },
   {
-    "id": "google-calendar",
-    "name": "Google Calendar",
-    "description": "Manage calendar events. Tools: list_events(), create_event(data).",
-    "icon": "calendar",
+    "id": "airtable",
+    "name": "airtable",
+    "description": "Read and write data to Airtable bases.",
+    "icon": "grid",
+    "author": "domdomegg",
     "category": "Productivity",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-google-calendar"]
-  },
-  {
-    "id": "microsoft-graph",
-    "name": "Microsoft Graph",
-    "description": "Access M365 (Outlook/Teams/OneDrive). Tools: list_messages(), send_teams_message().",
-    "icon": "mail",
-    "category": "Productivity",
-    "transport": "stdio",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-microsoft-graph"]
-  },
-  {
-    "id": "aws-s3",
-    "name": "AWS S3",
-    "description": "Manage Amazon S3 buckets. Tools: list_buckets(), upload_object(bucket, key, body).",
-    "icon": "box",
-    "category": "Infrastructure",
-    "transport": "stdio",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-aws-s3"]
+    "args": [
+      "-y",
+      "airtable-mcp-server"
+    ],
+    "env_vars": [
+      {
+        "name": "AIRTABLE_API_KEY",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/domdomegg/airtable-mcp-server"
   },
   {
     "id": "github",
-    "name": "GitHub",
-    "description": "Automate GitHub tasks. Tools: create_issue(repo, title), list_pull_requests(repo).",
+    "name": "github",
+    "description": "Automate GitHub tasks: PRs, issues, and code search.",
     "icon": "github",
-    "category": "Infrastructure",
+    "author": "Model Context Protocol",
+    "category": "Development",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-github"],
-    "env_vars": [{ "name": "GITHUB_PERSONAL_ACCESS_TOKEN", "required": true }]
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-github"
+    ],
+    "env_vars": [
+      {
+        "name": "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/github"
+  },
+  {
+    "id": "everything",
+    "name": "everything",
+    "description": "Anthropic's official capability test server showcasing all MCP features.",
+    "icon": "cpu",
+    "author": "Model Context Protocol",
+    "category": "Development",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-everything"
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything"
+  },
+  {
+    "id": "playwright",
+    "name": "playwright",
+    "description": "A Model Context Protocol (MCP) server that provides browser automation capabilities using Playwright. ",
+    "icon": "cpu",
+    "author": "Model Context Protocol",
+    "category": "Development",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@playwright/mcp@latest"
+    ],
+    "is_verified": true,
+    "doc_url": "https://www.npmjs.com/package/@playwright/mcp"
   },
   {
     "id": "postgres",
-    "name": "Postgres",
-    "description": "Query PostgreSQL databases. Tools: query(sql), list_tables().",
+    "name": "postgres",
+    "description": "Connect to and query PostgreSQL databases.",
     "icon": "database",
+    "author": "Model Context Protocol",
     "category": "Databases",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-postgres"],
-    "env_vars": [{ "name": "DATABASE_URL", "required": true }]
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-postgres"
+    ],
+    "env_vars": [
+      {
+        "name": "DATABASE_URL",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/postgres"
   },
   {
-    "id": "mysql",
-    "name": "MySQL",
-    "description": "Query MySQL/MariaDB databases. Tools: query(sql), describe_table(name).",
+    "id": "redis",
+    "name": "redis",
+    "description": "Interact with Redis key-value stores.",
     "icon": "database",
+    "author": "Model Context Protocol",
     "category": "Databases",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-mysql"]
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-redis"
+    ],
+    "env_vars": [
+      {
+        "name": "REDIS_URL",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/redis"
   },
   {
     "id": "slack",
-    "name": "Slack",
-    "description": "Interact with Slack. Tools: post_message(channel, text), list_channels().",
+    "name": "slack",
+    "description": "Send messages, list channels, and interact with Slack workspaces.",
     "icon": "message-square",
+    "author": "Model Context Protocol",
     "category": "Communication",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-slack"],
-    "env_vars": [{ "name": "SLACK_BOT_TOKEN", "required": true }]
-  },
-  {
-    "id": "send-mail",
-    "name": "Send Mail",
-    "description": "Sends transactional emails via Resend. Tools: send_email(to, subject, html_body).",
-    "icon": "send",
-    "category": "Communication",
-    "transport": "stdio",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-resend"],
-    "env_vars": [{ "name": "RESEND_API_KEY", "required": true }]
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-slack"
+    ],
+    "env_vars": [
+      {
+        "name": "SLACK_BOT_TOKEN",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/slack"
   },
   {
     "id": "fetch",
-    "name": "Fetch",
-    "description": "Fetches and cleans web content for LLMs. Tools: fetch(url).",
+    "name": "fetch",
+    "description": "Download web content safely and convert it to Markdown.",
     "icon": "globe",
+    "author": "InfoInlet",
     "category": "Utilities",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-fetch"]
+    "args": [
+      "-y",
+      "@infoinlet/mcp-fetch"
+    ],
+    "is_verified": true,
+    "doc_url": "https://www.npmjs.com/package/@infoinlet/mcp-fetch"
   },
   {
     "id": "filesystem",
-    "name": "Filesystem",
-    "description": "Access local files (restricted to ./data). Tools: read_file(path), write_file(path, content).",
+    "name": "filesystem",
+    "description": "Access local files (restricted to ./data).",
     "icon": "file-text",
+    "author": "Model Context Protocol",
     "category": "Utilities",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem"]
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-filesystem",
+      "./data"
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem"
   },
   {
-    "id": "gleif",
-    "name": "GLEIF",
-    "description": "Verified legal entity lookups. Tools: gleif_search(query).",
-    "icon": "shield-check",
-    "category": "Business & Data",
-    "transport": "sse",
-    "url": "https://mcp.gleif.org/sse",
-    "env_vars": [{ "name": "MCP_GLEIF_URL", "required": true }]
+    "id": "fast-filesystem",
+    "name": "fast-filesystem",
+    "description": "High-performance filesystem access (restricted to ./data).",
+    "icon": "file-text",
+    "author": "efforthye",
+    "category": "Utilities",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "fast-filesystem-mcp",
+      "./data"
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/efforthye/fast-filesystem-mcp"
   },
   {
-    "id": "exchange-rates",
-    "name": "Exchange Rates",
-    "description": "Currency conversion via Frankfurter. Tools: get_exchange_rate(amount, from, to).",
-    "icon": "refresh-cw",
-    "category": "Business & Data",
-    "transport": "sse",
-    "url": "https://mcp.frankfurter.app/sse",
-    "env_vars": [{ "name": "MCP_EXCHANGE_URL", "required": true }]
+    "id": "firecrawl",
+    "name": "firecrawl",
+    "description": "Web scraping, deep crawling, and search with structured data extraction.",
+    "icon": "globe",
+    "author": "Firecrawl",
+    "category": "Utilities",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "firecrawl-mcp"
+    ],
+    "env_vars": [
+      {
+        "name": "FIRECRAWL_API_KEY",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/firecrawl/firecrawl"
+  },
+  {
+    "id": "sap-fiori",
+    "name": "sap-fiori",
+    "description": "Tooling for developing and modifying SAP Fiori applications.",
+    "icon": "layout",
+    "author": "SAP",
+    "category": "Enterprise",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@sap-ux/fiori-mcp-server"
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/SAP/fiori-tools"
+  },
+  {
+    "id": "salesforce",
+    "name": "salesforce",
+    "description": "Connect to Salesforce orgs and manage metadata, data, and users using the Salesforce CLI.",
+    "icon": "cloud",
+    "author": "Salesforce",
+    "category": "Enterprise",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@salesforce/mcp"
+    ],
+    "is_verified": true,
+    "doc_url": "https://www.npmjs.com/package/@salesforce/mcp"
   },
   {
     "id": "openfigi",
-    "name": "OpenFIGI",
-    "description": "Financial instrument lookups. Tools: figi_lookup(ticker).",
+    "name": "openfigi",
+    "description": "Lookup the Financial Instrument Global Identifier (FIGI) for a stock ticker.",
     "icon": "trending-up",
-    "category": "Business & Data",
+    "author": "Local",
+    "category": "Finance",
     "transport": "sse",
-    "url": "https://mcp.openfigi.com/sse",
-    "env_vars": [{ "name": "MCP_OPENFIGI_URL", "required": true }]
+    "url": "http://localhost:8093",
+    "env_vars": [
+      {
+        "name": "OPENFIGI_API_KEY",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://www.openfigi.com/api"
   },
   {
-    "id": "yahoo-finance",
-    "name": "Yahoo Finance",
-    "description": "Real-time market data, stock prices, and analyst ratings. Tools: get_stock_price(ticker), get_analyst_ratings(ticker).",
-    "icon": "bar-chart-2",
-    "category": "Business & Data",
-    "transport": "stdio",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-yfinance"]
+    "id": "lei",
+    "name": "lei",
+    "description": "Search for a company's Legal Entity Identifier (LEI) and official details.",
+    "icon": "award",
+    "author": "Local",
+    "category": "Finance",
+    "transport": "sse",
+    "url": "http://localhost:8091",
+    "is_verified": true,
+    "doc_url": "https://www.gleif.org/en/lei-data/gleif-api"
   },
   {
     "id": "sec-edgar",
-    "name": "SEC Edgar",
-    "description": "Official SEC filings database. Tools: search_filings(ticker, form_type), get_latest_10k(ticker).",
+    "name": "sec-edgar",
+    "description": "Search and retrieve official SEC filings, company facts, and financial facts from SEC EDGAR.",
     "icon": "file-search",
-    "category": "Business & Data",
+    "author": "Cyanheads",
+    "category": "Finance",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-sec-edgar"]
+    "args": [
+      "-y",
+      "@cyanheads/secedgar-mcp-server"
+    ],
+    "env_vars": [
+      {
+        "name": "EDGAR_USER_AGENT",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://www.npmjs.com/package/@cyanheads/secedgar-mcp-server"
   },
   {
-    "id": "weather",
-    "name": "Weather",
-    "description": "Global weather data and forecasts. Tools: get_forecast(lat, lon).",
-    "icon": "sun",
-    "category": "Environment & Energy",
-    "transport": "stdio",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-weather"],
-    "env_vars": [{ "name": "OPENWEATHERMAP_API_KEY", "required": true }]
+    "id": "morningstar",
+    "name": "morningstar",
+    "description": "Access Morningstar financial data, mutual fund / ETF / stock ratings, research, and portfolio analysis.",
+    "icon": "trending-up",
+    "author": "Morningstar",
+    "category": "Finance",
+    "transport": "sse",
+    "url": "https://mcp.morningstar.com/mcp",
+    "is_verified": true,
+    "doc_url": "https://www.morningstar.com"
   },
   {
-    "id": "solar-wind-prognosis",
-    "name": "Solar & Wind",
-    "description": "Specialized forecasts for PV (sun intensity) and wind turbines. Tools: get_solar_yield(lat, lon), get_wind_prognosis(lat, lon).",
-    "icon": "wind",
-    "category": "Environment & Energy",
+    "id": "kubernetes",
+    "name": "kubernetes",
+    "description": "Access cluster resources, view logs, and manage pods.",
+    "icon": "cpu",
+    "category": "DevOps \u0026 SRE",
     "transport": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-solar-wind"]
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-kubernetes"
+    ],
+    "env_vars": [
+      {
+        "name": "KUBECONFIG",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/containers/kubernetes-mcp-server"
+  },
+  {
+    "id": "aws",
+    "name": "aws",
+    "description": "Access AWS resources, view EC2 statuses, and manage instances.",
+    "icon": "cloud",
+    "category": "DevOps \u0026 SRE",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-aws"
+    ],
+    "env_vars": [
+      {
+        "name": "AWS_ACCESS_KEY_ID",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "AWS_SECRET_ACCESS_KEY",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "AWS_REGION",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/awslabs/mcp"
+  },
+  {
+    "id": "gcp",
+    "name": "gcp",
+    "description": "Access Google Cloud Platform instances, logs, and storage resources.",
+    "icon": "cloud",
+    "category": "DevOps \u0026 SRE",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-gcp"
+    ],
+    "env_vars": [
+      {
+        "name": "GCP_PROJECT_ID",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "GOOGLE_APPLICATION_CREDENTIALS",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/googleapis/mcp-toolbox"
+  },
+  {
+    "id": "azure",
+    "name": "azure",
+    "description": "Manage Azure Virtual Machines and retrieve resource groups metrics.",
+    "icon": "cloud",
+    "category": "DevOps \u0026 SRE",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-azure"
+    ],
+    "env_vars": [
+      {
+        "name": "AZURE_TENANT_ID",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "AZURE_CLIENT_ID",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "AZURE_CLIENT_SECRET",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/microsoft/mcp"
+  },
+  {
+    "id": "datadog",
+    "name": "datadog",
+    "description": "Retrieve application logs, traces, and trigger incident queries.",
+    "icon": "activity",
+    "category": "Monitoring",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-datadog"
+    ],
+    "env_vars": [
+      {
+        "name": "DATADOG_API_KEY",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "DATADOG_APP_KEY",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "DATADOG_SITE",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/datadog-labs/mcp-server"
+  },
+  {
+    "id": "splunk",
+    "name": "splunk",
+    "description": "Query Splunk logs, events, and trace anomalies.",
+    "icon": "file-search",
+    "category": "Monitoring",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-splunk"
+    ],
+    "env_vars": [
+      {
+        "name": "SPLUNK_URL",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "SPLUNK_TOKEN",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://splunkbase.splunk.com/app/7931"
+  },
+  {
+    "id": "elasticsearch",
+    "name": "elasticsearch",
+    "description": "Full-text query log search and indices diagnostics.",
+    "icon": "database",
+    "category": "Monitoring",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-elasticsearch"
+    ],
+    "env_vars": [
+      {
+        "name": "ELASTICSEARCH_URL",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "ELASTICSEARCH_API_KEY",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/elastic/mcp-server-elasticsearch"
+  },
+  {
+    "id": "prometheus",
+    "name": "prometheus",
+    "description": "Query Prometheus timeseries metrics for trends and alerts.",
+    "icon": "trending-up",
+    "category": "Monitoring",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-prometheus"
+    ],
+    "env_vars": [
+      {
+        "name": "PROMETHEUS_URL",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/pab1it0/prometheus-mcp-server"
+  },
+  {
+    "id": "grafana",
+    "name": "grafana",
+    "description": "Query Grafana dashboards, panels, and trigger alert responses.",
+    "icon": "layout",
+    "category": "Monitoring",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-grafana"
+    ],
+    "env_vars": [
+      {
+        "name": "GRAFANA_URL",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "GRAFANA_API_KEY",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/grafana/mcp-grafana"
+  },
+  {
+    "id": "pagerduty",
+    "name": "pagerduty",
+    "description": "Trigger, escalate, resolve PagerDuty incidents and add notes.",
+    "icon": "bell",
+    "category": "Incident Management",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-pagerduty"
+    ],
+    "env_vars": [
+      {
+        "name": "PAGERDUTY_TOKEN",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/PagerDuty/pagerduty-mcp-server"
+  },
+  {
+    "id": "opsgenie",
+    "name": "opsgenie",
+    "description": "Manage on-call schedules, alert routing, and escalation notes.",
+    "icon": "bell",
+    "category": "Incident Management",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-opsgenie"
+    ],
+    "env_vars": [
+      {
+        "name": "OPSGENIE_API_KEY",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/giantswarm/mcp-opsgenie"
+  },
+  {
+    "id": "jira",
+    "name": "jira",
+    "description": "Create, view, update tickets and tasks in Jira.",
+    "icon": "check-square",
+    "category": "Incident Management",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-jira"
+    ],
+    "env_vars": [
+      {
+        "name": "JIRA_URL",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "JIRA_EMAIL",
+        "description": "",
+        "required": true
+      },
+      {
+        "name": "JIRA_API_TOKEN",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/atlassian/atlassian-mcp-server"
+  },
+  {
+    "id": "mysql",
+    "name": "mysql",
+    "description": "Connect to and query MySQL databases.",
+    "icon": "database",
+    "category": "Databases",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-mysql"
+    ],
+    "env_vars": [
+      {
+        "name": "MYSQL_URL",
+        "description": "",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/mysql"
+  },
+  {
+    "id": "mattermost",
+    "name": "mattermost",
+    "description": "Send messages, list channels, and interact with Mattermost workspaces.",
+    "icon": "message-square",
+    "author": "Model Context Protocol",
+    "category": "Communication",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "mcp-server-mattermost"
+    ],
+    "env_vars": [
+      {
+        "name": "MATTERMOST_URL",
+        "description": "URL of the Mattermost server (e.g. http://localhost:8065)",
+        "required": true
+      },
+      {
+        "name": "MATTERMOST_TOKEN",
+        "description": "Mattermost Personal Access Token",
+        "required": true
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://github.com/cloud-ru-tech/mcp-server-mattermost"
   }
 ]

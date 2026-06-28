@@ -40,6 +40,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 		
 		// Headless HITL (ChatOps)
 		v1.POST("/hitl/:id/chat-resolve", h.HandleChatOpsResolve)
+		v1.POST("/hitl/slack-resolve", h.HandleSlackResolve)
 
 		// Internal Event Sync (from worker to server)
 		v1.POST("/internal/events", h.PublishInternalEvent)
@@ -87,6 +88,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 
 			protected.GET("/hitl/pending", h.GetPendingHITL)
 			protected.GET("/mcp-market", h.GetMCPMarket)
+			protected.POST("/mcp-market/publish", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor), h.PublishMCPMarket)
 			protected.GET("/mcp-servers", h.ListMCPServers)
 
 			mcpServers := protected.Group("/mcp-servers", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor))

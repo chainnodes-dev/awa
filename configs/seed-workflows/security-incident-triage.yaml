@@ -1,0 +1,65 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: security-incident-triage
+  version: 1
+  description: |
+    Automated triage of security alerts: enrichment → severity assessment → remediation script → human approval.
+    Showcases complex agent routing and multi-persona handovers.
+
+blackboard:
+  schema:
+    incident_id: { type: string, required: true }
+    source_ip: { type: string, required: true }
+    alert_type: { type: string }
+    threat_intel_report: { type: string }
+    severity: { type: string }
+    remediation_required: { type: bool }
+    remediation_plan: { type: string }
+
+states:
+  - name: INTAKE
+    type: initial
+    script: { trigger: '"start"' }
+
+  - name: THREAT_INTEL
+    type: prompt
+    agent: security-analyst
+    instructions: |
+      Analyse the source_ip using available threat intelligence.
+      Set threat_intel_report with your findings.
+      If the IP is a known malicious actor, set severity: 'CRITICAL' and trigger: 'intel_ready'.
+      Otherwise, set severity: 'LOW' and trigger: 'intel_ready'.
+
+  - name: REMEDIATION_SCAN
+    type: prompt
+    agent: security-analyst
+    instructions: |
+      Based on threat_intel_report, define a remediation plan.
+      If the severity is CRITICAL, remediation_required should be true.
+      Set remediation_plan as a markdown list of steps.
+      Trigger 'plan_done'.
+
+  - name: SOC_APPROVAL
+    type: hitl
+    instructions: "SOC Lead review required for Critical Incidents."
+
+  - name: RESOLVED
+    type: terminal
+
+  - name: ESCALATED
+    type: terminal
+
+transitions:
+  - { from: INTAKE, to: THREAT_INTEL, trigger: start }
+  - { from: THREAT_INTEL, to: REMEDIATION_SCAN, trigger: intel_ready }
+  - { from: REMEDIATION_SCAN, to: SOC_APPROVAL, trigger: plan_done, guard: "severity == 'CRITICAL'" }
+  - { from: REMEDIATION_SCAN, to: RESOLVED, trigger: plan_done }
+  - { from: SOC_APPROVAL, to: RESOLVED, trigger: approved }
+  - { from: SOC_APPROVAL, to: ESCALATED, trigger: rejected }
+
+agents:
+  - name: security-analyst
+    rules:
+      - "Strict JSON output only."
+      - "Prioritize system safety and containment."

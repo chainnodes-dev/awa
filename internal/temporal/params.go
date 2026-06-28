@@ -16,10 +16,11 @@ const (
 // The full WorkflowDef is passed in (not loaded inside the workflow) so the
 // workflow function stays deterministic across replays.
 type WorkflowParams struct {
-	RunID      string
-	TenantID   string // required for event subscription activities
-	Def        *asmtypes.WorkflowDef
-	Blackboard map[string]interface{}
+	RunID              string
+	TenantID           string // required for event subscription activities
+	Def                *asmtypes.WorkflowDef
+	Blackboard         map[string]interface{}
+	CapabilityMappings map[string]string
 }
 
 // TriggerSignalPayload is the body of the "trigger" signal sent by Engine.Trigger.
@@ -71,19 +72,22 @@ type PublishEventParams struct {
 
 // CreateHITLParams is the activity input for creating a HITL request.
 type CreateHITLParams struct {
-	Request *asmtypes.HITLRequest
+	Request  *asmtypes.HITLRequest
+	Notify   *asmtypes.HITLNotify
+	TenantID string
 }
 
 // ExecuteAgentParams is the activity input for running an LLM agent.
 type ExecuteAgentParams struct {
-	RunID           string
-	TenantID        string
-	WorkflowName    string // for metrics
-	WorkflowVersion string // for metrics
-	AgentDef        asmtypes.AgentDef
-	StateDef        asmtypes.StateDef
-	Blackboard      map[string]interface{}
-	Def             *asmtypes.WorkflowDef
+	RunID              string
+	TenantID           string
+	WorkflowName       string // for metrics
+	WorkflowVersion    string // for metrics
+	AgentDef           asmtypes.AgentDef
+	StateDef           asmtypes.StateDef
+	Blackboard         map[string]interface{}
+	Def                *asmtypes.WorkflowDef
+	CapabilityMappings map[string]string
 }
 
 // ExecuteCodeParams is the activity input for running a user JavaScript code node.

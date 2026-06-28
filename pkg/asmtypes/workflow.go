@@ -128,6 +128,8 @@ type StateDef struct {
 	// FormSchema is an optional JSON Schema used to render a custom input form
 	// in the dashboard when type == "hitl".
 	FormSchema map[string]interface{} `yaml:"form_schema,omitempty" json:"form_schema,omitempty"`
+	// Notify is the optional ChatOps integration settings.
+	Notify *HITLNotify `yaml:"notify,omitempty" json:"notify,omitempty"`
 	IsTimeoutNode bool `yaml:"is_timeout_node,omitempty" json:"is_timeout_node,omitempty"`
 
 	// Shorthand transitions (synthesized into formal Transitions at load time)
@@ -137,7 +139,12 @@ type StateDef struct {
 	Transitions []Transition `yaml:"transitions,omitempty"    json:"transitions,omitempty"`
 }
 
-// EmitEventDef is the configuration for a state of type "emit_event".
+// HITLNotify defines native ChatOps integration for HITL states.
+type HITLNotify struct {
+	Service string `yaml:"service"           json:"service"`           // "slack" | "teams"
+	Channel string `yaml:"channel"           json:"channel"`           // e.g. "#incidents" or Webhook URL
+	Message string `yaml:"message,omitempty" json:"message,omitempty"` // Custom alert message
+}
 // The state fires a named platform event, optionally carrying a subset of the
 // blackboard as payload, then immediately advances via CompletionTrigger.
 type EmitEventDef struct {
@@ -178,6 +185,8 @@ type SubProcessDef struct {
 	InputMappings map[string]string `yaml:"input_mappings,omitempty"      json:"input_mappings,omitempty"`
 	// OutputMappings maps sub-process output ports back to parent blackboard fields.
 	OutputMappings map[string]string `yaml:"output_mappings,omitempty"     json:"output_mappings,omitempty"`
+	// CapabilityMappings maps abstract capabilities required by the sub-process to parent actual MCP servers.
+	CapabilityMappings map[string]string `yaml:"capability_mappings,omitempty" json:"capability_mappings,omitempty"`
 }
 
 // ScriptDef defines deterministic inline logic for a state of type "script".

@@ -462,20 +462,26 @@ func (e *Executor) loadAgentTools(ctx context.Context, agent asmtypes.AgentDef, 
 		if cap.MCPServer != "" {
 			rawServers = append(rawServers, cap.MCPServer)
 		} else if cap.Type != "" {
-			if e.store != nil {
-				if dynamic, err := e.store.ListMCPServers(ctx); err == nil {
-					for _, d := range dynamic {
-						hasScope := false
-						for _, s := range d.Scopes {
-							if strings.EqualFold(s, cap.Scope) {
-								hasScope = true
-								break
+			// Sandboxed Isolation: Check if this abstract capability is mapped
+			if mappedServer, exists := task.CapabilityMappings[cap.Type]; exists && mappedServer != "" {
+				rawServers = append(rawServers, mappedServer)
+			} else if len(task.CapabilityMappings) == 0 {
+				// Fallback: If not inside a sandboxed subprocess mapping, do the discovery.
+				if e.store != nil {
+					if dynamic, err := e.store.ListMCPServers(ctx); err == nil {
+						for _, d := range dynamic {
+							hasScope := false
+							for _, s := range d.Scopes {
+								if strings.EqualFold(s, cap.Scope) {
+									hasScope = true
+									break
+								}
 							}
-						}
-						if cap.Scope == "" || hasScope {
-							if strings.Contains(strings.ToLower(d.Name), strings.ToLower(cap.Type)) || strings.Contains(strings.ToLower(d.Description), strings.ToLower(cap.Type)) {
-								rawServers = append(rawServers, d.Name)
-								break
+							if cap.Scope == "" || hasScope {
+								if strings.Contains(strings.ToLower(d.Name), strings.ToLower(cap.Type)) || strings.Contains(strings.ToLower(d.Description), strings.ToLower(cap.Type)) {
+									rawServers = append(rawServers, d.Name)
+									break
+								}
 							}
 						}
 					}

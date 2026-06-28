@@ -11,7 +11,6 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/asm-platform/asm/internal/events"
-	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/pkg/asmtypes"
@@ -293,7 +292,9 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					}
 				}
 				_ = workflow.ExecuteActivity(shortOpts, (*Activities).CreateHITL, CreateHITLParams{
-					Request: hitlReq,
+					Request:  hitlReq,
+					Notify:   state.Notify,
+					TenantID: p.TenantID,
 				}).Get(bCtx, nil)
 
 				var trigger string
@@ -319,14 +320,15 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 							agentOpts := makeAgentOpts(bCtx, agentDef.TaskQueue, 0)
 							var output *asmtypes.AgentOutput
 							_ = workflow.ExecuteActivity(agentOpts, (*Activities).ExecuteAgent, ExecuteAgentParams{
-								RunID:           p.RunID,
-								TenantID:        p.TenantID,
-								WorkflowName:    p.Def.Metadata.Name,
-								WorkflowVersion: p.Def.Metadata.Version,
-								AgentDef:        *agentDef,
-								StateDef:        *state,
-								Blackboard:      bb,
-								Def:             p.Def,
+								RunID:              p.RunID,
+								TenantID:           p.TenantID,
+								WorkflowName:       p.Def.Metadata.Name,
+								WorkflowVersion:    p.Def.Metadata.Version,
+								AgentDef:           *agentDef,
+								StateDef:           *state,
+								Blackboard:         bb,
+								Def:                p.Def,
+								CapabilityMappings: p.CapabilityMappings,
 							}).Get(bCtx, &output)
 							
 							if output != nil {
@@ -390,14 +392,15 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				agentOpts := makeAgentOpts(bCtx, agentDef.TaskQueue, stateTimeout)
 				var output *asmtypes.AgentOutput
 				err := workflow.ExecuteActivity(agentOpts, (*Activities).ExecuteAgent, ExecuteAgentParams{
-					RunID:           p.RunID,
-					TenantID:        p.TenantID,
-					WorkflowName:    p.Def.Metadata.Name,
-					WorkflowVersion: p.Def.Metadata.Version,
-					AgentDef:        *agentDef,
-					StateDef:        *state,
-					Blackboard:      bb,
-					Def:             p.Def,
+					RunID:              p.RunID,
+					TenantID:           p.TenantID,
+					WorkflowName:       p.Def.Metadata.Name,
+					WorkflowVersion:    p.Def.Metadata.Version,
+					AgentDef:           *agentDef,
+					StateDef:           *state,
+					Blackboard:         bb,
+					Def:                p.Def,
+					CapabilityMappings: p.CapabilityMappings,
 				}).Get(bCtx, &output)
 				if err != nil {
 					if temporalsdk.IsTimeoutError(err) {
@@ -689,21 +692,11 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				sc := state.SubProcess
 				skillOpts := makeShortOpts(bCtx)
 
-				// 1. Verify license for sub-processes (Enterprise Feature).
-				var claims *enterprise.LicenseClaims
-				err := workflow.ExecuteActivity(skillOpts, (*Activities).GetLicenseClaims, p.TenantID).Get(bCtx, &claims)
-				if err != nil {
-					workflowErr = fmt.Errorf("license verification failed: %w", err)
-					return
-				}
-				if claims.Tier == enterprise.TierFree {
-					workflowErr = fmt.Errorf("%w: subprocesses require a Pro or Enterprise license", enterprise.ErrTierNotMet)
-					return
-				}
+				// Load the child WorkflowDef by name and version.
 
 				// 2. Load the child WorkflowDef by name and version.
 				var childDef *asmtypes.WorkflowDef
-				err = workflow.ExecuteActivity(skillOpts, (*Activities).LoadWorkflowDef,
+				err := workflow.ExecuteActivity(skillOpts, (*Activities).LoadWorkflowDef,
 					LoadWorkflowDefParams{
 						TenantID:     p.TenantID,
 						WorkflowName: sc.ProcessRef,
@@ -739,9 +732,11 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 
 				childCtx := workflow.WithChildOptions(bCtx, cwo)
 				skillErr := workflow.ExecuteChildWorkflow(childCtx, ASMWorkflow, WorkflowParams{
-					RunID:      childRunID,
-					Def:        childDef,
-					Blackboard: childBB,
+					RunID:              childRunID,
+					TenantID:           p.TenantID,
+					Def:                childDef,
+					Blackboard:         childBB,
+					CapabilityMappings: sc.CapabilityMappings,
 				}).Get(bCtx, nil)
 
 				// 4. Determine trigger and apply output mappings.

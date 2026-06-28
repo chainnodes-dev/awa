@@ -22,12 +22,13 @@ type Executor interface {
 
 // AgentTask carries everything an executor needs to run an agent.
 type AgentTask struct {
-	RunID      string
-	TenantID   string
-	AgentDef   asmtypes.AgentDef
-	StateDef   asmtypes.StateDef
-	Blackboard map[string]interface{}
-	Def        *asmtypes.WorkflowDef
+	RunID              string
+	TenantID           string
+	AgentDef           asmtypes.AgentDef
+	StateDef           asmtypes.StateDef
+	Blackboard         map[string]interface{}
+	Def                *asmtypes.WorkflowDef
+	CapabilityMappings map[string]string
 }
 
 // TemporalEngineClient abstracts the Temporal client used by the engine.

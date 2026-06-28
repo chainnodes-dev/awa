@@ -1,0 +1,36 @@
+services:
+  # ── Grafana (Open Source Metrics Visualization & Alerting) ──────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: chainnode-grafana
+    ports:
+      - "3000:3000" # Access at http://localhost:3000
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+  # ── Mattermost (Open Source Slack Alternative) ──────────────────────
+  mattermost:
+    image: mattermost/mattermost-team-edition:9.5
+    platform: linux/amd64
+    container_name: chainnode-mattermost
+    ports:
+      - "8065:8065" # Access at http://localhost:8065
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mmuser:mmpassword@mattermost-postgres:5432/mattermost?sslmode=disable
+    depends_on:
+      mattermost-postgres:
+        condition: service_healthy
+
+  mattermost-postgres:
+    image: postgres:15-alpine
+    container_name: chainnode-mattermost-postgres
+    environment:
+      POSTGRES_USER: mmuser
+      POSTGRES_PASSWORD: mmpassword
+      POSTGRES_DB: mattermost
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mmuser -d mattermost"]
+      interval: 3s
+      timeout: 3s
+      retries: 5

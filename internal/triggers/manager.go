@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/asm-platform/asm/internal/secrets"
@@ -104,6 +105,47 @@ func (m *Manager) HandleWebhook(ctx context.Context, tenantID, workflowName, ver
 	key := fmt.Sprintf("%s/%s/%s/%s", tenantID, workflowName, version, triggerName)
 	_, exists := m.instances[key]
 	m.mu.RUnlock()
+
+	if !exists {
+		// Fallback 1: Try prefix matching to find any active trigger for this workflow version
+		prefix := fmt.Sprintf("%s/%s/%s/", tenantID, workflowName, version)
+		m.mu.RLock()
+		for k := range m.instances {
+			if strings.HasPrefix(k, prefix) {
+				key = k
+				exists = true
+				break
+			}
+		}
+		m.mu.RUnlock()
+	}
+
+	if !exists {
+		// Fallback 2: If specific version is not active/loaded, query the latest version in the database
+		tCtx := store.WithTenantID(ctx, tenantID)
+		latestDef, _, err := m.store.GetLatestDefinition(tCtx, workflowName)
+		if err == nil && latestDef != nil {
+			version = latestDef.Metadata.Version
+			m.mu.RLock()
+			key = fmt.Sprintf("%s/%s/%s/%s", tenantID, workflowName, version, triggerName)
+			_, exists = m.instances[key]
+			m.mu.RUnlock()
+
+			if !exists {
+				// Try prefix matching on the latest version as well
+				prefix := fmt.Sprintf("%s/%s/%s/", tenantID, workflowName, version)
+				m.mu.RLock()
+				for k := range m.instances {
+					if strings.HasPrefix(k, prefix) {
+						key = k
+						exists = true
+						break
+					}
+				}
+				m.mu.RUnlock()
+			}
+		}
+	}
 
 	if !exists {
 		return nil, fmt.Errorf("webhook trigger '%s' not found or not active for workflow '%s'", triggerName, workflowName)

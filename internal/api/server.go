@@ -82,6 +82,21 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 		return engine.StartRun(store.WithTenantID(ctx, tenantID), workflowName, version, inputs)
 	}, secretMgr)
 
+	// Load existing workflow triggers on startup
+	slog.Info("Loading existing workflow triggers from database...")
+	if tenantsList, err := s.ListTenants(context.Background()); err == nil {
+		for _, t := range tenantsList {
+			tCtx := store.WithTenantID(context.Background(), t.ID)
+			if defs, err := s.ListDefinitions(tCtx, store.DefinitionFilter{}); err == nil {
+				for _, def := range defs {
+					if err := triggerMgr.AddWorkflow(context.Background(), t.ID, def); err != nil {
+						slog.Error("Failed to register startup triggers", "workflow", def.Metadata.Name, "tenant", t.ID, "error", err)
+					}
+				}
+			}
+		}
+	}
+
 	handlers := NewHandlers(cfg, engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr, triggerMgr, secretMgr)
 
 	router := gin.New()
