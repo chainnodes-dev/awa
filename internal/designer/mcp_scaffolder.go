@@ -40,7 +40,7 @@ func (g *Generator) ScaffoldMCP(ctx context.Context, req MCPScaffoldRequest) (*M
 	system := buildMCPScaffoldSystemPrompt()
 	userMsg := buildMCPScaffoldUserMsg(req)
 
-	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+	resp, err := g.Complete(ctx, llm.CompletionRequest{
 		SystemPrompt: system,
 		Messages:     []llm.Message{{Role: "user", Content: userMsg}},
 		MaxTokens:    8192,

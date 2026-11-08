@@ -1,0 +1,140 @@
+services:
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: chainnode_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-chainnode}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chainnode_secret}
+      POSTGRES_DB: ${DB_NAME:-chainnode}
+    ports:
+      - "${HOST_DB_PORT:-5435}:5432"
+    volumes:
+      - chainnode_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-chainnode} -d ${DB_NAME:-chainnode}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: chainnode_redis
+    restart: unless-stopped
+    ports:
+      - "${HOST_REDIS_PORT:-6379}:6379"
+    volumes:
+      - chainnode_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:1.24
+    container_name: chainnode_temporal
+    restart: unless-stopped
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${DB_USER:-chainnode}
+      POSTGRES_PWD: ${DB_PASSWORD:-chainnode_secret}
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/development-sql.yaml
+    volumes:
+      - ./temporal-config:/etc/temporal/config/dynamicconfig
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    container_name: chainnode_temporal_ui
+    restart: unless-stopped
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "${HOST_TEMPORAL_UI_PORT:-8088}:8080"
+    depends_on:
+      - temporal
+
+  # ── Chainnode Services ─────────────────────────────────────────────────────
+  server:
+    build:
+      context: .
+      args:
+        CMD: server
+    container_name: chainnode_server
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgres://${DB_USER:-chainnode}:${DB_PASSWORD:-chainnode_secret}@postgres:5432/${DB_NAME:-chainnode}?sslmode=disable
+      - TEMPORAL_ADDRESS=temporal:7233
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-dev-insecure-secret-change-in-prod}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-pwd}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - PORT=8080
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GROK_API_KEY=${GROK_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-}
+      - MCP_MARKET_SOURCE=${MCP_MARKET_SOURCE:-configs/mcp-market.json}
+    ports:
+      - "${HOST_API_PORT:-8080}:8080"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      args:
+        CMD: worker
+    container_name: chainnode_worker
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgres://${DB_USER:-chainnode}:${DB_PASSWORD:-chainnode_secret}@postgres:5432/${DB_NAME:-chainnode}?sslmode=disable
+      - TEMPORAL_ADDRESS=temporal:7233
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-dev-insecure-secret-change-in-prod}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GROK_API_KEY=${GROK_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - npm_cache:/root/.npm
+      - pip_cache:/root/.cache/pip
+    depends_on:
+      - temporal
+      - server
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: chainnode_frontend
+    restart: unless-stopped
+    ports:
+      - "${HOST_FRONTEND_PORT:-5174}:80"
+    depends_on:
+      - server
+
+
+volumes:
+  chainnode_db_data:
+  chainnode_redis_data:
+  npm_cache:
+  pip_cache:
+

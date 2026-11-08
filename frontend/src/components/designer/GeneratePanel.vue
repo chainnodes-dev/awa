@@ -152,16 +152,31 @@
             </button>
             <input ref="fileInput" type="file" accept=".txt,.md" class="hidden" @change="handleFileUpload"/>
 
-            <!-- Model Selection -->
-            <select
-              :value="provider"
-              @change="emit('update:provider', $event.target.value)"
-              :disabled="loading"
-              class="bg-surface-0 border border-border text-[10px] text-text rounded px-1.5 py-0.5 outline-none cursor-pointer focus:border-violet-500 transition-colors font-sans truncate w-full disabled:opacity-50"
-            >
-              <option value="">(Default)</option>
-              <option v-for="p in enabledProviders" :key="p.id" :value="p.id">{{ p.label }}</option>
-            </select>
+            <!-- Model Tier Selection (Frontier | Balanced | Fast | Custom) -->
+            <div class="flex items-center gap-1 min-w-0">
+              <select
+                v-model="selectedTier"
+                @change="setTier(selectedTier)"
+                :disabled="loading"
+                class="bg-surface-0 border border-border text-[10px] text-text rounded px-1.5 py-0.5 outline-none cursor-pointer focus:border-violet-500 transition-colors font-sans truncate shrink-0 max-w-[210px]"
+                :title="'Active Designer Profile: ' + selectedTier + ' (' + activeTierModel(selectedTier) + ')'"
+              >
+                <option value="frontier">🚀 Frontier ({{ activeTierModel('frontier') }})</option>
+                <option value="balanced">⚖️ Balanced [Default] ({{ activeTierModel('balanced') }})</option>
+                <option value="fast">⚡ Fast ({{ activeTierModel('fast') }})</option>
+                <option value="custom">⚙️ Custom Model Override...</option>
+              </select>
+
+              <input
+                v-if="selectedTier === 'custom'"
+                v-model="customModelSlug"
+                @change="saveCustomModel"
+                type="text"
+                placeholder="e.g. meta-llama/llama-3.3-70b-instruct"
+                class="bg-surface-0 border border-amber-500/50 text-[10px] text-text rounded px-1.5 py-0.5 font-mono w-40 focus:outline-none focus:border-amber-400 transition-colors"
+                :disabled="loading"
+              />
+            </div>
           </div>
 
           <!-- Center: Auto Pilot Checkbox -->
@@ -276,6 +291,31 @@ function handleFileUpload(event) {
   reader.readAsText(file)
   
   event.target.value = ''
+}
+
+// ── Tier Selection State & Helpers ──
+const selectedTier = ref(localStorage.getItem('ai_designer_tier') || 'balanced')
+const customModelSlug = ref(localStorage.getItem('ai_designer_custom_model') || '')
+
+function setTier(tier) {
+  selectedTier.value = tier
+  localStorage.setItem('ai_designer_tier', tier)
+}
+
+function saveCustomModel() {
+  localStorage.setItem('ai_designer_custom_model', customModelSlug.value.trim())
+}
+
+function activeTierModel(tier) {
+  if (llmStore.designerProfiles[tier]?.model) {
+    return llmStore.designerProfiles[tier].model
+  }
+  const defaults = {
+    frontier: 'anthropic/claude-sonnet-4.5',
+    balanced: 'google/gemini-2.0-flash-001',
+    fast: '~deepseek/deepseek-flash-latest',
+  }
+  return defaults[tier] || ''
 }
 
 const props = defineProps({
@@ -408,6 +448,8 @@ async function runStep(index) {
     const { data } = await api.post(step.endpoint, {
       process_description: props.description,
       current_yaml:        props.yamlSource || '',
+      tier:                selectedTier.value,
+      model:               selectedTier.value === 'custom' ? (customModelSlug.value.trim() || undefined) : undefined,
       provider:            props.provider || undefined,
     })
 
@@ -470,6 +512,8 @@ async function applyRefinement() {
       description:   promptText,
       history:       props.history,
       existing_yaml: props.yamlSource || '',
+      tier:          selectedTier.value,
+      model:         selectedTier.value === 'custom' ? (customModelSlug.value.trim() || undefined) : undefined,
       provider:      props.provider || undefined,
     })
 
@@ -621,6 +665,7 @@ function parseLLMFeedback(index, interactions) {
 
 onMounted(() => {
   if (llmStore.configs.length === 0) llmStore.fetchAll()
+  llmStore.fetchDesignerProfiles()
 })
 </script>
 

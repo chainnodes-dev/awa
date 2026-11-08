@@ -6,6 +6,7 @@
         <p class="text-xs text-text-muted mt-0.5">Monitor subscription limits, licenses, and system audit logs</p>
       </div>
       <div v-if="entStore.status" class="flex items-center gap-2">
+        <span v-if="entStore.status.company_name" class="text-[10px] font-bold tracking-wider text-text-muted">Licensed to <strong class="text-text">{{ entStore.status.company_name }}</strong></span>
         <span class="text-[10px] font-bold uppercase tracking-widest text-text-muted">Tier</span>
         <span :class="tierBadgeClass(entStore.status.tier)">{{ entStore.status.tier }}</span>
       </div>
@@ -80,12 +81,18 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
             </div>
             <div>
-              <div class="text-[11px] font-bold text-text uppercase tracking-wider">License Active: {{ entStore.status.tier }}</div>
+              <div class="text-[11px] font-bold text-text uppercase tracking-wider">
+                License Active: {{ entStore.status.tier }}
+                <span v-if="entStore.status.company_name" class="ml-2 font-semibold text-emerald-400">({{ entStore.status.company_name }})</span>
+              </div>
               <div class="text-[10px] text-text-muted">Valid until {{ formatDateTime(entStore.status.expires_at) }}</div>
             </div>
           </div>
-          <div class="text-[10px] font-mono text-text-muted opacity-50">
-            ID: {{ entStore.status.tenant_id?.slice(0,8) || '...' }}
+          <div v-if="entStore.status.company_name" class="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded">
+            Licensed to {{ entStore.status.company_name }}
+          </div>
+          <div v-else-if="entStore.status.tenant_id && entStore.status.tenant_id !== '*'" class="text-[10px] font-mono text-text-muted opacity-50">
+            ID: {{ entStore.status.tenant_id.slice(0,8) }}
           </div>
         </div>
         <div v-else class="flex items-center gap-2 text-[10px] font-mono text-text-muted bg-black/10 p-3 rounded-lg border border-dashed border-border">

@@ -26,23 +26,24 @@ const (
 	// ChainNodesPublicKey is the hardcoded public key for Chain Nodes license verification.
 	// This ensures that only licenses signed by Chain Nodes SRL are accepted.
 	ChainNodesPublicKey = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3QwlqfwEnHKdXXYG1aL/
-dbAO7DsV7InutB6iub+onloy53BWvxmkJY80ZzOsn8IqaxEcqXoo69Iu4r5ooS+A
-0Q/pZ8pab1COhnVq6Bv8ZA63l3ZI12qA10TA/FraHh/VCBkKUyJ1n/PbtJW4TtRr
-PtG1/1pjHAXhGZmr6PrKwKHANNaOgPvZxr6HiizN/IWW1nGKO2OCbJMJAdKx25JA
-VkqF2xXw4bB1uCHBfZ3tsJUqx2KDIt41IqDBgxrhjRery3aNzTlJGCJiTT/h5Jev
-OEkVnz0tVTlgtghkHngwMRjZduvejFo4qZFNCjHgrGRdBtF1Dlfy22+ZI24/Weje
-dQIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz48lbb4YGptU+4EOaFoM
+yVgeivtLTwStR/8A8Uqlj35a1Jh0q3PULQb5fCfBjSWfvM40RFi+2YNu3IQvtyxw
+YxAtNIouJMHqeRJ2ZX3anMCGai7icMWyMlBTteY6LQqj0oT2TXEkjkN7ULJHz15J
+/rxizvr0QtYH+SKia0QHJ0b27c7jzBSmS9fjXe6Hlh7w+R9fRwTpCxyIdeNvcK3z
+u7v+Wc7z2YdxOyvV/b9nugyS2Y5R64T0xCXK3EioMghX6J70lYhlfL4Mg20w1FCC
+qhtHQHr8X1S81EHxhg6opqQSGBjdQJEWLZpg4VQBb+q10+Y0Bka5mai5V7e91SbM
+yQIDAQAB
 -----END PUBLIC KEY-----`
 )
 
 // LicenseClaims represents the signed information in an enterprise license.
 type LicenseClaims struct {
-	Tier         Tier     `json:"tier"`
-	TenantID     string   `json:"tenant_id"`
-	IssuedAt     int64    `json:"iat"`
-	ExpiresAt    int64    `json:"exp"`
-	Features     []string `json:"features,omitempty"`
+	Tier        Tier     `json:"tier"`
+	TenantID    string   `json:"tenant_id,omitempty"`
+	CompanyName string   `json:"company_name,omitempty"`
+	IssuedAt    int64    `json:"iat"`
+	ExpiresAt   int64    `json:"exp"`
+	Features    []string `json:"features,omitempty"`
 	jwt.RegisteredClaims
 }
 

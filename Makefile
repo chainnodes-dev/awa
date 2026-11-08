@@ -1,4 +1,4 @@
-.PHONY: dev-infra stop reset-db server worker frontend dev migrate tidy test build docker-build stack stack-down frontend-install k8s-apply k8s-delete k8s-status specialist demo demo-down
+.PHONY: dev-infra stop reset-db server worker frontend dev migrate tidy test build docker-build stack stack-down frontend-install k8s-apply k8s-delete k8s-status specialist demo demo-down deploy-mint
 
 # Start infrastructure only (for development)
 dev-infra:
@@ -86,6 +86,11 @@ stack:
 # Stop all Chain Nodes-related containers
 stack-down:
 	docker compose down
+
+# Deploy full stack to Linux Mint server (mintbox)
+deploy-mint:
+	./scripts/deploy_to_mint.sh egon mintbox
+
 
 # Start demo stack (Grafana + Mattermost)
 demo:

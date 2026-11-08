@@ -23,9 +23,10 @@ type Config struct {
 	TemporalTaskQueue string
 
 	// LLM
-	LLMProvider  string // "anthropic" | "openai" | "ollama"
-	AnthropicKey string
-	OpenAIKey    string
+	LLMProvider   string // "openrouter" | "anthropic" | "openai" | "ollama"
+	OpenRouterKey string
+	AnthropicKey  string
+	OpenAIKey     string
 	DefaultModel string
 	// Ollama (local LLM server — no API key required)
 	OllamaURL   string // e.g. "http://mintbox:11434"
@@ -61,6 +62,7 @@ func Load() *Config {
 		TemporalNamespace: getEnv("TEMPORAL_NAMESPACE", "default"),
 		TemporalTaskQueue: getEnv("TEMPORAL_TASK_QUEUE", "chainnodes-workers"),
 		LLMProvider:       getEnv("LLM_PROVIDER", ""),
+		OpenRouterKey:     getEnv("OPENROUTER_API_KEY", ""),
 		AnthropicKey:      getEnv("ANTHROPIC_API_KEY", ""),
 		OpenAIKey:         getEnv("OPENAI_API_KEY", ""),
 		DefaultModel:      getEnv("DEFAULT_MODEL", "claude-sonnet-4-6"),

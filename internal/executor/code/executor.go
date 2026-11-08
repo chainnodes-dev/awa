@@ -26,6 +26,7 @@
 package code
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -239,15 +240,21 @@ func toJSValue(vm *goja.Runtime, v interface{}) goja.Value {
 // jsonEqual compares two values for equality using JSON serialisation.
 // This is deliberately simple: we don't need structural deep-equality — we
 // just need to know if the script changed the value.
+// Note: We deliberately avoid direct `a == b` comparison because interface{}
+// values containing non-comparable concrete types (e.g. map[string]interface{}, slices)
+// cause a runtime panic in Go.
 func jsonEqual(a, b interface{}) bool {
-	if a == b {
+	if a == nil && b == nil {
 		return true
+	}
+	if a == nil || b == nil {
+		return false
 	}
 	aj, err1 := json.Marshal(a)
 	bj, err2 := json.Marshal(b)
 	if err1 != nil || err2 != nil {
 		return false
 	}
-	return string(aj) == string(bj)
+	return bytes.Equal(aj, bj)
 }
 

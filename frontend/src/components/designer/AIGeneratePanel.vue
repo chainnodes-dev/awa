@@ -157,18 +157,61 @@
               @change="handleFileUpload"
             />
 
-            <!-- Model Selection Box -->
-            <div class="flex items-center gap-1 shrink-0">
-              <span class="text-[9px] text-text-muted uppercase font-bold tracking-wider">Model:</span>
-              <select
-                :value="provider"
-                @change="emit('update:provider', $event.target.value)"
+            <!-- Model Tier Selector: Frontier | Balanced (Default) | Fast | Custom -->
+            <div class="flex items-center gap-1 shrink-0 bg-surface-2 p-0.5 rounded-lg border border-border text-[11px]">
+              <span class="text-[9px] text-text-muted uppercase font-bold tracking-wider px-1.5 select-none">Tier:</span>
+
+              <button
+                type="button"
+                @click="setTier('frontier')"
                 :disabled="loading"
-                class="bg-surface-0 border border-border text-[11px] text-text rounded px-2 py-1 outline-none cursor-pointer focus:border-violet-500 transition-colors font-sans disabled:opacity-50"
+                :class="['px-2 py-0.5 rounded-md font-semibold transition-all flex items-center gap-1', selectedTier === 'frontier' ? 'bg-purple-500/20 text-purple-300 shadow-sm border border-purple-500/30' : 'text-text-muted hover:text-text border border-transparent']"
+                :title="'Frontier Tier: ' + activeTierModel('frontier')"
               >
-                <option value="">(Platform Default)</option>
-                <option v-for="p in enabledProviders" :key="p.id" :value="p.id">{{ p.label }}</option>
-              </select>
+                <span>🚀 Frontier</span>
+              </button>
+
+              <button
+                type="button"
+                @click="setTier('balanced')"
+                :disabled="loading"
+                :class="['px-2 py-0.5 rounded-md font-semibold transition-all flex items-center gap-1', selectedTier === 'balanced' ? 'bg-indigo-500/20 text-indigo-300 shadow-sm border border-indigo-500/30' : 'text-text-muted hover:text-text border border-transparent']"
+                :title="'Balanced Tier (Default): ' + activeTierModel('balanced')"
+              >
+                <span>⚖️ Balanced</span>
+              </button>
+
+              <button
+                type="button"
+                @click="setTier('fast')"
+                :disabled="loading"
+                :class="['px-2 py-0.5 rounded-md font-semibold transition-all flex items-center gap-1', selectedTier === 'fast' ? 'bg-emerald-500/20 text-emerald-300 shadow-sm border border-emerald-500/30' : 'text-text-muted hover:text-text border border-transparent']"
+                :title="'Fast Tier: ' + activeTierModel('fast')"
+              >
+                <span>⚡ Fast</span>
+              </button>
+
+              <button
+                type="button"
+                @click="setTier('custom')"
+                :disabled="loading"
+                :class="['px-2 py-0.5 rounded-md font-semibold transition-all flex items-center gap-1', selectedTier === 'custom' ? 'bg-amber-500/20 text-amber-300 shadow-sm border border-amber-500/30' : 'text-text-muted hover:text-text border border-transparent']"
+                title="Enter custom model slug"
+              >
+                <span>⚙️ Custom</span>
+              </button>
+            </div>
+
+            <!-- Custom Model Input when selectedTier === 'custom' -->
+            <div v-if="selectedTier === 'custom'" class="flex items-center gap-1 shrink-0">
+              <input
+                v-model="customModelSlug"
+                @change="saveCustomModel"
+                type="text"
+                placeholder="e.g. meta-llama/llama-3.3-70b-instruct"
+                class="bg-surface-0 border border-amber-500/50 text-[11px] text-text rounded px-2 py-0.5 font-mono w-48 focus:outline-none focus:border-amber-400 transition-colors"
+                :disabled="loading"
+              />
             </div>
 
             <!-- Auto Pilot Checkbox -->
@@ -307,6 +350,31 @@ const emit = defineEmits([
   'requestDescriptionModal',
 ])
 
+// ── Tier Selection State & Helpers ──
+const selectedTier = ref(localStorage.getItem('ai_designer_tier') || 'balanced')
+const customModelSlug = ref(localStorage.getItem('ai_designer_custom_model') || '')
+
+function setTier(tier) {
+  selectedTier.value = tier
+  localStorage.setItem('ai_designer_tier', tier)
+}
+
+function saveCustomModel() {
+  localStorage.setItem('ai_designer_custom_model', customModelSlug.value.trim())
+}
+
+function activeTierModel(tier) {
+  if (llmStore.designerProfiles[tier]?.model) {
+    return llmStore.designerProfiles[tier].model
+  }
+  const defaults = {
+    frontier: 'anthropic/claude-sonnet-4.5',
+    balanced: 'google/gemini-2.0-flash-001',
+    fast: '~deepseek/deepseek-flash-latest',
+  }
+  return defaults[tier] || ''
+}
+
 // ── Pipeline gears ──
 const stepToGear = ['decompose', 'categorise', 'wire', 'implement']
 
@@ -413,6 +481,8 @@ async function runStep(index) {
     const { data } = await api.post(step.endpoint, {
       process_description: props.description,
       current_yaml:        props.yamlSource || '',
+      tier:                selectedTier.value,
+      model:               selectedTier.value === 'custom' ? (customModelSlug.value.trim() || undefined) : undefined,
       provider:            props.provider || undefined,
     })
 
@@ -475,6 +545,8 @@ async function applyRefinement() {
       description:   promptText,
       history:       props.history,
       existing_yaml: props.yamlSource || '',
+      tier:          selectedTier.value,
+      model:         selectedTier.value === 'custom' ? (customModelSlug.value.trim() || undefined) : undefined,
       provider:      props.provider || undefined,
     })
 
@@ -626,6 +698,7 @@ function parseLLMFeedback(index, interactions) {
 
 onMounted(() => {
   if (llmStore.configs.length === 0) llmStore.fetchAll()
+  llmStore.fetchDesignerProfiles()
 })
 </script>
 

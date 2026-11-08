@@ -90,8 +90,9 @@ func (h *Handlers) SetLicense(c *gin.Context) {
 		return
 	}
 
-	// Ensure the license is actually for THIS tenant.
-	if claims.TenantID != "" && claims.TenantID != tenantID {
+	// Ensure the license is actually for THIS tenant if a specific tenant is defined.
+	// Empty string ("") or wildcard ("*") allows any tenant (single-tenant deployment mode).
+	if claims.TenantID != "" && claims.TenantID != "*" && claims.TenantID != tenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "license tenant mismatch"})
 		return
 	}
@@ -105,6 +106,8 @@ func (h *Handlers) SetLicense(c *gin.Context) {
 	// 3. Audit Log.
 	_ = enterprise.RecordAction(c.Request.Context(), h.store, enterprise.ActionLicenseUpdated, map[string]interface{}{
 		"token_received": true,
+		"company_name":   claims.CompanyName,
+		"tier":           claims.Tier,
 	})
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "license updated"})
@@ -155,6 +158,8 @@ func (h *Handlers) GetLicenseStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"tier":              claims.Tier,
+		"company_name":      claims.CompanyName,
+		"tenant_id":         claims.TenantID,
 		"issued_at":         claims.IssuedAt,
 		"expires_at":        claims.ExpiresAt,
 		"features":          claims.Features,

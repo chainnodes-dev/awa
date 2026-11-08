@@ -38,6 +38,7 @@
         </div>
 
         <div v-if="entStore.status" class="flex items-center gap-2">
+           <span v-if="entStore.status.company_name" class="text-[10px] font-bold tracking-wider text-text-muted">Licensed to <strong class="text-text">{{ entStore.status.company_name }}</strong></span>
            <span class="text-[10px] font-bold uppercase tracking-widest text-text-muted">Tier</span>
            <span :class="tierBadgeClass(entStore.status.tier)">{{ entStore.status.tier }}</span>
         </div>
@@ -102,23 +103,175 @@
 
         <!-- LLM Configs -->
         <section v-if="isAdmin" class="space-y-4">
-           <div class="flex items-center gap-2 px-1">
-             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
-               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-             </svg>
-             <h2 class="text-sm font-bold text-text uppercase tracking-wider">LLM Providers</h2>
+           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+             <div class="flex items-center gap-2">
+               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+               </svg>
+               <h2 class="text-sm font-bold text-text uppercase tracking-wider">LLM Providers & Routing</h2>
+               <span class="text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-medium">
+                 {{ showAllProviders ? 'All Providers' : 'Standard (OpenRouter + Local)' }}
+               </span>
+             </div>
+             <div class="flex items-center gap-2">
+               <!-- Category Filter Pills (shown when direct providers are expanded) -->
+               <div v-if="showAllProviders" class="flex items-center gap-1 bg-surface-2 p-1 rounded-lg border border-border text-[10px]">
+                 <button @click="llmFilter = 'all'" :class="['px-2.5 py-1 rounded-md font-medium transition-all', llmFilter === 'all' ? 'bg-surface-0 text-text shadow-sm' : 'text-text-muted hover:text-text']">All ({{ llmStore.PROVIDERS.length }})</button>
+                 <button @click="llmFilter = 'active'" :class="['px-2.5 py-1 rounded-md font-medium transition-all', llmFilter === 'active' ? 'bg-surface-0 text-text shadow-sm' : 'text-text-muted hover:text-text']">Active</button>
+                 <button @click="llmFilter = 'gateway'" :class="['px-2.5 py-1 rounded-md font-medium transition-all flex items-center gap-1', llmFilter === 'gateway' ? 'bg-indigo-500/20 text-indigo-400 shadow-sm' : 'text-text-muted hover:text-text']">
+                   <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span> OpenRouter
+                 </button>
+                 <button @click="llmFilter = 'cloud'" :class="['px-2.5 py-1 rounded-md font-medium transition-all', llmFilter === 'cloud' ? 'bg-surface-0 text-text shadow-sm' : 'text-text-muted hover:text-text']">Direct APIs</button>
+                 <button @click="llmFilter = 'local'" :class="['px-2.5 py-1 rounded-md font-medium transition-all', llmFilter === 'local' ? 'bg-surface-0 text-text shadow-sm' : 'text-text-muted hover:text-text']">Local</button>
+               </div>
+
+               <!-- Toggle Direct Providers Button -->
+               <button
+                 type="button"
+                 @click="showAllProviders = !showAllProviders"
+                 :class="['text-xs px-2.5 py-1 rounded-lg border font-medium transition-all flex items-center gap-1.5', showAllProviders ? 'bg-surface-2 border-accent text-accent' : 'bg-surface-1 border-border text-text-muted hover:text-text']"
+                 :title="showAllProviders ? 'Hide direct cloud APIs' : 'Show direct cloud APIs (OpenAI, Anthropic, Gemini, Grok...)'"
+               >
+                 <span>{{ showAllProviders ? 'Hide Direct APIs' : 'Show Direct APIs' }}</span>
+                 <span class="text-[10px] opacity-70">({{ showAllProviders ? llmStore.PROVIDERS.length : '2' }})</span>
+               </button>
+             </div>
            </div>
-           <div v-for="prov in llmStore.PROVIDERS" :key="prov.id" class="card p-5 space-y-4">
+
+           <!-- OpenRouter Spotlight Banner -->
+           <div v-if="llmFilter === 'all' || llmFilter === 'gateway'" class="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/20 rounded-xl p-4 flex items-start justify-between gap-4">
+             <div class="space-y-1">
+               <div class="flex items-center gap-2">
+                 <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Universal Router (Recommended)</span>
+                 <span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-semibold">One Key for 300+ Models</span>
+               </div>
+               <p class="text-[11px] text-text-muted max-w-xl">
+                 Use <strong>OpenRouter</strong> to route requests across Claude 3.5 Sonnet, GPT-4o, DeepSeek R1, Llama 3.3, and Gemini without managing separate subscriptions.
+               </p>
+             </div>
+             <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" class="btn-ghost text-[10px] text-indigo-400 hover:text-indigo-300 font-bold shrink-0">
+               Get API Key ↗
+             </a>
+           </div>
+
+           <!-- Semantic Model Profiles (Task-based Routing) -->
+           <div class="space-y-3">
+             <div class="flex items-center justify-between px-1">
+               <div>
+                 <h3 class="text-xs font-bold text-text uppercase tracking-wider flex items-center gap-2">
+                   <span>Task Model Profiles</span>
+                   <span class="text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-medium">Automatic Workflow Routing</span>
+                 </h3>
+                 <p class="text-[11px] text-text-muted mt-0.5">Workflow state nodes select these profiles. Assign OpenRouter or Local Ollama models to each role.</p>
+               </div>
+               <button @click="llmStore.fetchProfiles()" class="btn-ghost text-xs p-1.5 text-text-muted hover:text-text" title="Refresh Profiles">
+                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+               </button>
+             </div>
+
+             <!-- Profile Cards Grid -->
+             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+               <div
+                 v-for="(prof, key) in displayProfiles"
+                 :key="key"
+                 class="card p-4 space-y-3 border-border hover:border-accent/30 transition-all flex flex-col justify-between"
+               >
+                 <div class="space-y-1.5">
+                   <div class="flex items-center justify-between">
+                     <span class="text-xs font-bold text-text flex items-center gap-1.5">
+                       <span>{{ profileIcon(key) }}</span>
+                       <span>{{ prof.label || key }}</span>
+                     </span>
+                     <span :class="['text-[9px] px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider', prof.provider === 'ollama' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-indigo-500/10 text-indigo-400']">
+                       {{ prof.provider === 'ollama' ? 'Local' : 'OpenRouter' }}
+                     </span>
+                   </div>
+                   <p class="text-[10px] text-text-muted leading-relaxed line-clamp-2">{{ prof.description }}</p>
+                 </div>
+
+                 <div class="pt-2 border-t border-border/50 flex items-center justify-between gap-2">
+                   <div class="truncate">
+                     <span class="text-[9px] text-text-muted block font-mono uppercase tracking-widest">Assigned Model</span>
+                     <span class="text-xs font-mono font-medium text-text truncate block" :title="prof.model">{{ prof.model || 'Not assigned' }}</span>
+                   </div>
+                   <button
+                     @click="openAssignModal(key)"
+                     class="btn-ghost text-xs px-2.5 py-1 text-accent hover:bg-accent/10 shrink-0 font-medium rounded-lg"
+                   >
+                     Change
+                   </button>
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           <!-- Process Generation Profiles (AI Designer) -->
+           <div class="space-y-3">
+             <div class="flex items-center justify-between px-1">
+               <div>
+                 <h3 class="text-xs font-bold text-text uppercase tracking-wider flex items-center gap-2">
+                   <span>Process Generation Profiles</span>
+                   <span class="text-[9px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded-full font-medium">AI Designer & Refine</span>
+                 </h3>
+                 <p class="text-[11px] text-text-muted mt-0.5">Tiered models used by the AI Designer to architect, decompose, wire, and synthesize workflows.</p>
+               </div>
+               <button @click="llmStore.fetchDesignerProfiles()" class="btn-ghost text-xs p-1.5 text-text-muted hover:text-text" title="Refresh Designer Profiles">
+                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+               </button>
+             </div>
+
+             <!-- Designer Profile Cards Grid (Frontier, Balanced, Fast) -->
+             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+               <div
+                 v-for="(prof, key) in displayDesignerProfiles"
+                 :key="key"
+                 class="card p-4 space-y-3 border-border hover:border-purple-500/30 transition-all flex flex-col justify-between"
+               >
+                 <div class="space-y-1.5">
+                   <div class="flex items-center justify-between">
+                     <span class="text-xs font-bold text-text flex items-center gap-1.5">
+                       <span>{{ designerProfileIcon(key) }}</span>
+                       <span>{{ prof.label || key }}</span>
+                     </span>
+                     <span v-if="key === 'balanced'" class="text-[9px] px-2 py-0.5 rounded-full bg-accent/20 text-accent font-semibold uppercase tracking-wider">Default</span>
+                     <span v-else class="text-[9px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 font-mono font-bold uppercase tracking-wider">
+                       {{ prof.provider === 'ollama' ? 'Local' : 'OpenRouter' }}
+                     </span>
+                   </div>
+                   <p class="text-[10px] text-text-muted leading-relaxed line-clamp-2">{{ prof.description }}</p>
+                 </div>
+
+                 <div class="pt-2 border-t border-border/50 flex items-center justify-between gap-2">
+                   <div class="truncate">
+                     <span class="text-[9px] text-text-muted block font-mono uppercase tracking-widest">Assigned Model</span>
+                     <span class="text-xs font-mono font-medium text-text truncate block" :title="prof.model">{{ prof.model || 'Not assigned' }}</span>
+                   </div>
+                   <button
+                     @click="openAssignModalForDesigner(key)"
+                     class="btn-ghost text-xs px-2.5 py-1 text-accent hover:bg-accent/10 shrink-0 font-medium rounded-lg"
+                   >
+                     Change
+                   </button>
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           <!-- Provider Cards -->
+           <div v-for="prov in filteredProviders" :key="prov.id" :class="['card p-5 space-y-4 transition-all', prov.id === 'openrouter' ? 'border-indigo-500/40 shadow-sm shadow-indigo-500/5' : '']">
              <div class="flex items-center gap-3">
                <div class="flex-1">
-                 <h2 class="text-sm font-semibold text-text">{{ prov.label }}</h2>
-                 <p class="text-xs text-text-muted mt-0.5">{{ providerEndpoint(prov.id) || 'Local server' }}</p>
+                 <div class="flex items-center gap-2">
+                   <h2 class="text-sm font-semibold text-text">{{ prov.label }}</h2>
+                   <span v-if="prov.badge" class="text-[9px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold uppercase tracking-wider">{{ prov.badge }}</span>
+                   <span v-if="isDefaultProvider(prov.id)" class="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent font-medium">default</span>
+                 </div>
+                 <p class="text-xs text-text-muted mt-0.5">{{ prov.description || providerEndpoint(prov.id) || 'Local server' }}</p>
                </div>
                <label class="flex items-center gap-2 cursor-pointer">
                  <input type="checkbox" v-model="forms[prov.id].enabled" class="rounded" />
                  <span class="text-xs text-text-muted">Enabled</span>
                </label>
-               <span v-if="isDefaultProvider(prov.id)" class="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent font-medium">default</span>
              </div>
 
              <div class="grid grid-cols-2 gap-3">
@@ -126,13 +279,36 @@
                  <label class="text-xs text-text-muted mb-1 block">API Key</label>
                  <input v-model="forms[prov.id].api_key" type="password" :placeholder="hasExistingKey(prov.id) ? 'Configured (leave blank to keep)' : 'Enter API key'" class="input text-sm w-full font-mono" autocomplete="new-password" />
                </div>
-               <div v-if="prov.needsURL" class="col-span-2">
-                 <label class="text-xs text-text-muted mb-1 block">Server URL</label>
-                 <input v-model="forms[prov.id].base_url" type="text" placeholder="http://localhost:11434" class="input text-sm w-full font-mono" />
+               <div class="col-span-2">
+                 <div class="flex items-center justify-between mb-1">
+                   <label class="text-xs text-text-muted block">Endpoint URL</label>
+                   <span v-if="!prov.needsURL && !forms[prov.id].base_url" class="text-[10px] text-text-muted opacity-60">Default: {{ providerEndpoint(prov.id) }}</span>
+                 </div>
+                 <input v-model="forms[prov.id].base_url" type="text" :placeholder="prov.needsURL ? 'http://localhost:11434' : ('https://' + providerEndpoint(prov.id) + ' (default)')" class="input text-sm w-full font-mono" />
                </div>
-               <div>
+               <div v-if="prov.id === 'openrouter' || prov.id === 'ollama'">
                  <label class="text-xs text-text-muted mb-1 block">Default Model</label>
-                 <input v-model="forms[prov.id].default_model" type="text" :placeholder="llmStore.DEFAULT_MODELS[prov.id]" class="input text-sm w-full" />
+                 <div class="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-surface-1 border border-border min-h-[38px]">
+                   <div class="min-w-0 flex-1">
+                     <span class="text-xs font-mono font-medium text-text truncate block" :title="forms[prov.id].default_model || llmStore.DEFAULT_MODELS[prov.id]">
+                       {{ forms[prov.id].default_model || llmStore.DEFAULT_MODELS[prov.id] || 'Not selected' }}
+                     </span>
+                     <span v-if="!forms[prov.id].default_model" class="text-[9px] text-text-muted">
+                       (Preset default)
+                     </span>
+                   </div>
+                   <button
+                     type="button"
+                     @click="openModelPickerForProvider(prov.id)"
+                     class="btn-ghost text-xs px-2.5 py-1 text-accent hover:bg-accent/10 shrink-0 font-medium rounded-lg border border-accent/20"
+                   >
+                     Change
+                   </button>
+                 </div>
+               </div>
+               <div v-else>
+                 <label class="text-xs text-text-muted mb-1 block">Default Model</label>
+                 <input v-model="forms[prov.id].default_model" type="text" :placeholder="llmStore.DEFAULT_MODELS[prov.id]" class="input text-sm w-full font-mono text-xs" />
                </div>
                <div>
                  <label class="text-xs text-text-muted mb-1 block">Max Output Tokens</label>
@@ -375,6 +551,163 @@
       @close="activePopoutId = null"
     />
 
+    <!-- Assign Model to Profile Modal -->
+    <div v-if="assignModalOpen" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="card max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border-border shadow-2xl">
+        <!-- Modal Header -->
+        <div class="p-4 border-b border-border flex items-center justify-between bg-surface-1 shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-base">{{ getModalIcon() }}</span>
+            <div>
+              <h3 class="text-sm font-bold text-text">{{ modalTitle }}</h3>
+              <p class="text-[11px] text-text-muted">{{ modalSubtitle }}</p>
+            </div>
+          </div>
+          <button @click="assignModalOpen = false" class="btn-ghost p-1 text-text-muted hover:text-text">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Modal Source Tabs -->
+        <div class="p-3 border-b border-border bg-surface-0 flex items-center justify-between gap-3 shrink-0">
+          <div v-if="assignTargetMode === 'profile'" class="flex items-center gap-1 bg-surface-2 p-1 rounded-lg border border-border text-xs">
+            <button
+              @click="assignSourceTab = 'openrouter'"
+              :class="['px-3 py-1 rounded-md font-medium transition-all flex items-center gap-1.5', assignSourceTab === 'openrouter' ? 'bg-indigo-500/20 text-indigo-400 font-bold shadow-sm' : 'text-text-muted hover:text-text']"
+            >
+              <span>🌐 OpenRouter Catalog</span>
+              <span v-if="llmStore.openRouterCatalog.length" class="text-[10px] opacity-75">({{ llmStore.openRouterCatalog.length }})</span>
+            </button>
+            <button
+              @click="assignSourceTab = 'ollama'"
+              :class="['px-3 py-1 rounded-md font-medium transition-all flex items-center gap-1.5', assignSourceTab === 'ollama' ? 'bg-emerald-500/20 text-emerald-400 font-bold shadow-sm' : 'text-text-muted hover:text-text']"
+            >
+              <span>💻 Local Weights (Ollama)</span>
+              <span v-if="localModels.length" class="text-[10px] opacity-75">({{ localModels.length }})</span>
+            </button>
+          </div>
+          <div v-else class="flex items-center gap-2 text-xs font-semibold px-2.5 py-1 bg-surface-2 rounded-lg border border-border">
+            <span v-if="assignSourceTab === 'openrouter'" class="text-indigo-400 flex items-center gap-1.5">
+              <span>🌐 OpenRouter Catalog</span>
+              <span v-if="llmStore.openRouterCatalog.length" class="text-[10px] opacity-75">({{ llmStore.openRouterCatalog.length }} models)</span>
+            </span>
+            <span v-else class="text-emerald-400 flex items-center gap-1.5">
+              <span>💻 Local Weights (Ollama)</span>
+              <span v-if="localModels.length" class="text-[10px] opacity-75">({{ localModels.length }} downloaded)</span>
+            </span>
+          </div>
+
+          <!-- Live Search Bar -->
+          <div v-if="assignSourceTab === 'openrouter'" class="relative flex-1 max-w-xs">
+            <input
+              v-model="modelSearchQuery"
+              type="text"
+              placeholder="Search 300+ models (e.g. gemini, r1, sonnet)..."
+              class="input text-xs w-full pl-8"
+              autofocus
+            />
+            <svg class="absolute left-2.5 top-2.5 text-text-muted" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </div>
+        </div>
+
+        <!-- Modal Body (Scrollable List) -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-2">
+          <!-- OpenRouter Models List -->
+          <template v-if="assignSourceTab === 'openrouter'">
+            <div v-if="llmStore.catalogLoading" class="text-center py-12 text-text-muted text-xs">
+              <div class="inline-block animate-spin mb-2">↻</div>
+              <div>Fetching live models from OpenRouter...</div>
+            </div>
+
+            <div v-else-if="filteredOpenRouterModels.length === 0" class="text-center py-12 text-text-muted text-xs">
+              No models match "{{ modelSearchQuery }}".
+            </div>
+
+            <div
+              v-for="m in filteredOpenRouterModels"
+              :key="m.id"
+              :class="['p-3 rounded-xl border transition-all flex items-center justify-between gap-3', currentSelectedModel === m.id ? 'border-accent bg-accent/5' : 'border-border bg-surface-1 hover:border-border-hover']"
+            >
+              <div class="space-y-1 min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-semibold text-text truncate">{{ m.name }}</span>
+                  <span class="text-[9px] font-mono text-text-muted bg-surface-2 px-1.5 py-0.5 rounded">{{ m.id }}</span>
+                  <span v-if="currentSelectedModel === m.id" class="text-[9px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full">CURRENT</span>
+                </div>
+                <p v-if="m.description" class="text-[10px] text-text-muted line-clamp-1">{{ m.description }}</p>
+                <div class="flex items-center gap-3 text-[10px] font-mono text-text-muted">
+                  <span v-if="m.context_length">Context: {{ formatContext(m.context_length) }}</span>
+                  <span v-if="m.prompt_price !== undefined">Prompt: ${{ m.prompt_price.toFixed(2) }}/M</span>
+                  <span v-if="m.completion_price !== undefined">Comp: ${{ m.completion_price.toFixed(2) }}/M</span>
+                </div>
+              </div>
+
+              <button
+                @click="assignModel('openrouter', m.id)"
+                :disabled="savingProfile"
+                :class="['text-xs px-3 py-1.5 rounded-lg font-bold transition-all shrink-0', currentSelectedModel === m.id ? 'btn-ghost text-text-muted' : 'btn-primary']"
+              >
+                {{ currentSelectedModel === m.id ? 'Selected' : 'Assign' }}
+              </button>
+            </div>
+          </template>
+
+          <!-- Ollama Local Models List -->
+          <template v-else-if="assignSourceTab === 'ollama'">
+            <div v-if="localModels.length === 0" class="text-center py-12 text-text-muted text-xs space-y-2">
+              <p>No local Ollama models currently downloaded.</p>
+              <p class="text-[10px]">Use the "Local Model Weight Manager" section below to pull weights (e.g. `llama3.2`).</p>
+            </div>
+
+            <div
+              v-for="m in localModels"
+              :key="m.name"
+              :class="['p-3 rounded-xl border transition-all flex items-center justify-between gap-3', currentSelectedModel === m.name ? 'border-accent bg-accent/5' : 'border-border bg-surface-1 hover:border-border-hover']"
+            >
+              <div class="space-y-1 min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-text">{{ m.name }}</span>
+                  <span class="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">Local</span>
+                  <span v-if="currentSelectedModel === m.name" class="text-[9px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full">CURRENT</span>
+                </div>
+                <div class="text-[10px] font-mono text-text-muted">
+                  Size: {{ formatSize(m.size) }} | Format: {{ m.details?.format || 'GGUF' }}
+                </div>
+              </div>
+
+              <button
+                @click="assignModel('ollama', m.name)"
+                :disabled="savingProfile"
+                :class="['text-xs px-3 py-1.5 rounded-lg font-bold transition-all shrink-0', currentSelectedModel === m.name ? 'btn-ghost text-text-muted' : 'btn-primary']"
+              >
+                {{ currentSelectedModel === m.name ? 'Selected' : 'Assign' }}
+              </button>
+            </div>
+          </template>
+        </div>
+
+        <!-- Custom Model Input Footer -->
+        <div class="p-3 border-t border-border bg-surface-1 flex items-center justify-between gap-2 shrink-0">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-[10px] font-mono text-text-muted whitespace-nowrap">Or custom slug:</span>
+            <input
+              v-model="customSlugInput"
+              type="text"
+              placeholder="e.g. meta-llama/llama-3.3-70b-instruct"
+              class="input text-xs font-mono flex-1"
+            />
+          </div>
+          <button
+            @click="assignModel(assignSourceTab, customSlugInput)"
+            :disabled="!customSlugInput || savingProfile"
+            class="btn-primary text-xs px-3 py-1.5 shrink-0"
+          >
+            {{ assignTargetMode === 'provider' ? 'Select Custom' : 'Assign Custom' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -412,12 +745,36 @@ const testing = reactive({})
 const statuses = reactive({})
 
 const selectedDefault = ref('')
+const llmFilter = ref('all')
 
 const enabledProviders = computed(() =>
   llmStore.PROVIDERS.filter(p => forms[p.id]?.enabled)
 )
 
-// ...
+const showAllProviders = ref(false)
+
+const filteredProviders = computed(() => {
+  return llmStore.PROVIDERS.filter(p => {
+    if (!showAllProviders.value) {
+      if (p.id !== 'openrouter' && p.id !== 'ollama') {
+        return false
+      }
+    }
+    if (llmFilter.value === 'active') {
+      return forms[p.id]?.enabled || hasExistingKey(p.id) || (p.id === 'ollama' && forms[p.id]?.base_url)
+    }
+    if (llmFilter.value === 'gateway') {
+      return p.category === 'gateway'
+    }
+    if (llmFilter.value === 'local') {
+      return p.category === 'local'
+    }
+    if (llmFilter.value === 'cloud') {
+      return p.category === 'cloud'
+    }
+    return true
+  })
+})
 
 function isDefaultProvider(id) {
   return llmStore.configs.find(c => c.provider === id)?.is_default === true
@@ -429,6 +786,7 @@ function hasExistingKey(id) {
 
 function providerEndpoint(id) {
   const map = {
+    openrouter: 'openrouter.ai',
     openai:    'api.openai.com',
     grok:      'api.x.ai',
     deepseek:  'api.deepseek.com',
@@ -441,8 +799,224 @@ function providerEndpoint(id) {
     cohere:    'api.cohere.ai',
     qwen:      'dashscope.aliyuncs.com',
     glm:       'open.bigmodel.cn',
+    ollama:    'localhost:11434 (default)',
   }
   return map[id] ?? ''
+}
+
+// ── Model Profiles & Provider Model Selection ──
+const assignModalOpen     = ref(false)
+const assignTargetMode    = ref('profile') // 'profile' | 'provider'
+const assignTargetKey     = ref('')        // profile key or provider id
+const assigningProfileKey = ref('')
+const modelSearchQuery    = ref('')
+const assignSourceTab     = ref('openrouter') // 'openrouter' | 'ollama'
+const customSlugInput     = ref('')
+const savingProfile       = ref(false)
+
+const displayProfiles = computed(() => {
+  if (Object.keys(llmStore.profiles).length > 0) {
+    return llmStore.profiles
+  }
+  return {
+    fast: { id: 'fast', provider: 'openrouter', model: '~deepseek/deepseek-flash-latest', label: 'Fast & Efficient', description: 'High-throughput classification, routing & structured extraction' },
+    reasoning: { id: 'reasoning', provider: 'openrouter', model: 'deepseek/deepseek-r1', label: 'Deep Reasoning', description: 'Complex planning, multi-step deduction & architectural decisions' },
+    coding: { id: 'coding', provider: 'openrouter', model: 'qwen/qwen-2.5-coder-32b-instruct', label: 'Code & Transform', description: 'Code generation, SQL querying & complex data transforms' },
+    general: { id: 'general', provider: 'openrouter', model: '~deepseek/deepseek-flash-latest', label: 'Default Generalist', description: 'High-capability reasoning for general tool calling & orchestration' },
+    local: { id: 'local', provider: 'ollama', model: 'llama3.2', label: 'On-Prem / Local', description: 'Zero data-leakage execution on local hardware via Ollama' },
+  }
+})
+
+const displayDesignerProfiles = computed(() => {
+  if (Object.keys(llmStore.designerProfiles).length > 0) {
+    return llmStore.designerProfiles
+  }
+  return {
+    frontier: { id: 'frontier', provider: 'openrouter', model: 'anthropic/claude-sonnet-4.5', label: 'Frontier', description: 'Maximum intelligence & reasoning for complex enterprise workflows', badge: 'Frontier' },
+    balanced: { id: 'balanced', provider: 'openrouter', model: 'google/gemini-2.0-flash-001', label: 'Balanced', description: 'Optimal speed, quality & cost balance for standard workflows', badge: 'Default' },
+    fast: { id: 'fast', provider: 'openrouter', model: '~deepseek/deepseek-flash-latest', label: 'Fast', description: 'Rapid prototyping & simple workflows with ultra-low latency', badge: 'Fast' },
+  }
+})
+
+function designerProfileIcon(key) {
+  const icons = {
+    frontier: '🚀',
+    balanced: '⚖️',
+    fast: '⚡',
+  }
+  return icons[key] || '⚙️'
+}
+
+const currentAssignProfile = computed(() => {
+  if (assignTargetMode.value === 'provider') return {}
+  if (assignTargetMode.value === 'designer_profile') {
+    return llmStore.designerProfiles[assigningProfileKey.value] || displayDesignerProfiles.value[assigningProfileKey.value] || {}
+  }
+  return llmStore.profiles[assigningProfileKey.value] || displayProfiles.value[assigningProfileKey.value] || {}
+})
+
+const currentSelectedModel = computed(() => {
+  if (assignTargetMode.value === 'provider') {
+    const provId = assignTargetKey.value
+    return forms[provId]?.default_model || llmStore.DEFAULT_MODELS[provId] || ''
+  }
+  return currentAssignProfile.value?.model || ''
+})
+
+const modalTitle = computed(() => {
+  if (assignTargetMode.value === 'provider') {
+    const prov = llmStore.PROVIDERS.find(p => p.id === assignTargetKey.value)
+    return `Select Default Model for ${prov?.label || assignTargetKey.value}`
+  }
+  if (assignTargetMode.value === 'designer_profile') {
+    return `Assign Model to ${currentAssignProfile.value.label || assigningProfileKey.value} Tier`
+  }
+  return `Assign Model to ${currentAssignProfile.value.label || assigningProfileKey.value}`
+})
+
+const modalSubtitle = computed(() => {
+  if (assignTargetMode.value === 'provider') {
+    if (assignTargetKey.value === 'openrouter') {
+      return 'Choose from 400+ OpenRouter cloud models or enter a custom model slug'
+    }
+    if (assignTargetKey.value === 'ollama') {
+      return 'Choose from downloaded local Ollama models or enter a custom model slug'
+    }
+    return 'Select default model for this provider'
+  }
+  if (assignTargetMode.value === 'designer_profile') {
+    return 'Select the model to power AI Designer workflow synthesis for this tier'
+  }
+  return 'Select an OpenRouter cloud model or on-premise Ollama model'
+})
+
+function getModalIcon() {
+  if (assignTargetMode.value === 'provider') {
+    return assignTargetKey.value === 'ollama' ? '💻' : '🌐'
+  }
+  if (assignTargetMode.value === 'designer_profile') {
+    return designerProfileIcon(assigningProfileKey.value)
+  }
+  return profileIcon(assigningProfileKey.value)
+}
+
+const filteredOpenRouterModels = computed(() => {
+  const q = modelSearchQuery.value.trim().toLowerCase()
+  const list = llmStore.openRouterCatalog
+  if (!q) return list.slice(0, 50)
+  return list.filter(m => 
+    m.id.toLowerCase().includes(q) || 
+    (m.name && m.name.toLowerCase().includes(q)) ||
+    (m.description && m.description.toLowerCase().includes(q))
+  ).slice(0, 50)
+})
+
+function profileIcon(key) {
+  const icons = {
+    fast: '⚡',
+    reasoning: '🧠',
+    coding: '💻',
+    general: '🛡️',
+    local: '🔒',
+  }
+  return icons[key] || '⚙️'
+}
+
+function formatContext(tokens) {
+  if (!tokens) return 'unknown'
+  if (tokens >= 1000000) return (tokens / 1000000).toFixed(1).replace('.0', '') + 'M'
+  if (tokens >= 1000) return Math.round(tokens / 1000) + 'k'
+  return tokens
+}
+
+function openAssignModal(key) {
+  assignTargetMode.value = 'profile'
+  assignTargetKey.value = key
+  assigningProfileKey.value = key
+  modelSearchQuery.value = ''
+  customSlugInput.value = ''
+  const prof = currentAssignProfile.value
+  assignSourceTab.value = prof?.provider === 'ollama' ? 'ollama' : 'openrouter'
+  assignModalOpen.value = true
+  llmStore.fetchOpenRouterModels()
+}
+
+function openAssignModalForDesigner(key) {
+  assignTargetMode.value = 'designer_profile'
+  assignTargetKey.value = key
+  assigningProfileKey.value = key
+  modelSearchQuery.value = ''
+  customSlugInput.value = ''
+  const prof = currentAssignProfile.value
+  assignSourceTab.value = prof?.provider === 'ollama' ? 'ollama' : 'openrouter'
+  assignModalOpen.value = true
+  llmStore.fetchOpenRouterModels()
+}
+
+function openModelPickerForProvider(providerId) {
+  assignTargetMode.value = 'provider'
+  assignTargetKey.value = providerId
+  assigningProfileKey.value = ''
+  modelSearchQuery.value = ''
+  customSlugInput.value = ''
+  assignSourceTab.value = (providerId === 'ollama') ? 'ollama' : 'openrouter'
+  assignModalOpen.value = true
+  if (providerId === 'openrouter') {
+    llmStore.fetchOpenRouterModels()
+  } else if (providerId === 'ollama') {
+    fetchLocalModels()
+  }
+}
+
+async function assignModel(provider, modelSlug) {
+  if (!modelSlug) return
+  const trimmed = modelSlug.trim()
+
+  if (assignTargetMode.value === 'provider') {
+    const provId = assignTargetKey.value
+    if (forms[provId]) {
+      forms[provId].default_model = trimmed
+      if (forms[provId].enabled || hasExistingKey(provId)) {
+        await save(provId)
+      }
+    }
+    assignModalOpen.value = false
+    return
+  }
+
+  if (assignTargetMode.value === 'designer_profile') {
+    savingProfile.value = true
+    try {
+      const key = assigningProfileKey.value
+      const target = { ...displayDesignerProfiles.value }
+      if (!target[key]) target[key] = { id: key }
+      target[key].provider = provider
+      target[key].model = trimmed
+      await llmStore.saveDesignerProfiles(target)
+      assignModalOpen.value = false
+    } catch (e) {
+      console.error('Failed to assign designer profile', e)
+    } finally {
+      savingProfile.value = false
+    }
+    return
+  }
+
+  // Profile assignment
+  savingProfile.value = true
+  try {
+    const key = assigningProfileKey.value
+    const target = { ...displayProfiles.value }
+    if (!target[key]) target[key] = { id: key }
+    target[key].provider = provider
+    target[key].model = trimmed
+    await llmStore.saveProfiles(target)
+    assignModalOpen.value = false
+  } catch (e) {
+    console.error('Failed to assign model profile', e)
+  } finally {
+    savingProfile.value = false
+  }
 }
 
 const updatingLicense = ref(false)
@@ -736,6 +1310,8 @@ onMounted(async () => {
   try {
     await Promise.allSettled([
       llmStore.fetchAll(),
+      llmStore.fetchProfiles(),
+      llmStore.fetchDesignerProfiles(),
       fetchPrompts(),
       fetchLocalModels()
     ])

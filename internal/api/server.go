@@ -206,18 +206,14 @@ func EnsureDefaultTenant(ctx context.Context, s store.Store) (*store.Tenant, err
 }
 
 
-// SeedLLMConfigs ensured that at least one LLM provider is configured
-// by reading from environment variables on first boot.
+// SeedLLMConfigs ensures that LLM provider configurations are seeded
+// from environment variables if not already configured in the database.
 func SeedLLMConfigs(cfg *config.Config, s store.Store, tenantID string) {
 	ctx := store.WithTenantID(context.Background(), tenantID)
 
-	hasAny, err := s.HasAnyLLMConfig(ctx)
-	if err != nil || hasAny {
-		return
-	}
-
 	type seed struct{ provider, apiKey, baseURL, model string }
 	seeds := []seed{
+		{"openrouter", cfg.OpenRouterKey, "", "~deepseek/deepseek-flash-latest"},
 		{"anthropic", cfg.AnthropicKey, "", "claude-3-5-sonnet-latest"},
 		{"openai", cfg.OpenAIKey, "", "gpt-4o"},
 		{"grok", cfg.GrokKey, "", "grok-3"},
@@ -232,6 +228,17 @@ func SeedLLMConfigs(cfg *config.Config, s store.Store, tenantID string) {
 				continue
 			}
 		} else if sd.apiKey == "" {
+			continue
+		}
+
+		// Don't overwrite if provider is already configured in the database,
+		// but migrate deprecated OpenRouter models if necessary.
+		if existing, err := s.GetLLMConfig(ctx, sd.provider); err == nil && existing != nil {
+			if sd.provider == "openrouter" && (existing.DefaultModel == "anthropic/claude-3.5-sonnet" || existing.DefaultModel == "") {
+				existing.DefaultModel = "~deepseek/deepseek-flash-latest"
+				_ = s.UpsertLLMConfig(ctx, existing)
+				slog.Info("Migrated deprecated OpenRouter model to ~deepseek/deepseek-flash-latest")
+			}
 			continue
 		}
 

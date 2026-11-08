@@ -128,13 +128,22 @@ func main() {
 
 	// -- Activities + Worker --
 	var verifier *enterprise.Verifier
-	if cfg.LicensePublicKey != "" {
-		pub, err := enterprise.ParseRSAPublicKey(cfg.LicensePublicKey)
-		if err != nil {
-			slog.Error("Failed to parse license public key", "error", err)
-		} else {
-			verifier = enterprise.NewVerifier(pub)
-		}
+	pubKeyPEM, err := s.GetSystemSetting(context.Background(), "license_public_key")
+	if err != nil || pubKeyPEM == "" {
+		pubKeyPEM = cfg.LicensePublicKey
+	}
+	if pubKeyPEM == "" {
+		pubKeyPEM = enterprise.ChainNodesPublicKey
+		slog.Info("License verification enabled in worker using built-in public key", "key_type", "RSA")
+	} else {
+		slog.Info("License verification enabled in worker using configured public key", "key_type", "RSA")
+	}
+
+	pub, err := enterprise.ParseRSAPublicKey(pubKeyPEM)
+	if err != nil {
+		slog.Error("Failed to parse license public key in worker", "error", err)
+	} else {
+		verifier = enterprise.NewVerifier(pub)
 	}
 
 	var secretMgr secrets.SecretManager

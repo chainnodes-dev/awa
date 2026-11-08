@@ -101,16 +101,26 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 				mcpServers.POST("/:id/ping", h.PingMCPServer)
 			}
 
-			llmCfg := protected.Group("/llm-configs", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor))
+			llmCfg := protected.Group("/llm-configs")
 			{
-				llmCfg.GET("", h.ListLLMConfigs)
-				llmCfg.PUT("/:provider", h.UpsertLLMConfig)
-				llmCfg.DELETE("/:provider", h.DeleteLLMConfig)
-				llmCfg.POST("/default", h.SetDefaultProvider)
-				llmCfg.POST("/:provider/test", h.TestLLMConnection)
-				llmCfg.GET("/local/models", h.ListLocalModels)
-				llmCfg.POST("/local/models/pull", h.PullLocalModel)
-				llmCfg.DELETE("/local/models", h.DeleteLocalModel)
+				// Read profiles and catalog accessible to Admin, Editor, and Operator (for Workflow Designer)
+				llmCfgRead := llmCfg.Group("", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor, auth.RoleOperator))
+				llmCfgRead.GET("/profiles", h.GetModelProfiles)
+				llmCfgRead.GET("/designer-profiles", h.GetDesignerProfiles)
+				llmCfgRead.GET("/openrouter/models", h.ListOpenRouterModels)
+				llmCfgRead.GET("/local/models", h.ListLocalModels)
+
+				// Management restricted to Admin and Editor
+				llmCfgAdmin := llmCfg.Group("", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor))
+				llmCfgAdmin.GET("", h.ListLLMConfigs)
+				llmCfgAdmin.PUT("/profiles", h.SetModelProfiles)
+				llmCfgAdmin.PUT("/designer-profiles", h.SetDesignerProfiles)
+				llmCfgAdmin.POST("/local/models/pull", h.PullLocalModel)
+				llmCfgAdmin.DELETE("/local/models", h.DeleteLocalModel)
+				llmCfgAdmin.POST("/default", h.SetDefaultProvider)
+				llmCfgAdmin.POST("/:provider/test", h.TestLLMConnection)
+				llmCfgAdmin.PUT("/:provider", h.UpsertLLMConfig)
+				llmCfgAdmin.DELETE("/:provider", h.DeleteLLMConfig)
 			}
 
 			designerGroup := protected.Group("/designer", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor, auth.RoleOperator))

@@ -18,6 +18,8 @@ type PipelineRequest struct {
 	ProcessDescription string   `json:"process_description"`
 	CurrentYAML        string   `json:"current_yaml,omitempty"`
 	Provider           string   `json:"provider,omitempty"`
+	Model              string   `json:"model,omitempty"`
+	Tier               string   `json:"tier,omitempty"`
 	MCPServers         []string `json:"mcp_servers,omitempty"`
 }
 
@@ -453,7 +455,7 @@ func (g *Generator) runJSONPipelineStep(ctx context.Context, req PipelineRequest
 		}
 		editor := NewWorkflowEditor(def)
 
-		resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+		resp, err := g.Complete(ctx, llm.CompletionRequest{
 			SystemPrompt: system,
 			Messages:     messages,
 			MaxTokens:    g.provider.MaxOutputTokens(),

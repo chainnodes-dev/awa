@@ -9,24 +9,27 @@ import (
 
 // ProviderDefaultModels maps each provider name to its recommended default model.
 var ProviderDefaultModels = map[string]string{
-	"anthropic": "claude-sonnet-4-5",
-	"openai":    "gpt-4o",
-	"grok":      "grok-3",
-	"deepseek":  "deepseek-v4-flash",
-	"mistral":   "mistral-large-latest",
-	"groq":      "llama-3.1-70b-versatile",
-	"together":  "meta-llama/Llama-3-70b-chat-hf",
-	"fireworks": "accounts/fireworks/models/llama-v3p1-70b-instruct",
-	"cohere":    "command-r-plus",
-	"qwen":      "qwen-plus",
-	"glm":       "glm-4-plus",
-	"gemini":    "gemini-2.0-flash",
-	"ollama":    "llama3.2",
+	"openrouter": "~deepseek/deepseek-flash-latest",
+	"anthropic":  "claude-sonnet-4-5",
+	"openai":     "gpt-4o",
+	"grok":       "grok-3",
+	"deepseek":   "deepseek-v4-flash",
+	"mistral":    "mistral-large-latest",
+	"groq":       "llama-3.1-70b-versatile",
+	"together":   "meta-llama/Llama-3-70b-chat-hf",
+	"fireworks":  "accounts/fireworks/models/llama-v3p1-70b-instruct",
+	"cohere":     "command-r-plus",
+	"qwen":       "qwen-plus",
+	"glm":        "glm-4-plus",
+	"gemini":     "gemini-2.0-flash",
+	"ollama":     "llama3.2",
 }
 
 // ProviderEndpoint returns the default API endpoint for OpenAI-compatible providers.
 func ProviderEndpoint(provider string) string {
 	switch provider {
+	case "openrouter":
+		return "https://openrouter.ai/api/v1/chat/completions"
 	case "openai":
 		return "https://api.openai.com/v1/chat/completions"
 	case "grok":
@@ -71,8 +74,11 @@ func BuildRegistryFromDB(ctx context.Context, s store.LLMConfigStore) (*Registry
 			continue
 		}
 		model := cfg.DefaultModel
-		if model == "" {
+		if model == "" || (cfg.Provider == "openrouter" && model == "anthropic/claude-3.5-sonnet") {
 			model = ProviderDefaultModels[cfg.Provider]
+		}
+		if cfg.Provider == "openrouter" && model == "deepseek/deepseek-flash-latest" {
+			model = "~deepseek/deepseek-flash-latest"
 		}
 
 		var prov Provider

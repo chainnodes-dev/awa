@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -165,6 +166,80 @@ func TestSetLicense_UploadFormats(t *testing.T) {
 		gotTenant, _ := s.GetTenant(context.Background(), tenantID)
 		if gotTenant.LicenseToken != token {
 			t.Errorf("failed to extract and save token: got %q, want %q", gotTenant.LicenseToken, token)
+		}
+	})
+
+	// --- TEST CASE 4: Wildcard Single-Tenant License with Company Name ---
+	t.Run("Wildcard Single-Tenant License with Company Name", func(t *testing.T) {
+		wildcardClaims := &enterprise.LicenseClaims{
+			Tier:        enterprise.TierEnterprise,
+			TenantID:    "*",
+			CompanyName: "Acme Global Logistics",
+			IssuedAt:    time.Now().Unix(),
+			ExpiresAt:   time.Now().Add(24 * time.Hour).Unix(),
+			Features:    []string{"sso", "branding"},
+		}
+		wildcardToken, err := signer.Sign(wildcardClaims)
+		if err != nil {
+			t.Fatalf("failed to sign wildcard token: %v", err)
+		}
+
+		body := jsonBody(t, map[string]string{"token": wildcardToken})
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/api/v1/enterprise/license", body)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", authHeader)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200 for wildcard license, got %d (body: %s)", w.Code, w.Body.String())
+		}
+
+		// Verify GET /api/v1/enterprise/status returns company name
+		statusW := httptest.NewRecorder()
+		statusReq, _ := http.NewRequest("GET", "/api/v1/enterprise/status", nil)
+		statusReq.Header.Set("Authorization", authHeader)
+		router.ServeHTTP(statusW, statusReq)
+
+		if statusW.Code != http.StatusOK {
+			t.Fatalf("expected 200 from status, got %d", statusW.Code)
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(statusW.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse status json: %v", err)
+		}
+
+		if resp["company_name"] != "Acme Global Logistics" {
+			t.Errorf("expected company_name 'Acme Global Logistics', got %v", resp["company_name"])
+		}
+		if resp["tier"] != "enterprise" {
+			t.Errorf("expected tier 'enterprise', got %v", resp["tier"])
+		}
+	})
+
+	// --- TEST CASE 5: Tenant Mismatch Rejected ---
+	t.Run("Tenant ID Mismatch Rejected", func(t *testing.T) {
+		mismatchedClaims := &enterprise.LicenseClaims{
+			Tier:      enterprise.TierEnterprise,
+			TenantID:  "different-tenant-uuid",
+			IssuedAt:  time.Now().Unix(),
+			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
+		}
+		mismatchedToken, err := signer.Sign(mismatchedClaims)
+		if err != nil {
+			t.Fatalf("failed to sign token: %v", err)
+		}
+
+		body := jsonBody(t, map[string]string{"token": mismatchedToken})
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/api/v1/enterprise/license", body)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", authHeader)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected 403 Forbidden for mismatched tenant, got %d", w.Code)
 		}
 	})
 }

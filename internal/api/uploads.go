@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/asm-platform/asm/internal/tools"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/text/unicode/norm"
 )
 
 // UploadFile handles both multipart/form-data and application/json (Base64) file uploads.
@@ -46,7 +48,7 @@ func (h *Handlers) UploadFile(c *gin.Context) {
 		}
 
 		fileID = uuid.New().String()
-		filename = filepath.Base(req.Name)
+		filename = norm.NFC.String(filepath.Base(req.Name))
 		fileSize = int64(len(data))
 		mimeType = req.MimeType
 		if mimeType == "" {
@@ -81,7 +83,8 @@ func (h *Handlers) UploadFile(c *gin.Context) {
 		}
 
 		fileID = uuid.New().String()
-		filename = filepath.Base(file.Filename)
+		// Normalize to NFC so Linux filesystems, LLMs, and APIs share the exact same Unicode representation
+		filename = norm.NFC.String(filepath.Base(file.Filename))
 		fileSize = file.Size
 		mimeType = file.Header.Get("Content-Type")
 
@@ -114,15 +117,11 @@ func (h *Handlers) GetUploadedFile(c *gin.Context) {
 	fileID := c.Param("id")
 	filename := c.Param("filename")
 
-	// Prevent path traversal
-	fileID = filepath.Base(fileID)
-	filename = filepath.Base(filename)
-
-	filePath := filepath.Join("data", "uploads", fileID, filename)
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+	targetPath, _, err := tools.ResolveUploadedFilePath(fileID, filename)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
 	}
 
-	c.File(filePath)
+	c.File(targetPath)
 }

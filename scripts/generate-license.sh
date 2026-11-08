@@ -18,9 +18,9 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-clear
+clear 2>/dev/null || true
 echo -e "${BOLD}${CYAN}====================================================${NC}"
-echo -e "${BOLD}${CYAN}            PHAXA ENTERPRISE LICENSE GENERATOR       ${NC}"
+echo -e "${BOLD}${CYAN}         CHAIN NODES ENTERPRISE LICENSE GENERATOR   ${NC}"
 echo -e "${BOLD}${CYAN}====================================================${NC}"
 echo ""
 
@@ -37,11 +37,13 @@ if [ ! -f "$DEFAULT_KEY" ]; then
 fi
 
 # 2. Argument Parsing & Interactive Wizard
-TENANT=""
+COMPANY=""
+TENANT="*"
 TIER="enterprise"
 DAYS="365"
 KEY_PATH="$DEFAULT_KEY"
 FEATURES="sso,branding,secrets,audit_logs,analytics"
+OUTPUT_FILE=""
 
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
@@ -56,20 +58,23 @@ while [[ "$#" -gt 0 ]]; do
             echo -e "${GREEN}${BOLD}✔ Successfully generated new key pair!${NC}"
             exit 0
             ;;
+        -c|--company) COMPANY="$2"; shift ;;
         -t|--tenant) TENANT="$2"; shift ;;
         -r|--tier) TIER="$2"; shift ;;
         -d|--days) DAYS="$2"; shift ;;
         -k|--key) KEY_PATH="$2"; shift ;;
         -f|--features) FEATURES="$2"; shift ;;
+        -o|--out) OUTPUT_FILE="$2"; shift ;;
         -h|--help)
             echo "Usage: $0 [options]"
             echo "Options:"
-            echo "  -g, --gen-key          Generate a new RSA 2048-bit Private/Public Key Pair"
-            echo "  -t, --tenant <id>      Target Customer Tenant ID (Required for signing)"
+            echo "  -c, --company <name>   Customer / Organization Name (e.g. Acme Corp)"
+            echo "  -t, --tenant <id>      Specific SaaS Tenant UUID (Default: * for single-tenant / any instance)"
             echo "  -r, --tier <tier>      License Tier (pro, enterprise) (Default: enterprise)"
             echo "  -d, --days <days>      Validity duration in days (Default: 365)"
             echo "  -k, --key <path>       Path to RSA private key file (Default: private.pem)"
             echo "  -f, --features <list>  Comma-separated list of enabled features (Default: sso,branding,secrets,audit_logs,analytics)"
+            echo "  -o, --out <path>       Output path for the license file (e.g. license.pem or client.lic)"
             exit 0
             ;;
         *) error_exit "Unknown parameter passed: $1. Use --help for usage details." ;;
@@ -77,18 +82,27 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# If no tenant provided via args, run the interactive wizard
-if [ -z "$TENANT" ]; then
+# If neither company nor specific tenant provided via args, run the interactive wizard
+if [ -z "$COMPANY" ] && [ "$TENANT" == "*" ]; then
     echo -e "${BOLD}${YELLOW}Entering interactive license setup wizard...${NC}"
     echo ""
 
-    # Prompt Tenant ID
-    while [ -z "$TENANT" ]; do
-        read -p "$(echo -e ${BOLD}${CYAN}"🔑 Enter Customer Tenant ID (e.g. company_corp): "${NC})" TENANT
-        if [ -z "$TENANT" ]; then
-            echo -e "${RED}Tenant ID cannot be empty. Please enter a valid ID.${NC}"
+    # Prompt Company Name
+    while [ -z "$COMPANY" ]; do
+        read -p "$(echo -e ${BOLD}${CYAN}"🏢 Enter Customer / Organization Name (e.g. Acme Corp): "${NC})" COMPANY
+        if [ -z "$COMPANY" ]; then
+            echo -e "${RED}Company name cannot be empty. Please enter a valid name.${NC}"
         fi
     done
+
+    # Optional Multi-Tenant UUID restriction
+    read -p "$(echo -e ${BOLD}${CYAN}"🌐 Restrict to specific multi-tenant UUID? (y/N) [default: N]: "${NC})" is_saas
+    if [[ "$is_saas" =~ ^[Yy]$ ]]; then
+        read -p "$(echo -e ${BOLD}${CYAN}"🔑 Enter SaaS Tenant UUID: "${NC})" custom_tenant
+        if [ ! -z "$custom_tenant" ]; then
+            TENANT="$custom_tenant"
+        fi
+    fi
 
     # Prompt License Tier
     read -p "$(echo -e ${BOLD}${CYAN}"💎 Enter License Tier (pro | enterprise) [default: $TIER]: "${NC})" input_tier
@@ -123,13 +137,20 @@ fi
 echo ""
 echo -e "${BLUE}Building license generation tool...${NC}"
 # Compile / run the go tool
+OUT_ARG=()
+if [ ! -z "$OUTPUT_FILE" ]; then
+    OUT_ARG=(-out "$OUTPUT_FILE")
+fi
+
 go run ./cmd/license-gen/main.go \
     -key "$KEY_PATH" \
+    -company "$COMPANY" \
     -tenant "$TENANT" \
     -tier "$TIER" \
     -days "$DAYS" \
-    -features "$FEATURES"
+    -features "$FEATURES" \
+    "${OUT_ARG[@]}"
 
 echo ""
 echo -e "${GREEN}${BOLD}✔ License successfully compiled and signed!${NC}"
-echo -e "${BLUE}Copy the token above and paste it into Phaxa under Usage & Reporting -> Update Key.${NC}"
+echo -e "${BLUE}Deliver the license file/token to the customer to activate under Settings -> License / Usage.${NC}"

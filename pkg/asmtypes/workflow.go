@@ -228,6 +228,7 @@ type Transition struct {
 
 type AgentDef struct {
 	Name           string            `yaml:"name"                      json:"name"`
+	Provider       string            `yaml:"provider,omitempty"       json:"provider,omitempty"`
 	Model          string            `yaml:"model,omitempty"           json:"model,omitempty"`
 	// TaskQueue overrides the default Temporal task queue for this agent.
 	// When set, the Chain Nodes workflow schedules this agent's activity on the named
@@ -243,6 +244,7 @@ type AgentDef struct {
 func (a *AgentDef) UnmarshalYAML(value *yaml.Node) error {
 	type alias struct {
 		Name           string               `yaml:"name"`
+		Provider       string               `yaml:"provider,omitempty"`
 		Model          string               `yaml:"model,omitempty"`
 		TaskQueue      string               `yaml:"task_queue,omitempty"`
 		Tools          []string             `yaml:"tools,omitempty"`
@@ -257,6 +259,7 @@ func (a *AgentDef) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	a.Name = tmp.Name
+	a.Provider = tmp.Provider
 	a.Model = tmp.Model
 	a.TaskQueue = tmp.TaskQueue
 	a.Tools = tmp.Tools
@@ -284,6 +287,12 @@ func (a *AgentDef) UnmarshalYAML(value *yaml.Node) error {
 				}
 			}
 		}
+	} else if a.Config == nil {
+		a.Config = make(map[string]string)
+	}
+
+	if tmp.Provider != "" && a.Config["provider"] == "" {
+		a.Config["provider"] = tmp.Provider
 	}
 
 	return nil

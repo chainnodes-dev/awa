@@ -562,3 +562,97 @@ func TestRegistryMerge_GlobalToolPreservedWhenNoAgentConflict(t *testing.T) {
 		t.Error("agent_only tool missing from merged registry")
 	}
 }
+
+func TestResolveModelProfile(t *testing.T) {
+	exec := &Executor{
+		globalTools: tools.NewRegistry(),
+	}
+
+	tests := []struct {
+		name      string
+		agent     asmtypes.AgentDef
+		wantProv  string
+		wantModel string
+	}{
+		{
+			name:      "Execution Profile Fast via Model field",
+			agent:     asmtypes.AgentDef{Model: "fast"},
+			wantProv:  "openrouter",
+			wantModel: "~deepseek/deepseek-flash-latest",
+		},
+		{
+			name:      "Execution Profile General via Model field",
+			agent:     asmtypes.AgentDef{Model: "general"},
+			wantProv:  "openrouter",
+			wantModel: "~deepseek/deepseek-flash-latest",
+		},
+		{
+			name:      "Execution Profile Reasoning via Model field",
+			agent:     asmtypes.AgentDef{Model: "reasoning"},
+			wantProv:  "openrouter",
+			wantModel: "deepseek/deepseek-r1",
+		},
+		{
+			name:      "Execution Profile Coding via Model field",
+			agent:     asmtypes.AgentDef{Model: "coding"},
+			wantProv:  "openrouter",
+			wantModel: "qwen/qwen-2.5-coder-32b-instruct",
+		},
+		{
+			name:      "Execution Profile Local via Model field",
+			agent:     asmtypes.AgentDef{Model: "local"},
+			wantProv:  "ollama",
+			wantModel: "llama3.2",
+		},
+		{
+			name:      "Prefix @profile:fast",
+			agent:     asmtypes.AgentDef{Model: "@profile:fast"},
+			wantProv:  "openrouter",
+			wantModel: "~deepseek/deepseek-flash-latest",
+		},
+		{
+			name:      "Prefix @reasoning",
+			agent:     asmtypes.AgentDef{Model: "@reasoning"},
+			wantProv:  "openrouter",
+			wantModel: "deepseek/deepseek-r1",
+		},
+		{
+			name: "Profile in Config map",
+			agent: asmtypes.AgentDef{
+				Config: map[string]string{"profile": "coding"},
+			},
+			wantProv:  "openrouter",
+			wantModel: "qwen/qwen-2.5-coder-32b-instruct",
+		},
+		{
+			name:      "Defensive fallback: designer tier 'balanced' mapped to general",
+			agent:     asmtypes.AgentDef{Model: "balanced"},
+			wantProv:  "openrouter",
+			wantModel: "~deepseek/deepseek-flash-latest",
+		},
+		{
+			name:      "Defensive fallback: designer tier 'frontier' mapped to reasoning",
+			agent:     asmtypes.AgentDef{Model: "frontier"},
+			wantProv:  "openrouter",
+			wantModel: "deepseek/deepseek-r1",
+		},
+		{
+			name:      "Direct real model ID passes through untouched",
+			agent:     asmtypes.AgentDef{Model: "openai/gpt-4o"},
+			wantProv:  "",
+			wantModel: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prov, model := exec.resolveModelProfile(context.Background(), tt.agent)
+			if prov != tt.wantProv {
+				t.Errorf("prov = %q, want %q", prov, tt.wantProv)
+			}
+			if model != tt.wantModel {
+				t.Errorf("model = %q, want %q", model, tt.wantModel)
+			}
+		})
+	}
+}

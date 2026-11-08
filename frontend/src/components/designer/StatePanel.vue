@@ -462,30 +462,49 @@
     <template v-if="['prompt', 'hitl'].includes(form.type) && form.agent">
       <div class="bg-surface-1 border border-border rounded-xl p-4 space-y-3">
         <h4 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Agent Parameter Overrides</h4>
+        <!-- Semantic Model Profile Selector -->
         <div class="space-y-1">
-          <label class="text-xs text-text-muted">LLM Provider</label>
-          <select class="input text-xs" v-model="agentForm.provider">
-            <option value="">Default (Global Settings)</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI</option>
-            <option value="grok">Grok (xAI)</option>
-            <option value="deepseek">Deepseek</option>
-            <option value="gemini">Gemini</option>
-            <option value="mistral">Mistral AI</option>
-            <option value="groq">Groq</option>
-            <option value="together">Together AI</option>
-            <option value="fireworks">Fireworks AI</option>
-            <option value="cohere">Cohere</option>
-            <option value="qwen">Qwen (Alibaba)</option>
-            <option value="glm">GLM (Zhipu)</option>
-            <option value="ollama">Ollama (Local / Stdio)</option>
+          <div class="flex items-center justify-between">
+            <label class="text-xs text-text-muted">Task Model Profile</label>
+            <span v-if="activeProfileSummary" class="text-[10px] text-indigo-400 font-mono">{{ activeProfileSummary }}</span>
+          </div>
+          <select class="input text-xs" v-model="agentForm.profile">
+            <option value="general">🛡️ Generalist ({{ getProfileSummary('general') }})</option>
+            <option value="fast">⚡ Fast & Cheap ({{ getProfileSummary('fast') }})</option>
+            <option value="reasoning">🧠 Deep Reasoning ({{ getProfileSummary('reasoning') }})</option>
+            <option value="coding">💻 Code & Transform ({{ getProfileSummary('coding') }})</option>
+            <option value="local">🔒 Local On-Prem ({{ getProfileSummary('local') }})</option>
+            <option value="custom">⚙️ Custom Model Override...</option>
           </select>
         </div>
-        
-        <div class="space-y-1">
-          <label class="text-xs text-text-muted">Model Identifier</label>
-          <input class="input text-xs" v-model="agentForm.model" placeholder="Leave empty for global defaults..." />
-        </div>
+
+        <!-- Custom Model Override Fields (only shown if profile === 'custom') -->
+        <template v-if="agentForm.profile === 'custom'">
+          <div class="space-y-1">
+            <label class="text-xs text-text-muted">Custom LLM Provider</label>
+            <select class="input text-xs" v-model="agentForm.provider">
+              <option value="openrouter">OpenRouter (Universal Gateway)</option>
+              <option value="ollama">Ollama (Local)</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="openai">OpenAI</option>
+              <option value="deepseek">Deepseek</option>
+              <option value="gemini">Gemini</option>
+              <option value="grok">Grok (xAI)</option>
+              <option value="mistral">Mistral AI</option>
+              <option value="groq">Groq</option>
+              <option value="together">Together AI</option>
+              <option value="fireworks">Fireworks AI</option>
+              <option value="cohere">Cohere</option>
+              <option value="qwen">Qwen (Alibaba)</option>
+              <option value="glm">GLM (Zhipu)</option>
+            </select>
+          </div>
+          
+          <div class="space-y-1">
+            <label class="text-xs text-text-muted">Custom Model Identifier</label>
+            <input class="input text-xs font-mono" v-model="agentForm.model" placeholder="e.g. ~deepseek/deepseek-flash-latest" />
+          </div>
+        </template>
 
         <div class="space-y-1">
           <label class="text-xs text-text-muted">Task Queue</label>
@@ -622,6 +641,7 @@
 import { reactive, ref, computed, watch, onMounted } from 'vue'
 import { api } from '@/stores/auth'
 import { useEnterpriseStore } from '@/stores/enterprise'
+import { useLLMStore } from '@/stores/llm'
 import AgentCombobox from './AgentCombobox.vue'
 import CodeEditor from './CodeEditor.vue'
 import CodeEditorModal from './CodeEditorModal.vue'
@@ -639,6 +659,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['update', 'delete'])
 const entStore = useEnterpriseStore()
+const llmStore = useLLMStore()
 
 // Codegen & script setup refs
 const codegenLoading = ref(false)
@@ -719,12 +740,34 @@ const form = reactive({
   hitl_notify_message: props.node.notify?.message ?? '',
 })
 
+function detectInitialProfile(agentDef) {
+  if (agentDef?.config?.profile) return agentDef.config.profile
+  const m = agentDef?.model || ''
+  if (m.startsWith('@profile:')) return m.slice(9)
+  if (m.startsWith('@')) return m.slice(1)
+  if (['fast', 'reasoning', 'coding', 'general', 'local'].includes(m)) return m
+  if (m || agentDef?.config?.provider) return 'custom'
+  return 'general'
+}
+
 const agentForm = reactive({
-  provider:    props.agentDef?.config?.provider    ?? '',
-  model:       props.agentDef?.model               ?? '',
+  profile:     detectInitialProfile(props.agentDef),
+  provider:    props.agentDef?.config?.provider    ?? 'openrouter',
+  model:       (props.agentDef?.model?.startsWith('@profile:') || ['fast','reasoning','coding','general','local'].includes(props.agentDef?.model)) ? '' : (props.agentDef?.model ?? ''),
   task_queue:  props.agentDef?.task_queue          ?? '',
   prompt:      props.agentDef?.config?.prompt      ?? '',
   mcp_servers: props.agentDef?.config?.mcp_servers ?? '',
+})
+
+function getProfileSummary(id) {
+  const p = llmStore.profiles[id]
+  if (!p) return id
+  return p.model ? p.model : id
+}
+
+const activeProfileSummary = computed(() => {
+  if (agentForm.profile === 'custom') return agentForm.model ? `${agentForm.provider}:${agentForm.model}` : 'custom override'
+  return getProfileSummary(agentForm.profile)
 })
 
 const availableVersions = ref([])
@@ -742,6 +785,9 @@ async function fetchMcpServers() {
 
 onMounted(() => {
   fetchMcpServers()
+  if (Object.keys(llmStore.profiles).length === 0) {
+    llmStore.fetchProfiles()
+  }
 })
 
 const subprocessRequiredInputs = computed(() => {
@@ -1107,12 +1153,13 @@ function onApply() {
   
   const agentData = (!['script', 'code', 'subprocess', 'telegram_output', 'discord_output', 'timeout_node'].includes(form.type) && form.agent) ? {
     name:       form.agent,
-    model:      agentForm.model      || undefined,
+    model:      agentForm.profile === 'custom' ? (agentForm.model || undefined) : `@profile:${agentForm.profile}`,
     task_queue: agentForm.task_queue || undefined,
-    config: (agentForm.prompt || agentForm.mcp_servers || agentForm.provider) ? {
+    config: (agentForm.prompt || agentForm.mcp_servers || (agentForm.profile === 'custom' ? agentForm.provider : undefined) || agentForm.profile) ? {
       prompt:      agentForm.prompt      || undefined,
       mcp_servers: agentForm.mcp_servers || undefined,
-      provider:    agentForm.provider    || undefined,
+      provider:    agentForm.profile === 'custom' ? (agentForm.provider || undefined) : undefined,
+      profile:     agentForm.profile !== 'custom' ? agentForm.profile : undefined,
     } : undefined,
   } : null
   

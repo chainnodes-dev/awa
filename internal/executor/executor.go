@@ -90,8 +90,21 @@ func (e *Executor) Execute(ctx context.Context, task orchestrator.AgentTask) (*a
 	if providerName == "" {
 		providerName = e.defaultProv
 	}
+	if agent.Provider != "" {
+		providerName = agent.Provider
+	}
 	if agent.Config["provider"] != "" {
 		providerName = agent.Config["provider"]
+	}
+
+	// Resolve semantic model profile if specified (e.g. agent.Config["profile"], @profile:fast, balanced, etc.)
+	if profProv, profModel := e.resolveModelProfile(ctx, agent); profModel != "" {
+		if profProv != "" && agent.Config["provider"] == "" && agent.Provider == "" {
+			providerName = profProv
+		} else if profProv != "" && providerName == "" {
+			providerName = profProv
+		}
+		agent.Model = profModel
 	}
 	provider, err := e.llmRegistry.Get(providerName)
 	if err != nil {
@@ -886,4 +899,74 @@ func containsTrigger(list []string, name string) bool {
 		}
 	}
 	return false
+}
+
+// resolveModelProfile checks if the agent specifies a semantic execution profile and resolves it to provider and model.
+// Execution profiles: "fast", "reasoning", "coding", "general", "local".
+func (e *Executor) resolveModelProfile(ctx context.Context, agent asmtypes.AgentDef) (string, string) {
+	// 1. Build Execution Profiles map from defaults + custom database settings
+	profiles := llm.DefaultModelProfiles()
+	if e.store != nil {
+		if raw, err := e.store.GetSystemSetting(ctx, "llm_model_profiles"); err == nil && raw != "" {
+			var custom map[string]llm.ModelProfile
+			if err := json.Unmarshal([]byte(raw), &custom); err == nil {
+				for k, v := range custom {
+					profiles[k] = v
+				}
+			}
+		}
+	}
+
+	// 2. Extract candidate profile key
+	profileKey := ""
+	if p, ok := agent.Config["profile"]; ok && p != "" {
+		profileKey = strings.TrimSpace(p)
+	} else if strings.HasPrefix(agent.Model, "@profile:") {
+		profileKey = strings.TrimPrefix(agent.Model, "@profile:")
+	} else if strings.HasPrefix(agent.Model, "@") {
+		profileKey = strings.TrimPrefix(agent.Model, "@")
+	} else {
+		candidate := strings.ToLower(strings.TrimSpace(agent.Model))
+		if _, exists := profiles[candidate]; exists || candidate == "balanced" || candidate == "frontier" {
+			profileKey = candidate
+		}
+	}
+
+	profileKey = strings.ToLower(strings.TrimSpace(profileKey))
+	if profileKey == "" || profileKey == "custom" {
+		return "", ""
+	}
+
+	// 3. Resolve execution profile
+	if prof, ok := profiles[profileKey]; ok {
+		prov := prof.Provider
+		model := prof.Model
+		if prov == "openrouter" {
+			switch model {
+			case "anthropic/claude-3.5-sonnet", "", "deepseek/deepseek-flash-latest":
+				model = "~deepseek/deepseek-flash-latest"
+			}
+			if !strings.HasPrefix(model, "~") && strings.HasPrefix(model, "deepseek/deepseek-flash") {
+				model = "~" + model
+			}
+		}
+		return prov, model
+	}
+
+	// 4. Defensive fallback: if a designer generation tier (e.g. "balanced" or "frontier")
+	// was mistakenly placed in an execution agent, map it safely to the appropriate execution profile
+	// rather than sending an invalid model slug to the remote LLM provider.
+	if profileKey == "balanced" {
+		slog.Warn("Agent specified designer tier 'balanced' in execution workflow; mapping to 'general' execution profile", "agent", agent.Name)
+		if prof, ok := profiles["general"]; ok {
+			return prof.Provider, prof.Model
+		}
+	} else if profileKey == "frontier" {
+		slog.Warn("Agent specified designer tier 'frontier' in execution workflow; mapping to 'reasoning' execution profile", "agent", agent.Name)
+		if prof, ok := profiles["reasoning"]; ok {
+			return prof.Provider, prof.Model
+		}
+	}
+
+	return "", ""
 }

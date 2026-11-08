@@ -28,6 +28,10 @@ type ProcessAnalyseRequest struct {
 	// Provider is an optional LLM provider name to use for this request, overriding
 	// the default provider.
 	Provider string `json:"provider,omitempty"`
+	// Model is an optional specific model slug override.
+	Model string `json:"model,omitempty"`
+	// Tier is an optional generation profile tier ("frontier" | "balanced" | "fast").
+	Tier string `json:"tier,omitempty"`
 }
 
 // ProcessAnalyseResult holds the generated workflow.
@@ -88,7 +92,7 @@ func (g *Generator) AnalyseProcess(ctx context.Context, req ProcessAnalyseReques
 	interaction = append(interaction, llm.Message{Role: "system", Content: system})
 	interaction = append(interaction, messages...)
 
-	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+	resp, err := g.Complete(ctx, llm.CompletionRequest{
 		SystemPrompt: system,
 		Messages:     messages,
 		MaxTokens:    g.provider.MaxOutputTokens(),
@@ -111,7 +115,7 @@ func (g *Generator) AnalyseProcess(ctx context.Context, req ProcessAnalyseReques
 		interaction = append(interaction, llm.Message{Role: "user", Content: retryMsg})
 
 		// Retry completion
-		resp, err = g.provider.Complete(ctx, llm.CompletionRequest{
+		resp, err = g.Complete(ctx, llm.CompletionRequest{
 			SystemPrompt: system,
 			Messages:     messages,
 			MaxTokens:    g.provider.MaxOutputTokens(),
@@ -170,7 +174,7 @@ func (g *Generator) SummariseProcess(ctx context.Context, req ProcessSummariseRe
 		{Role: "user", Content: userMsg},
 	}
 
-	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+	resp, err := g.Complete(ctx, llm.CompletionRequest{
 		SystemPrompt: system,
 		Messages:     messages,
 		MaxTokens:    1024,

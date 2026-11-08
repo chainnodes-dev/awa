@@ -36,7 +36,7 @@ func (g *Generator) Codegen(ctx context.Context, req CodegenRequest) (*CodegenRe
 	system := buildCodegenSystemPrompt()
 	userMsg := buildCodegenUserMsg(req)
 
-	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+	resp, err := g.Complete(ctx, llm.CompletionRequest{
 		SystemPrompt: system,
 		Messages:     []llm.Message{{Role: "user", Content: userMsg}},
 		MaxTokens:    4096,

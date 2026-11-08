@@ -9,6 +9,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -128,10 +131,13 @@ func (h *Handlers) TestLLMConnection(c *gin.Context) {
 	}
 
 	model := cfg.DefaultModel
-	if model == "" {
+	if model == "" || (provider == "openrouter" && model == "anthropic/claude-3.5-sonnet") {
 		if def, ok := llm.ProviderDefaultModels[provider]; ok {
 			model = def
 		}
+	}
+	if provider == "openrouter" && model == "deepseek/deepseek-flash-latest" {
+		model = "~deepseek/deepseek-flash-latest"
 	}
 
 	var prov llm.Provider
@@ -350,4 +356,214 @@ func (h *Handlers) DeleteLocalModel(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// GetModelProfiles returns the semantic model profiles configured for the platform.
+func (h *Handlers) GetModelProfiles(c *gin.Context) {
+	ctx := c.Request.Context()
+	profiles := llm.DefaultModelProfiles()
+
+	if raw, err := h.store.GetSystemSetting(ctx, "llm_model_profiles"); err == nil && raw != "" {
+		var custom map[string]llm.ModelProfile
+		if err := json.Unmarshal([]byte(raw), &custom); err == nil {
+			for k, v := range custom {
+				if v.Provider == "openrouter" {
+					switch v.Model {
+					case "anthropic/claude-3.5-sonnet", "", "deepseek/deepseek-flash-latest":
+						v.Model = "~deepseek/deepseek-flash-latest"
+					}
+				}
+				profiles[k] = v
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, profiles)
+}
+
+// SetModelProfiles updates the semantic model profiles for the platform.
+func (h *Handlers) SetModelProfiles(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req map[string]llm.ModelProfile
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate and merge with defaults
+	defaults := llm.DefaultModelProfiles()
+	merged := make(map[string]llm.ModelProfile)
+	for k, v := range defaults {
+		merged[k] = v
+	}
+	for k, v := range req {
+		if v.ID == "" {
+			v.ID = k
+		}
+		merged[k] = v
+	}
+
+	data, err := json.Marshal(merged)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.store.SetSystemSetting(ctx, "llm_model_profiles", string(data)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "profiles": merged})
+}
+
+// GetDesignerProfiles returns the workflow generation profiles configured for the platform.
+func (h *Handlers) GetDesignerProfiles(c *gin.Context) {
+	ctx := c.Request.Context()
+	profiles := llm.DefaultDesignerProfiles()
+
+	if raw, err := h.store.GetSystemSetting(ctx, "llm_designer_profiles"); err == nil && raw != "" {
+		var custom map[string]llm.ModelProfile
+		if err := json.Unmarshal([]byte(raw), &custom); err == nil {
+			for k, v := range custom {
+				profiles[k] = v
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, profiles)
+}
+
+// SetDesignerProfiles updates the workflow generation profiles.
+func (h *Handlers) SetDesignerProfiles(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req map[string]llm.ModelProfile
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	defaults := llm.DefaultDesignerProfiles()
+	merged := make(map[string]llm.ModelProfile)
+	for k, v := range defaults {
+		merged[k] = v
+	}
+	for k, v := range req {
+		if v.ID == "" {
+			v.ID = k
+		}
+		merged[k] = v
+	}
+
+	data, err := json.Marshal(merged)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.store.SetSystemSetting(ctx, "llm_designer_profiles", string(data)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "profiles": merged})
+}
+
+// OpenRouterModelInfo contains curated metadata about an OpenRouter model.
+type OpenRouterModelInfo struct {
+	ID              string  `json:"id"`
+	Name            string  `json:"name"`
+	ContextLength   int     `json:"context_length"`
+	PromptPrice     float64 `json:"prompt_price"`     // per 1M tokens
+	CompletionPrice float64 `json:"completion_price"` // per 1M tokens
+	Description     string  `json:"description"`
+}
+
+var (
+	openRouterCacheMu     sync.RWMutex
+	openRouterCacheModels []OpenRouterModelInfo
+	openRouterCacheExpiry time.Time
+)
+
+// ListOpenRouterModels returns available models from OpenRouter (cached with fallback).
+func (h *Handlers) ListOpenRouterModels(c *gin.Context) {
+	openRouterCacheMu.RLock()
+	if len(openRouterCacheModels) > 0 && time.Now().Before(openRouterCacheExpiry) {
+		cached := openRouterCacheModels
+		openRouterCacheMu.RUnlock()
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+	openRouterCacheMu.RUnlock()
+
+	// Fetch from OpenRouter
+	client := &http.Client{Timeout: 8 * time.Second}
+	req, err := http.NewRequestWithContext(c.Request.Context(), "GET", "https://openrouter.ai/api/v1/models", nil)
+	if err == nil {
+		req.Header.Set("User-Agent", "asm-platform/1.0")
+		if cfg, _ := h.store.GetLLMConfig(c.Request.Context(), "openrouter"); cfg != nil && cfg.APIKey != "" && cfg.APIKey != "***" {
+			req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+		}
+
+		resp, reqErr := client.Do(req)
+		if reqErr == nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+			var orResp struct {
+				Data []struct {
+					ID            string `json:"id"`
+					Name          string `json:"name"`
+					Description   string `json:"description"`
+					ContextLength int    `json:"context_length"`
+					Pricing       struct {
+						Prompt     string `json:"prompt"`
+						Completion string `json:"completion"`
+					} `json:"pricing"`
+				} `json:"data"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&orResp); err == nil && len(orResp.Data) > 0 {
+				var result []OpenRouterModelInfo
+				for _, m := range orResp.Data {
+					pPrice, _ := strconv.ParseFloat(m.Pricing.Prompt, 64)
+					cPrice, _ := strconv.ParseFloat(m.Pricing.Completion, 64)
+					result = append(result, OpenRouterModelInfo{
+						ID:              m.ID,
+						Name:            m.Name,
+						ContextLength:   m.ContextLength,
+						PromptPrice:     pPrice * 1000000.0,
+						CompletionPrice: cPrice * 1000000.0,
+						Description:     m.Description,
+					})
+				}
+				openRouterCacheMu.Lock()
+				openRouterCacheModels = result
+				openRouterCacheExpiry = time.Now().Add(15 * time.Minute)
+				openRouterCacheMu.Unlock()
+
+				c.JSON(http.StatusOK, result)
+				return
+			}
+		}
+	}
+
+	// Fallback to cached or curated static list if offline / rate limited
+	openRouterCacheMu.RLock()
+	if len(openRouterCacheModels) > 0 {
+		cached := openRouterCacheModels
+		openRouterCacheMu.RUnlock()
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+	openRouterCacheMu.RUnlock()
+
+	fallback := []OpenRouterModelInfo{
+		{ID: "~deepseek/deepseek-flash-latest", Name: "DeepSeek: DeepSeek Flash Latest", ContextLength: 1048576, PromptPrice: 0.05, CompletionPrice: 0.50, Description: "Redirects to the latest DeepSeek Flash family with 1M context"},
+		{ID: "deepseek/deepseek-r1", Name: "DeepSeek: R1 (Reasoning)", ContextLength: 164000, PromptPrice: 0.55, CompletionPrice: 2.19, Description: "Open-weights reasoning model rivaling OpenAI o1"},
+		{ID: "anthropic/claude-sonnet-4.5", Name: "Anthropic: Claude Sonnet 4.5", ContextLength: 200000, PromptPrice: 3.0, CompletionPrice: 15.0, Description: "Flagship intelligence for code, reasoning and orchestrations"},
+		{ID: "google/gemini-2.0-flash-001", Name: "Google: Gemini 2.0 Flash", ContextLength: 1048576, PromptPrice: 0.10, CompletionPrice: 0.40, Description: "Next-gen multimodal, ultra-fast latency and 1M context"},
+		{ID: "openai/gpt-4o", Name: "OpenAI: GPT-4o", ContextLength: 128000, PromptPrice: 2.50, CompletionPrice: 10.0, Description: "Omni model for complex text and vision tasks"},
+		{ID: "openai/gpt-4o-mini", Name: "OpenAI: GPT-4o Mini", ContextLength: 128000, PromptPrice: 0.15, CompletionPrice: 0.60, Description: "Fast, cost-effective model for high volume tasks"},
+		{ID: "qwen/qwen-2.5-coder-32b-instruct", Name: "Qwen: Qwen 2.5 Coder 32B", ContextLength: 131072, PromptPrice: 0.12, CompletionPrice: 0.12, Description: "Code intelligence model competitive with GPT-4"},
+		{ID: "meta-llama/llama-3.3-70b-instruct", Name: "Meta: Llama 3.3 70B Instruct", ContextLength: 131072, PromptPrice: 0.20, CompletionPrice: 0.40, Description: "Open weights industry workhorse with 70B parameters"},
+	}
+	c.JSON(http.StatusOK, fallback)
 }

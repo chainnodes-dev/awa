@@ -26,7 +26,8 @@ FROM alpine:3.21
 # nodejs/npm: required to execute JS-based MCP servers (npx)
 # python3/py3-pip: required to execute Python-based MCP servers
 # bash/curl/gcompat: required for npx wrappers and glibc-compiled native binaries
-RUN apk add --no-cache ca-certificates tzdata nodejs npm python3 py3-pip bash curl gcompat \
+# poppler-utils: required for pdftotext extraction in read_file tool
+RUN apk add --no-cache ca-certificates tzdata nodejs npm python3 py3-pip bash curl gcompat poppler-utils \
     && pip install --break-system-packages uv
 
 WORKDIR /app

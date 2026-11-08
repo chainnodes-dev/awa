@@ -42,6 +42,10 @@ type GenerateRequest struct {
 	// Provider is an optional LLM provider name to use for this request, overriding
 	// the default provider.
 	Provider string `json:"provider,omitempty"`
+	// Model is an optional specific model slug (e.g. "anthropic/claude-sonnet-4.5").
+	Model string `json:"model,omitempty"`
+	// Tier is an optional generation profile tier ("frontier" | "balanced" | "fast").
+	Tier string `json:"tier,omitempty"`
 }
 
 // GenerateResult holds the LLM-generated workflow.
@@ -58,10 +62,11 @@ type GenerateResult struct {
 
 // Generator uses an LLM to produce WorkflowDef YAML from a plain-language description.
 type Generator struct {
-	provider llm.Provider
-	registry []MCPServerEntry
-	wfStore  store.WorkflowStore
-	prompts  *PromptManager
+	provider      llm.Provider
+	modelOverride string
+	registry      []MCPServerEntry
+	wfStore       store.WorkflowStore
+	prompts       *PromptManager
 }
 
 // NewGenerator creates a Generator backed by the given LLM provider.
@@ -76,14 +81,70 @@ func NewGenerator(provider llm.Provider, registry []MCPServerEntry, wfStore stor
 	}
 }
 
+// Provider returns the underlying LLM provider.
+func (g *Generator) Provider() llm.Provider {
+	if g == nil {
+		return nil
+	}
+	return g.provider
+}
+
+// ModelOverride returns the configured model override, if any.
+func (g *Generator) ModelOverride() string {
+	if g == nil {
+		return ""
+	}
+	return g.modelOverride
+}
+
 // WithProvider returns a shallow clone of the generator using a different LLM provider.
 func (g *Generator) WithProvider(p llm.Provider) *Generator {
-	return &Generator{
-		provider: p,
-		registry: g.registry,
-		wfStore:  g.wfStore,
-		prompts:  g.prompts,
+	if g == nil {
+		return nil
 	}
+	return &Generator{
+		provider:      p,
+		modelOverride: g.modelOverride,
+		registry:      g.registry,
+		wfStore:       g.wfStore,
+		prompts:       g.prompts,
+	}
+}
+
+// WithModel returns a clone of the generator with a specific model override.
+func (g *Generator) WithModel(model string) *Generator {
+	if g == nil {
+		return nil
+	}
+	return &Generator{
+		provider:      g.provider,
+		modelOverride: model,
+		registry:      g.registry,
+		wfStore:       g.wfStore,
+		prompts:       g.prompts,
+	}
+}
+
+// WithProviderAndModel returns a clone of the generator with a specific provider and model override.
+func (g *Generator) WithProviderAndModel(p llm.Provider, model string) *Generator {
+	if g == nil {
+		return nil
+	}
+	return &Generator{
+		provider:      p,
+		modelOverride: model,
+		registry:      g.registry,
+		wfStore:       g.wfStore,
+		prompts:       g.prompts,
+	}
+}
+
+// Complete executes an LLM completion, applying the generator's modelOverride if set.
+func (g *Generator) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
+	if g.modelOverride != "" && req.Model == "" {
+		req.Model = g.modelOverride
+	}
+	return g.provider.Complete(ctx, req)
 }
 
 func (g *Generator) GetPrompt(id string) string {
@@ -192,7 +253,7 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 	interaction = append(interaction, messages...)
 
 	// Call the LLM with the full conversation.
-	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+	resp, err := g.Complete(ctx, llm.CompletionRequest{
 		SystemPrompt: system,
 		Messages:     messages,
 		MaxTokens:    g.provider.MaxOutputTokens(),
@@ -215,7 +276,7 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*Generat
 		interaction = append(interaction, llm.Message{Role: "user", Content: retryMsg})
 
 		// Retry completion
-		resp, err = g.provider.Complete(ctx, llm.CompletionRequest{
+		resp, err = g.Complete(ctx, llm.CompletionRequest{
 			SystemPrompt: system,
 			Messages:     messages,
 			MaxTokens:    g.provider.MaxOutputTokens(),
@@ -287,7 +348,7 @@ func (g *Generator) DebugWorkflow(ctx context.Context, req DebugWorkflowRequest)
 		{Role: "user", Content: userMsg},
 	}
 
-	resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+	resp, err := g.Complete(ctx, llm.CompletionRequest{
 		SystemPrompt: system,
 		Messages:     messages,
 		MaxTokens:    g.provider.MaxOutputTokens(),

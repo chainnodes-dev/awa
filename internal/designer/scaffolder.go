@@ -48,7 +48,7 @@ func (g *Generator) Scaffold(ctx context.Context, req ScaffoldRequest) (*Scaffol
 	var lastRes *ScaffoldResult
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		resp, err := g.provider.Complete(ctx, llm.CompletionRequest{
+		resp, err := g.Complete(ctx, llm.CompletionRequest{
 			SystemPrompt: system,
 			Messages:     messages,
 			MaxTokens:    4096,

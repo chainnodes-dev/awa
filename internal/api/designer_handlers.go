@@ -11,6 +11,7 @@ import (
 
 	"github.com/asm-platform/asm/internal/auth"
 	"github.com/asm-platform/asm/internal/designer"
+	"github.com/asm-platform/asm/internal/executor/llm"
 	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/gin-gonic/gin"
@@ -315,10 +316,6 @@ func (h *Handlers) DiscoverMCPServer(c *gin.Context) {
 // GenerateWorkflow calls the LLM to produce a WorkflowDef from a description.
 // POST /api/v1/designer/generate
 func (h *Handlers) GenerateWorkflow(c *gin.Context) {
-	if h.generator == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
-		return
-	}
 	var req designer.GenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -328,7 +325,12 @@ func (h *Handlers) GenerateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Local models cannot be used for AI workflow generation"})
 		return
 	}
-	result, err := h.generator.Generate(c.Request.Context(), req)
+	gen := h.resolveDesignerGenerator(c.Request.Context(), req.Tier, req.Model, req.Provider)
+	if gen == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
+		return
+	}
+	result, err := gen.Generate(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -373,13 +375,14 @@ func (h *Handlers) CodegenHandler(c *gin.Context) {
 
 // ProcessAnalyseHandler decomposes a process description.
 func (h *Handlers) ProcessAnalyseHandler(c *gin.Context) {
-	if h.generator == nil {
+	var req designer.ProcessAnalyseRequest
+	_ = c.ShouldBindJSON(&req)
+	gen := h.resolveDesignerGenerator(c.Request.Context(), req.Tier, req.Model, req.Provider)
+	if gen == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
 		return
 	}
-	var req designer.ProcessAnalyseRequest
-	_ = c.ShouldBindJSON(&req)
-	result, err := h.generator.AnalyseProcess(c.Request.Context(), req)
+	result, err := gen.AnalyseProcess(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -408,16 +411,65 @@ func (h *Handlers) ProcessSummariseHandler(c *gin.Context) {
 
 // ── Multi-step pipeline handlers ─────────────────────────────────────────────
 
-func (h *Handlers) pipelineGeneratorFor(req designer.PipelineRequest) *designer.Generator {
+func (h *Handlers) resolveDesignerGenerator(ctx context.Context, tier, model, provider string) *designer.Generator {
 	if h.generator == nil {
 		return nil
 	}
-	if req.Provider != "" && req.Provider != "ollama" {
-		if p, err := h.llmRegistry.Get(req.Provider); err == nil {
-			return h.generator.WithProvider(p)
+
+	// 1. Fetch designer profiles (defaults merged with system_settings)
+	profiles := llm.DefaultDesignerProfiles()
+	if raw, err := h.store.GetSystemSetting(ctx, "llm_designer_profiles"); err == nil && raw != "" {
+		var custom map[string]llm.ModelProfile
+		if err := json.Unmarshal([]byte(raw), &custom); err == nil {
+			for k, v := range custom {
+				profiles[k] = v
+			}
 		}
 	}
-	return h.generator
+
+	resolvedProvider := strings.TrimSpace(provider)
+	resolvedModel := strings.TrimSpace(model)
+
+	// 2. If a custom model is explicitly provided, use it directly
+	if resolvedModel != "" {
+		if resolvedProvider == "" {
+			if _, err := h.llmRegistry.Get("openrouter"); err == nil {
+				resolvedProvider = "openrouter"
+			}
+		}
+	} else {
+		// 3. Resolve by tier: "frontier" | "balanced" | "fast", defaulting to "balanced"
+		selectedTier := strings.ToLower(strings.TrimSpace(tier))
+		if selectedTier == "" {
+			selectedTier = "balanced"
+		}
+
+		prof, ok := profiles[selectedTier]
+		if !ok {
+			prof = profiles["balanced"]
+		}
+		if resolvedProvider == "" {
+			resolvedProvider = prof.Provider
+		}
+		resolvedModel = prof.Model
+	}
+
+	// 4. Retrieve provider from registry
+	var targetProvider llm.Provider
+	if resolvedProvider != "" && resolvedProvider != "ollama" {
+		if p, err := h.llmRegistry.Get(resolvedProvider); err == nil {
+			targetProvider = p
+		}
+	}
+	if targetProvider == nil {
+		targetProvider = h.generator.Provider()
+	}
+
+	return h.generator.WithProviderAndModel(targetProvider, resolvedModel)
+}
+
+func (h *Handlers) pipelineGeneratorFor(ctx context.Context, req designer.PipelineRequest) *designer.Generator {
+	return h.resolveDesignerGenerator(ctx, req.Tier, req.Model, req.Provider)
 }
 
 func writePipelineResult(c *gin.Context, result *designer.PipelineStepResult, err error) {
@@ -432,7 +484,7 @@ func writePipelineResult(c *gin.Context, result *designer.PipelineStepResult, er
 func (h *Handlers) PipelineDecomposeHandler(c *gin.Context) {
 	var req designer.PipelineRequest
 	_ = c.ShouldBindJSON(&req)
-	gen := h.pipelineGeneratorFor(req)
+	gen := h.pipelineGeneratorFor(c.Request.Context(), req)
 	if gen == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
 		return
@@ -444,7 +496,7 @@ func (h *Handlers) PipelineDecomposeHandler(c *gin.Context) {
 func (h *Handlers) PipelineCategoriseHandler(c *gin.Context) {
 	var req designer.PipelineRequest
 	_ = c.ShouldBindJSON(&req)
-	gen := h.pipelineGeneratorFor(req)
+	gen := h.pipelineGeneratorFor(c.Request.Context(), req)
 	if gen == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
 		return
@@ -456,7 +508,7 @@ func (h *Handlers) PipelineCategoriseHandler(c *gin.Context) {
 func (h *Handlers) PipelineWireHandler(c *gin.Context) {
 	var req designer.PipelineRequest
 	_ = c.ShouldBindJSON(&req)
-	gen := h.pipelineGeneratorFor(req)
+	gen := h.pipelineGeneratorFor(c.Request.Context(), req)
 	if gen == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
 		return
@@ -468,7 +520,7 @@ func (h *Handlers) PipelineWireHandler(c *gin.Context) {
 func (h *Handlers) PipelineImplementHandler(c *gin.Context) {
 	var req designer.PipelineRequest
 	_ = c.ShouldBindJSON(&req)
-	gen := h.pipelineGeneratorFor(req)
+	gen := h.pipelineGeneratorFor(c.Request.Context(), req)
 	if gen == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI workflow generation is not available"})
 		return
