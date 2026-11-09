@@ -145,6 +145,37 @@
           <!-- Task Resolution + Blackboard Tweak Sidebar -->
           <div class="w-96 flex flex-col overflow-hidden bg-surface-1/30 border-l border-border">
             <div class="flex-1 overflow-y-auto p-4 space-y-6">
+              <!-- Guest Portal Link Section -->
+              <div v-if="selectedTask.guest_portal_url" class="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl space-y-2">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5 text-xs font-semibold text-indigo-400">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                    <span>Guest Portal Link</span>
+                  </div>
+                  <button
+                    @click="copyGuestLink(selectedTask.guest_portal_url)"
+                    class="text-[11px] font-medium text-indigo-300 hover:text-white px-2 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/30 transition-colors"
+                  >
+                    {{ copied ? 'Copied!' : 'Copy Link' }}
+                  </button>
+                </div>
+                <p class="text-[11px] text-text-muted leading-tight">External guests can submit this form without an account.</p>
+              </div>
+              <div v-else class="flex justify-end">
+                <button
+                  @click="generateGuestLink"
+                  :disabled="generatingGuestLink"
+                  class="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 btn-ghost p-1"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                  </svg>
+                  <span>{{ generatingGuestLink ? 'Generating...' : 'Create Guest Portal Link' }}</span>
+                </button>
+              </div>
+
               <!-- Task Form Section -->
               <div class="space-y-4">
                 <div class="flex items-center justify-between">
@@ -313,10 +344,37 @@ import { convertBlackboardSchemaToJsonSchema } from '@/utils/schema'
 import JsonSchemaForm from '@/components/monitor/JsonSchemaForm.vue'
 import BlackboardEditor from '@/components/monitor/BlackboardEditor.vue'
 
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, api } from '@/stores/auth'
 const execStore = useExecutionStore()
 const wfStore = useWorkflowStore()
 const authStore = useAuthStore()
+
+const copied = ref(false)
+const generatingGuestLink = ref(false)
+
+function copyGuestLink(url) {
+  navigator.clipboard.writeText(url)
+  copied.value = true
+  setTimeout(() => { copied.value = false }, 2000)
+}
+
+async function generateGuestLink() {
+  if (!selectedTask.value) return
+  generatingGuestLink.value = true
+  try {
+    const res = await api.post(`/runs/${selectedTask.value.run_id}/guest-token`, {
+      title: `${selectedTask.value.workflow_name || 'Workflow'} - Action Required`,
+      expires_in: '168h'
+    })
+    if (res.data?.portal_url) {
+      selectedTask.value.guest_portal_url = res.data.portal_url
+    }
+  } catch (err) {
+    console.error('Failed to generate guest link', err)
+  } finally {
+    generatingGuestLink.value = false
+  }
+}
 
 const workflowDef = ref(null)
 

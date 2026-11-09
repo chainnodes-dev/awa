@@ -724,6 +724,18 @@ func (s *PostgresStore) CreateHITL(ctx context.Context, req *asmtypes.HITLReques
 	if req.ID == "" {
 		req.ID = uuid.NewString()
 	}
+	if req.Metadata == nil {
+		req.Metadata = make(map[string]interface{})
+	}
+	if req.GuestAccess {
+		req.Metadata["guest_access"] = true
+	}
+	if req.GuestPortalURL != "" {
+		req.Metadata["guest_portal_url"] = req.GuestPortalURL
+	}
+	if req.GuestToken != "" {
+		req.Metadata["guest_token"] = req.GuestToken
+	}
 	meta, _ := json.Marshal(req.Metadata)
 	fs, _ := json.Marshal(req.FormSchema)
 	_, err := s.pool.Exec(ctx, `
@@ -756,6 +768,17 @@ func (s *PostgresStore) GetHITL(ctx context.Context, runID string) (*asmtypes.HI
 	_ = json.Unmarshal(fs, &req.FormSchema)
 	_ = json.Unmarshal(bb, &req.Blackboard)
 	_ = json.Unmarshal(bbs, &req.BlackboardSchema)
+	if req.Metadata != nil {
+		if ga, ok := req.Metadata["guest_access"].(bool); ok {
+			req.GuestAccess = ga
+		}
+		if gpu, ok := req.Metadata["guest_portal_url"].(string); ok {
+			req.GuestPortalURL = gpu
+		}
+		if gt, ok := req.Metadata["guest_token"].(string); ok {
+			req.GuestToken = gt
+		}
+	}
 	return &req, nil
 }
 
@@ -824,6 +847,17 @@ func (s *PostgresStore) ListHITLs(ctx context.Context, filter HITLFilter) ([]*as
 		_ = json.Unmarshal(fs, &req.FormSchema)
 		_ = json.Unmarshal(bb, &req.Blackboard)
 		_ = json.Unmarshal(bbs, &req.BlackboardSchema)
+		if req.Metadata != nil {
+			if ga, ok := req.Metadata["guest_access"].(bool); ok {
+				req.GuestAccess = ga
+			}
+			if gpu, ok := req.Metadata["guest_portal_url"].(string); ok {
+				req.GuestPortalURL = gpu
+			}
+			if gt, ok := req.Metadata["guest_token"].(string); ok {
+				req.GuestToken = gt
+			}
+		}
 		out = append(out, &req)
 	}
 	return out, nil

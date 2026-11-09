@@ -1,13 +1,13 @@
 <template>
-  <!-- Show the full shell layout only when authenticated -->
-  <div v-if="authStore.isAuthenticated" class="flex h-screen overflow-hidden bg-surface-0">
+  <!-- Show the full shell layout only when authenticated and not on a public page -->
+  <div v-if="authStore.isAuthenticated && !route.meta.public" class="flex h-screen overflow-hidden bg-surface-0">
     <Sidebar />
     <div class="flex-1 flex flex-col min-w-0">
       <RouterView />
     </div>
   </div>
 
-  <!-- Public pages (Login) get the full viewport -->
+  <!-- Public pages (Login, Setup, PublicPortal) get the full viewport -->
   <RouterView v-else />
 </template>
 

@@ -107,6 +107,7 @@ type Store interface {
 	APIKeyStore
 	SystemSettingsStore
 	KnowledgeStore
+	GuestTokenStore
 	Close() error
 }
 

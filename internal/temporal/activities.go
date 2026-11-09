@@ -100,13 +100,80 @@ func (a *Activities) PublishEvent(ctx context.Context, p PublishEventParams) err
 	return a.Bus.Publish(ctx, events.New(p.EventType, json.RawMessage(raw)))
 }
 
-// CreateHITL persists a new HITL request to the store.
-func (a *Activities) CreateHITL(ctx context.Context, p CreateHITLParams) error {
+// CreateHITL persists a new HITL request to the store and mints a guest portal token if enabled.
+func (a *Activities) CreateHITL(ctx context.Context, p CreateHITLParams) (*CreateHITLResult, error) {
 	if p.Request.ID == "" {
 		p.Request.ID = uuid.NewString()
 	}
+
+	result := &CreateHITLResult{}
+
+	if p.GuestAccess {
+		p.Request.GuestAccess = true
+		tokenPlain, tokenHash, err := store.GenerateGuestToken()
+		if err != nil {
+			slog.Error("Failed to generate guest token", "run_id", p.Request.RunID, "error", err)
+		} else {
+			ttl := 7 * 24 * time.Hour // default 7 days
+			if p.GuestExpiresIn != "" {
+				if d, parseErr := time.ParseDuration(p.GuestExpiresIn); parseErr == nil && d > 0 {
+					ttl = d
+				}
+			}
+
+			title := p.GuestTitle
+			if title == "" {
+				if t, ok := p.Request.FormSchema["title"].(string); ok && t != "" {
+					title = t
+				} else {
+					title = fmt.Sprintf("Action Required: %s", p.Request.StateName)
+				}
+			}
+
+			desc := p.GuestDescription
+			if desc == "" {
+				if d, ok := p.Request.FormSchema["description"].(string); ok && d != "" {
+					desc = d
+				}
+			}
+
+			baseURL := os.Getenv("BASE_URL")
+			if baseURL == "" {
+				baseURL = "http://localhost:8080"
+			}
+			portalURL := fmt.Sprintf("%s/portal/%s/%s", strings.TrimRight(baseURL, "/"), p.Request.RunID, tokenPlain)
+
+			gt := &store.GuestToken{
+				ID:          uuid.NewString(),
+				TenantID:    p.TenantID,
+				RunID:       p.Request.RunID,
+				StateName:   p.Request.StateName,
+				TokenHash:   tokenHash,
+				ExpiresAt:   time.Now().Add(ttl),
+				Status:      "active",
+				Title:       title,
+				Description: desc,
+				FormSchema:  p.Request.FormSchema,
+				Metadata: map[string]interface{}{
+					"workflow_name":    p.Request.WorkflowName,
+					"workflow_version": p.Request.WorkflowVersion,
+				},
+				CreatedAt: time.Now(),
+			}
+
+			if err := a.Store.CreateGuestToken(ctx, gt); err != nil {
+				slog.Error("Failed to save guest token", "run_id", p.Request.RunID, "error", err)
+			} else {
+				p.Request.GuestPortalURL = portalURL
+				p.Request.GuestToken = tokenPlain
+				result.GuestPortalURL = portalURL
+				result.GuestToken = tokenPlain
+			}
+		}
+	}
+
 	if err := a.Store.CreateHITL(ctx, p.Request); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Notify the UI that we are waiting for human input.
@@ -133,7 +200,7 @@ func (a *Activities) CreateHITL(ctx context.Context, p CreateHITLParams) error {
 		}
 	}
 
-	return nil
+	return result, nil
 }
 
 func (a *Activities) sendSlackNotification(ctx context.Context, tenantID, hitlID string, n *asmtypes.HITLNotify) error {

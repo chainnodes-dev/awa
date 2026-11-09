@@ -282,6 +282,7 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 					BlackboardSchema: p.Def.Blackboard.Schema,
 					WorkflowName:     p.Def.Metadata.Name,
 					WorkflowVersion:  p.Def.Metadata.Version,
+					GuestAccess:      state.GuestAccess,
 				}
 				waitDur := 24 * time.Hour
 				if state.Timeout != "" {
@@ -291,11 +292,21 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 						hitlReq.TimeoutAt = &t
 					}
 				}
+				var hitlRes CreateHITLResult
 				_ = workflow.ExecuteActivity(shortOpts, (*Activities).CreateHITL, CreateHITLParams{
-					Request:  hitlReq,
-					Notify:   state.Notify,
-					TenantID: p.TenantID,
-				}).Get(bCtx, nil)
+					Request:          hitlReq,
+					Notify:           state.Notify,
+					TenantID:         p.TenantID,
+					GuestAccess:      state.GuestAccess,
+					GuestExpiresIn:   state.GuestExpiresIn,
+					GuestTitle:       state.GuestTitle,
+					GuestDescription: state.GuestDescription,
+				}).Get(bCtx, &hitlRes)
+
+				if hitlRes.GuestPortalURL != "" {
+					bb["_guest_portal_url"] = hitlRes.GuestPortalURL
+					bb["_guest_token"] = hitlRes.GuestToken
+				}
 
 				var trigger string
 				selector := workflow.NewSelector(bCtx)

@@ -131,6 +131,11 @@ type StateDef struct {
 	// FormSchema is an optional JSON Schema used to render a custom input form
 	// in the dashboard when type == "hitl".
 	FormSchema map[string]interface{} `yaml:"form_schema,omitempty" json:"form_schema,omitempty"`
+	// GuestAccess enables public unauthenticated access via a secure single-use portal token.
+	GuestAccess      bool   `yaml:"guest_access,omitempty"       json:"guest_access,omitempty"`
+	GuestExpiresIn   string `yaml:"guest_expires_in,omitempty"   json:"guest_expires_in,omitempty"` // e.g. "72h", "7d", default "168h" (7 days)
+	GuestTitle       string `yaml:"guest_title,omitempty"        json:"guest_title,omitempty"`
+	GuestDescription string `yaml:"guest_description,omitempty"  json:"guest_description,omitempty"`
 	// Notify is the optional ChatOps integration settings.
 	Notify *HITLNotify `yaml:"notify,omitempty" json:"notify,omitempty"`
 	IsTimeoutNode bool `yaml:"is_timeout_node,omitempty" json:"is_timeout_node,omitempty"`

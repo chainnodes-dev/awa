@@ -49,6 +49,8 @@ type MemoryStore struct {
 	systemSettings map[string]string
 	knowledgeDocs   map[string]*KnowledgeDocument // key: id
 	knowledgeChunks map[string]*KnowledgeChunk    // key: id
+	guestTokens       map[string]*GuestToken       // key: id
+	guestTokensByHash map[string]string            // hash → id
 }
 
 type defEntry struct {
@@ -77,6 +79,8 @@ func NewMemoryStore() *MemoryStore {
 		systemSettings: make(map[string]string),
 		knowledgeDocs:   make(map[string]*KnowledgeDocument),
 		knowledgeChunks: make(map[string]*KnowledgeChunk),
+		guestTokens:       make(map[string]*GuestToken),
+		guestTokensByHash: make(map[string]string),
 	}
 }
 

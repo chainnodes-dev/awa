@@ -46,6 +46,15 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 		// Internal Event Sync (from worker to server)
 		v1.POST("/internal/events", h.PublishInternalEvent)
 
+		// Public Guest Portal (Token-Gated, No Auth Required)
+		portal := v1.Group("/portal/:run_id/:token")
+		{
+			portal.GET("", h.GetPortalForm)
+			portal.POST("/upload", h.UploadPortalFile)
+			portal.GET("/files/:id/:filename", h.GetPortalFile)
+			portal.POST("/submit", h.SubmitPortalForm)
+		}
+
 		// 2. PROTECTED API (Requires JWT)
 		protected := v1.Group("", auth.RequireAuth(jwtSvc))
 		{
@@ -83,6 +92,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 				runs.POST("", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.StartRun)
 				runs.POST("/:id/trigger", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.TriggerRun)
 				runs.POST("/:id/signal", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.SignalHITL)
+				runs.POST("/:id/guest-token", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.GenerateRunGuestToken)
 				runs.POST("/:id/chat", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.SendChat)
 				runs.POST("/:id/terminate", auth.RequireRole(auth.RoleAdmin, auth.RoleRunner, auth.RoleOperator), h.TerminateRun)
 				runs.DELETE("/:id", auth.RequireRole(auth.RoleAdmin), h.DeleteRun)

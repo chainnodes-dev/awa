@@ -72,9 +72,19 @@ type PublishEventParams struct {
 
 // CreateHITLParams is the activity input for creating a HITL request.
 type CreateHITLParams struct {
-	Request  *asmtypes.HITLRequest
-	Notify   *asmtypes.HITLNotify
-	TenantID string
+	Request          *asmtypes.HITLRequest
+	Notify           *asmtypes.HITLNotify
+	TenantID         string
+	GuestAccess      bool
+	GuestExpiresIn   string
+	GuestTitle       string
+	GuestDescription string
+}
+
+// CreateHITLResult contains the generated guest link details if guest access is enabled.
+type CreateHITLResult struct {
+	GuestPortalURL string `json:"guest_portal_url,omitempty"`
+	GuestToken     string `json:"guest_token,omitempty"`
 }
 
 // ExecuteAgentParams is the activity input for running an LLM agent.

@@ -15,6 +15,12 @@ const routes = [
     meta: { public: true, title: 'Initial Setup' }
   },
   {
+    path: '/portal/:run_id/:token',
+    name: 'PublicPortal',
+    component: () => import('@/views/PublicPortal.vue'),
+    meta: { public: true, title: 'Portal Form' }
+  },
+  {
     path: '/',
     redirect: '/dashboard'
   },

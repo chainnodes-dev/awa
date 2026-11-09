@@ -58,6 +58,9 @@ type HITLRequest struct {
 	Resolver         string                 `json:"resolver,omitempty"`
 	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 	FormSchema       map[string]interface{} `json:"form_schema,omitempty"`
+	GuestAccess      bool                   `json:"guest_access,omitempty"`
+	GuestPortalURL   string                 `json:"guest_portal_url,omitempty"`
+	GuestToken       string                 `json:"guest_token,omitempty"`
 	Blackboard       map[string]interface{} `json:"blackboard,omitempty"`
 	BlackboardSchema map[string]FieldDef    `json:"blackboard_schema,omitempty"`
 	WorkflowName     string                 `json:"workflow_name,omitempty"`
