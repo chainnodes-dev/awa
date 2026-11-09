@@ -43,6 +43,15 @@ type Config struct {
 	EmbeddingModel   string
 	EmbeddingDim     int
 
+	// Inbound Email & IMAP
+	IMAPHost         string
+	IMAPPort         int
+	IMAPUsername     string
+	IMAPPassword     string
+	IMAPMailbox      string
+	IMAPUseTLS       bool
+	IMAPPollInterval string // e.g. "60s"
+
 	// Auth
 	JWTSecret     string // HS256 signing key — must be set in production
 	AdminUsername string // seed admin username on first boot
@@ -92,6 +101,13 @@ func Load() *Config {
 		EmbeddingBaseURL:  getEnv("EMBEDDING_BASE_URL", ""),
 		EmbeddingModel:    getEnv("EMBEDDING_MODEL", "text-embedding-3-small"),
 		EmbeddingDim:      getEnvInt("EMBEDDING_DIM", 1536),
+		IMAPHost:         getEnv("IMAP_HOST", ""),
+		IMAPPort:         getEnvInt("IMAP_PORT", 993),
+		IMAPUsername:     getEnv("IMAP_USERNAME", ""),
+		IMAPPassword:     getEnv("IMAP_PASSWORD", ""),
+		IMAPMailbox:      getEnv("IMAP_MAILBOX", "INBOX"),
+		IMAPUseTLS:       getEnv("IMAP_USE_TLS", "true") == "true",
+		IMAPPollInterval: getEnv("IMAP_POLL_INTERVAL", "60s"),
 	}
 }
 

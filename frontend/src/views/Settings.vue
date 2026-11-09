@@ -16,6 +16,12 @@
                     style="background-color: activeTab === 'general' ? 'var(--color-accent)' : 'transparent'">
               General
             </button>
+            <button @click="activeTab = 'email'" 
+                    :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
+                             activeTab === 'email' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
+                    style="background-color: activeTab === 'email' ? 'var(--color-accent)' : 'transparent'">
+              Inbound Email
+            </button>
             <button @click="activeTab = 'local_models'" 
                     :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
                              activeTab === 'local_models' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
@@ -349,6 +355,315 @@
               </button>
            </div>
          </section>
+      </div>
+
+      <!-- Inbound Email & Workplace Connectors Tab -->
+      <div v-if="activeTab === 'email'" class="flex-1 px-6 py-6 max-w-4xl w-full mx-auto space-y-6">
+        <!-- Header Banner -->
+        <div class="card p-5 border border-indigo-500/20 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Dual-Channel Inbound Email Engine</span>
+                <span class="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">Active &amp; Ready</span>
+              </div>
+              <p class="text-xs text-text-muted max-w-2xl leading-relaxed">
+                Ingest emails via HTTP Webhooks (SendGrid, Mailgun, Postmark, Cloudflare) or automated background IMAP mailbox polling. 
+                MIME bodies, plaintext, HTML, and binary attachments are automatically extracted to platform storage (<code class="text-[11px] font-mono text-indigo-300">data/uploads/</code>) and dispatched to workflow triggers and wait states.
+              </p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <router-link to="/mcp-servers" class="btn-ghost text-xs border border-border px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-text-muted hover:text-text">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/>
+                </svg>
+                <span>View MCP Servers</span>
+              </router-link>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Inbound Webhook Endpoints -->
+        <section class="space-y-4">
+          <div class="flex items-center justify-between px-1">
+            <div class="flex items-center gap-2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+              </svg>
+              <h2 class="text-sm font-bold text-text uppercase tracking-wider">Inbound Webhook Endpoints</h2>
+            </div>
+            <span class="text-[10px] text-text-muted font-mono font-medium">Accepts JSON, RFC822 MIME, Multipart Form</span>
+          </div>
+
+          <div class="card p-5 space-y-4">
+            <!-- Tenant Scoped Endpoint -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="text-[10px] font-bold text-text-muted uppercase tracking-widest">Tenant Inbound Webhook (Recommended)</label>
+                <span class="text-[9px] font-mono text-indigo-400 font-semibold">Tenant: {{ currentTenantId }}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="input text-xs font-mono flex-1 bg-surface-2 text-text select-all overflow-x-auto whitespace-nowrap py-2 px-3 border border-border rounded-lg">
+                  {{ tenantWebhookUrl }}
+                </div>
+                <button
+                  @click="copyToClipboard(tenantWebhookUrl, 'tenant')"
+                  class="btn-primary text-xs px-3.5 py-2 shrink-0 flex items-center gap-1.5"
+                >
+                  <svg v-if="copiedTarget === 'tenant'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="text-emerald-400">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                  <span>{{ copiedTarget === 'tenant' ? 'Copied!' : 'Copy URL' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Global Inbound Webhook -->
+            <div class="space-y-1.5 pt-2 border-t border-border/50">
+              <div class="flex items-center justify-between">
+                <label class="text-[10px] font-bold text-text-muted uppercase tracking-widest">Global Webhook Endpoint</label>
+                <span class="text-[9px] text-text-muted">Resolves tenant from email headers or default context</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="input text-xs font-mono flex-1 bg-surface-2 text-text select-all overflow-x-auto whitespace-nowrap py-2 px-3 border border-border rounded-lg opacity-80">
+                  {{ globalWebhookUrl }}
+                </div>
+                <button
+                  @click="copyToClipboard(globalWebhookUrl, 'global')"
+                  class="btn-ghost text-xs px-3.5 py-2 border border-border shrink-0 flex items-center gap-1.5 hover:bg-surface-2"
+                >
+                  <svg v-if="copiedTarget === 'global'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="text-emerald-400">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                  <span>{{ copiedTarget === 'global' ? 'Copied!' : 'Copy URL' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Provider Integration Guides -->
+            <div class="space-y-3 pt-3 border-t border-border">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-text uppercase tracking-wider">Provider Setup Guides</span>
+                <div class="flex items-center gap-1 bg-surface-2 p-1 rounded-lg border border-border text-[10px]">
+                  <button
+                    v-for="guide in emailGuides"
+                    :key="guide.id"
+                    @click="activeEmailGuide = guide.id"
+                    :class="['px-2.5 py-1 rounded-md font-medium transition-all', activeEmailGuide === guide.id ? 'bg-surface-0 text-text font-bold shadow-sm' : 'text-text-muted hover:text-text']"
+                  >
+                    {{ guide.name }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Guide Content Box -->
+              <div class="bg-surface-2/60 rounded-xl p-4 border border-border space-y-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="space-y-1">
+                    <h4 class="text-xs font-bold text-text flex items-center gap-2">
+                      <span>{{ currentGuide.title }}</span>
+                      <span class="badge text-[9px] bg-indigo-500/10 text-indigo-400 font-mono">{{ currentGuide.format }}</span>
+                    </h4>
+                    <p class="text-[11px] text-text-muted">{{ currentGuide.desc }}</p>
+                  </div>
+                  <button
+                    v-if="currentGuide.snippet"
+                    @click="copyToClipboard(currentGuide.snippet, 'snippet')"
+                    class="btn-ghost text-[10px] border border-border px-2.5 py-1 rounded flex items-center gap-1 text-text-muted hover:text-text shrink-0"
+                  >
+                    {{ copiedTarget === 'snippet' ? 'Copied' : 'Copy Snippet' }}
+                  </button>
+                </div>
+
+                <div v-if="currentGuide.steps" class="space-y-1.5 text-xs text-text-muted">
+                  <div v-for="(step, idx) in currentGuide.steps" :key="idx" class="flex items-start gap-2 text-[11px]">
+                    <span class="text-indigo-400 font-mono font-bold">{{ idx + 1 }}.</span>
+                    <span>{{ step }}</span>
+                  </div>
+                </div>
+
+                <pre v-if="currentGuide.snippet" class="p-3 bg-surface-0 rounded-lg border border-border text-[11px] font-mono text-text overflow-x-auto whitespace-pre leading-relaxed">{{ currentGuide.snippet }}</pre>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 2: IMAP Mailbox Poller -->
+        <section class="space-y-4">
+          <div class="flex items-center justify-between px-1">
+            <div class="flex items-center gap-2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+              <h2 class="text-sm font-bold text-text uppercase tracking-wider">IMAP Mailbox Poller (Direct Ingestion)</h2>
+            </div>
+            <span class="badge text-[9px] bg-surface-2 text-text-muted border border-border">RFC 3501 IMAP4rev1 TLS</span>
+          </div>
+
+          <div class="card p-5 space-y-4">
+            <p class="text-xs text-text-muted leading-relaxed">
+              When configured in <code class="text-[11px] font-mono text-indigo-300">.env</code> or container environment, the background IMAP worker connects securely over TLS, searches for <code class="font-mono text-text">UNSEEN</code> messages, downloads attachments directly into platform storage, marks emails as read (<code class="font-mono text-text">\Seen</code>), and fires <code class="font-mono text-indigo-300">email.inbound</code> events.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div class="p-3 bg-surface-2 rounded-lg border border-border space-y-1">
+                <span class="text-[10px] font-bold text-text-muted uppercase tracking-widest block">Environment Configuration</span>
+                <div class="space-y-1 font-mono text-[11px]">
+                  <div class="flex justify-between"><span class="text-indigo-400">IMAP_HOST</span><span class="text-text-muted">imap.gmail.com</span></div>
+                  <div class="flex justify-between"><span class="text-indigo-400">IMAP_PORT</span><span class="text-text-muted">993</span></div>
+                  <div class="flex justify-between"><span class="text-indigo-400">IMAP_USERNAME</span><span class="text-text-muted">agent@yourcompany.com</span></div>
+                  <div class="flex justify-between"><span class="text-indigo-400">IMAP_PASSWORD</span><span class="text-text-muted">app-password-secret</span></div>
+                  <div class="flex justify-between"><span class="text-indigo-400">IMAP_MAILBOX</span><span class="text-text-muted">INBOX</span></div>
+                  <div class="flex justify-between"><span class="text-indigo-400">IMAP_POLL_INTERVAL</span><span class="text-text-muted">30s</span></div>
+                </div>
+              </div>
+
+              <div class="p-3 bg-surface-2 rounded-lg border border-border space-y-2">
+                <span class="text-[10px] font-bold text-text-muted uppercase tracking-widest block">How IMAP Ingestion Works</span>
+                <ul class="text-[11px] text-text-muted space-y-1.5 list-disc list-inside">
+                  <li>Securely connects over implicit TLS on port 993.</li>
+                  <li>Executes <code class="font-mono text-text">SEARCH UNSEEN</code> to locate new messages.</li>
+                  <li>Fetches RFC822 literal stream and decodes MIME parts.</li>
+                  <li>Saves attachments to <code class="font-mono text-text">data/uploads/:id/:filename</code>.</li>
+                  <li>Flags message as <code class="font-mono text-text">\Seen</code> to prevent repeat loops.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 3: Workplace MCP Connectors -->
+        <section class="space-y-4">
+          <div class="flex items-center justify-between px-1">
+            <div class="flex items-center gap-2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+                <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1"/>
+                <path d="M18 8h4a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-4"/>
+                <circle cx="8" cy="12" r="2"/>
+              </svg>
+              <h2 class="text-sm font-bold text-text uppercase tracking-wider">Curated Workplace Connectors (MCP)</h2>
+            </div>
+            <router-link to="/mcp-servers" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">Browse All MCP Servers &rarr;</router-link>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Microsoft 365 Connector Card -->
+            <div class="card p-5 space-y-3 border border-border hover:border-indigo-500/40 transition-all flex flex-col justify-between">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-sm">M</span>
+                    <div>
+                      <h3 class="text-xs font-bold text-text">Microsoft 365 / Graph API</h3>
+                      <p class="text-[10px] text-text-muted font-mono">microsoft-365</p>
+                    </div>
+                  </div>
+                  <span class="badge text-[9px] bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">Catalog Ready</span>
+                </div>
+                <p class="text-xs text-text-muted">
+                  Full Microsoft Graph integration for Outlook mailboxes, calendar scheduling, OneDrive document management, and Teams messages. Supports OAuth2 &amp; Azure Entra ID app credentials.
+                </p>
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                  <span class="text-[9px] bg-surface-2 text-text-muted px-2 py-0.5 rounded font-mono">mail:read_write</span>
+                  <span class="text-[9px] bg-surface-2 text-text-muted px-2 py-0.5 rounded font-mono">calendar:events</span>
+                  <span class="text-[9px] bg-surface-2 text-text-muted px-2 py-0.5 rounded font-mono">files:onedrive</span>
+                </div>
+              </div>
+
+              <div class="pt-3 border-t border-border flex items-center justify-between">
+                <span class="text-[10px] text-text-muted">Transport: Stdio / Docker</span>
+                <router-link to="/mcp-servers" class="btn-primary text-xs px-3 py-1.5 flex items-center gap-1">
+                  <span>Install / Configure</span>
+                </router-link>
+              </div>
+            </div>
+
+            <!-- Google Workspace Connector Card -->
+            <div class="card p-5 space-y-3 border border-border hover:border-indigo-500/40 transition-all flex flex-col justify-between">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-sm">G</span>
+                    <div>
+                      <h3 class="text-xs font-bold text-text">Google Workspace</h3>
+                      <p class="text-[10px] text-text-muted font-mono">google-workspace</p>
+                    </div>
+                  </div>
+                  <span class="badge text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">Catalog Ready</span>
+                </div>
+                <p class="text-xs text-text-muted">
+                  Connects to Gmail, Google Calendar, Google Drive, Docs &amp; Sheets. Supports Google Cloud Service Account JSON credentials or user-interactive OAuth2 tokens.
+                </p>
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                  <span class="text-[9px] bg-surface-2 text-text-muted px-2 py-0.5 rounded font-mono">gmail:send_search</span>
+                  <span class="text-[9px] bg-surface-2 text-text-muted px-2 py-0.5 rounded font-mono">calendar:schedule</span>
+                  <span class="text-[9px] bg-surface-2 text-text-muted px-2 py-0.5 rounded font-mono">drive:docs</span>
+                </div>
+              </div>
+
+              <div class="pt-3 border-t border-border flex items-center justify-between">
+                <span class="text-[10px] text-text-muted">Transport: Stdio / Docker</span>
+                <router-link to="/mcp-servers" class="btn-primary text-xs px-3 py-1.5 flex items-center gap-1">
+                  <span>Install / Configure</span>
+                </router-link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 4: Workflow Automation Recipes -->
+        <section class="space-y-4">
+          <div class="flex items-center gap-2 px-1">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400">
+              <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+            </svg>
+            <h2 class="text-sm font-bold text-text uppercase tracking-wider">Workflow Implementation Examples</h2>
+          </div>
+
+          <div class="card p-5 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <h4 class="text-xs font-bold text-text">1. Automatic Inbound Trigger</h4>
+                <p class="text-[11px] text-text-muted">Start an automated workflow as soon as an email matches a recipient or subject filter:</p>
+                <pre class="p-3 bg-surface-2 rounded-lg text-[10px] font-mono text-text overflow-x-auto">triggers:
+  - type: email
+    filter:
+      to: "invoices@company.com"
+      subject_contains: "Invoice"
+steps:
+  - id: triage
+    action:
+      tool: knowledge:search
+      args:
+        query: "blackboard.email_body"</pre>
+              </div>
+
+              <div class="space-y-2">
+                <h4 class="text-xs font-bold text-text">2. Outbound Tool &amp; Wait State</h4>
+                <p class="text-[11px] text-text-muted">Send an outbound email and wait for customer or vendor response:</p>
+                <pre class="p-3 bg-surface-2 rounded-lg text-[10px] font-mono text-text overflow-x-auto">steps:
+  - id: send_quote
+    action:
+      tool: email:send
+      args:
+        to: ["client@example.com"]
+        subject: "Quote #5402"
+        body: "Please confirm approval."
+  - id: wait_reply
+    wait:
+      event: email.inbound
+      timeout: 72h</pre>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
       <!-- Secrets Management (Enterprise Feature) -->
@@ -713,18 +1028,123 @@
 
 <script setup>
 import { ref, computed, onMounted, reactive } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore, api } from '@/stores/auth'
 import { useLLMStore } from '@/stores/llm'
 import { useEnterpriseStore } from '@/stores/enterprise'
 import { useTheme } from '@/composables/useTheme'
 import CodeEditor from '@/components/designer/CodeEditor.vue'
 import CodeEditorModal from '@/components/designer/CodeEditorModal.vue'
-const activeTab = ref('general')
+
+const route = useRoute()
+const activeTab = ref(route.query?.tab || 'general')
 
 const authStore = useAuthStore()
 const llmStore = useLLMStore()
 const entStore = useEnterpriseStore()
 const { theme, setTheme } = useTheme()
+
+// --- Inbound Email & Workplace Connectors ---
+const currentTenantId = computed(() => authStore.user?.tenant_id || 'default')
+const tenantWebhookUrl = computed(() => {
+  if (typeof window === 'undefined') return '/api/v1/webhooks/inbound-email/default'
+  return `${window.location.origin}/api/v1/webhooks/inbound-email/${currentTenantId.value}`
+})
+const globalWebhookUrl = computed(() => {
+  if (typeof window === 'undefined') return '/api/v1/webhooks/inbound-email'
+  return `${window.location.origin}/api/v1/webhooks/inbound-email`
+})
+
+const copiedTarget = ref(null)
+function copyToClipboard(text, target) {
+  if (!text) return
+  if (navigator?.clipboard?.writeText) {
+    navigator.clipboard.writeText(text)
+  }
+  copiedTarget.value = target
+  setTimeout(() => {
+    if (copiedTarget.value === target) copiedTarget.value = null
+  }, 2000)
+}
+
+const activeEmailGuide = ref('sendgrid')
+const emailGuides = [
+  { id: 'sendgrid', name: 'SendGrid' },
+  { id: 'mailgun', name: 'Mailgun' },
+  { id: 'postmark', name: 'Postmark' },
+  { id: 'cloudflare', name: 'Cloudflare' },
+  { id: 'curl', name: 'cURL / Test' },
+]
+
+const currentGuide = computed(() => {
+  const tUrl = tenantWebhookUrl.value
+  switch (activeEmailGuide.value) {
+    case 'sendgrid':
+      return {
+        title: 'SendGrid Inbound Parse Webhook',
+        format: 'multipart/form-data',
+        desc: 'SendGrid Inbound Parse parses inbound emails and POSTs standard multipart fields (from, to, subject, text, html, and attachments).',
+        steps: [
+          'Go to SendGrid Settings > Inbound Parse in your dashboard.',
+          'Add Host & Domain (e.g. parse.yourcompany.com with an MX record pointing to mx.sendgrid.net).',
+          `Set Destination URL to: ${tUrl}`,
+          'Check "POST the raw, full MIME message" (optional: ASM handles both parsed fields and raw MIME).'
+        ],
+        snippet: `# Test sending a SendGrid-style multipart payload\ncurl -X POST "${tUrl}" \\\n  -F "from=Alice <alice@example.com>" \\\n  -F "to=intake@company.com" \\\n  -F "subject=Vendor Quote Q4" \\\n  -F "text=Attached is the signed document."`
+      }
+    case 'mailgun':
+      return {
+        title: 'Mailgun Routing Webhook',
+        format: 'multipart/form-data',
+        desc: 'Mailgun forwards incoming messages matching specific email recipient patterns directly to your ASM webhook.',
+        steps: [
+          'In Mailgun, navigate to Receiving > Routes.',
+          'Create a new Route with expression: match_recipient(".*@inbound.yourdomain.com").',
+          `Add Action: forward("${tUrl}").`,
+          'Save Route. Incoming emails will immediately reach ASM and trigger workflows.'
+        ],
+        snippet: `# Test sending a Mailgun-style payload\ncurl -X POST "${tUrl}" \\\n  -F "sender=contractor@supplier.com" \\\n  -F "recipient=orders@company.com" \\\n  -F "subject=PO #8841 Confirmation" \\\n  -F "body-plain=Order confirmed. Delivery by Friday."`
+      }
+    case 'postmark':
+      return {
+        title: 'Postmark Inbound Webhook',
+        format: 'application/json',
+        desc: 'Postmark transforms emails into clean structured JSON payloads with Base64 encoded attachments.',
+        steps: [
+          'In Postmark, select your Server > Inbound.',
+          `Set Inbound Webhook URL to: ${tUrl}`,
+          'Enable "Include raw email in payload" if full RFC822 audit logs are desired.',
+          'Click "Check" to verify webhook delivery.'
+        ],
+        snippet: `curl -X POST "${tUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "From": "billing@saas.com",\n    "To": "accounts@company.com",\n    "Subject": "Monthly Invoice INV-2026",\n    "TextBody": "Thank you for your business. See attached invoice."\n  }'`
+      }
+    case 'cloudflare':
+      return {
+        title: 'Cloudflare Email Routing Worker',
+        format: 'message/rfc822 or JSON',
+        desc: 'Cloudflare Email Workers can stream the raw message directly to ASM with zero external dependencies.',
+        steps: [
+          'In Cloudflare Dashboard, configure Email Routing for your custom domain.',
+          'Create an Email Worker that captures email.raw and POSTs to ASM:',
+          `Worker target: ${tUrl}`
+        ],
+        snippet: `export default {\n  async email(message, env, ctx) {\n    const raw = await new Response(message.raw).arrayBuffer();\n    await fetch("${tUrl}", {\n      method: "POST",\n      headers: { "Content-Type": "message/rfc822" },\n      body: raw\n    });\n  }\n}`
+      }
+    case 'curl':
+    default:
+      return {
+        title: 'Direct HTTP / JSON Payload',
+        format: 'application/json',
+        desc: 'Send structured email events directly from any script, queue worker, or local simulator.',
+        steps: [
+          'POST JSON to the webhook URL with from, to, subject, and text/html.',
+          'Optionally include attachments as base64-encoded strings with filename and content_type.',
+          'ASM automatically writes attachments to platform storage and wakes matching wait states.'
+        ],
+        snippet: `curl -X POST "${tUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "from": "customer@acme.com",\n    "to": ["support@asm.local"],\n    "subject": "System Upgrade Inquiry",\n    "text": "Hi team, we would like to schedule an upgrade.",\n    "attachments": [\n      {\n        "filename": "specs.txt",\n        "content_type": "text/plain",\n        "content_base64": "SGVsbG8gV29ybGQ="\n      }\n    ]\n  }'`
+      }
+  }
+})
 
 const activePopoutId = ref(null)
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/asm-platform/asm/internal/auth"
 	"github.com/asm-platform/asm/internal/config"
+	"github.com/asm-platform/asm/internal/email"
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/health"
 	"github.com/asm-platform/asm/internal/mcp"
@@ -167,6 +168,10 @@ func testRouter(t *testing.T) testEnv {
 
 	mcpMgr := mcp.NewManager(s)
 	handlers := NewHandlers(&config.Config{}, eng, s, jwtSvc, nil, nil, nil, nil, nil, nil, mcpMgr, nil, nil) // nil generator, etc.
+	emailSvc := email.NewService(s, bus, func(ctx context.Context, tenantID, workflowName, version string, inputs map[string]interface{}) (*asmtypes.WorkflowRun, error) {
+		return eng.StartRun(store.WithTenantID(ctx, tenantID), workflowName, version, inputs)
+	})
+	handlers.SetEmailService(emailSvc)
 	router := gin.New()
 	registerRoutes(router, handlers, NewHub(bus), jwtSvc, health.New())
 

@@ -170,6 +170,7 @@ func main() {
 	knowledgeSvc := knowledge.NewService(s, cfg)
 	defer knowledgeSvc.Close()
 	exec.RegisterTool(tools.NewKnowledgeSearchTool(knowledgeSvc, ""))
+	exec.RegisterTool(tools.NewEmailSendTool())
 
 	acts := temporalpkg.NewActivities(s, bus, exec, temporalClient, verifier, secretMgr)
 	w := temporalpkg.NewWorker(temporalClient, cfg.TemporalTaskQueue, acts)

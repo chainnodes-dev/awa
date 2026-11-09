@@ -23,7 +23,33 @@ const (
 	HITLWaiting       = "hitl.waiting"
 	HITLResolved      = "hitl.resolved"
 	WorkflowEvent     = "workflow.event" // named event emitted by an emit_event state
+	EmailInbound      = "email.inbound"  // inbound email received via webhook or IMAP
 )
+
+// InboundEmailPayload is emitted when a new email is ingested by the platform.
+type InboundEmailPayload struct {
+	TenantID    string            `json:"tenant_id"`
+	MessageID   string            `json:"message_id"`
+	From        string            `json:"from"`
+	To          []string          `json:"to"`
+	Cc          []string          `json:"cc,omitempty"`
+	Subject     string            `json:"subject"`
+	Date        time.Time         `json:"date"`
+	TextBody    string            `json:"text_body"`
+	HTMLBody    string            `json:"html_body,omitempty"`
+	Attachments []EmailAttachment `json:"attachments,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	Source      string            `json:"source"` // "webhook" | "imap"
+}
+
+// EmailAttachment describes a file attachment parsed from an inbound email.
+type EmailAttachment struct {
+	FileID      string `json:"file_id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Size        int64  `json:"size"`
+	URL         string `json:"url"`
+}
 
 // Event is the envelope for all platform events.
 //

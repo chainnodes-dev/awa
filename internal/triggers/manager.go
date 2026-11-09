@@ -55,10 +55,12 @@ func (m *Manager) AddWorkflow(ctx context.Context, tenantID string, def *asmtype
 		var err error
 
 		switch tDef.Type {
-		case "webhook":
-			// Webhooks don't need a background instance, they are purely reactive
-			// via the HandleWebhook method. We just store a dummy instance to track it.
+		case "webhook", "email", "email_inbound":
+			// Webhooks and inbound email don't need a background socket instance,
+			// they are reactive via the API webhook handler.
 			instance = &webhookTrigger{}
+		case "email_imap":
+			instance, err = newEmailIMAPTrigger(tenantID, def.Metadata.Name, def.Metadata.Version, tDef, m.store, m.secretMgr)
 		case "telegram":
 			instance, err = newTelegramTrigger(tenantID, def.Metadata.Name, def.Metadata.Version, tDef, m.store, m.secretMgr)
 		case "discord":

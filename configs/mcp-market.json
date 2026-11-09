@@ -1,5 +1,71 @@
 [
   {
+    "id": "microsoft-365",
+    "name": "microsoft-365",
+    "description": "Microsoft 365 Graph connector for Outlook Email, Calendar, and OneDrive/SharePoint files. Supports Azure App Registration service credentials and interactive OAuth.",
+    "icon": "mail",
+    "author": "Microsoft 365 / Graph",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-office365"
+    ],
+    "env_vars": [
+      {
+        "name": "AZURE_CLIENT_ID",
+        "description": "Azure App Registration Application (client) ID",
+        "required": true
+      },
+      {
+        "name": "AZURE_CLIENT_SECRET",
+        "description": "Azure App Registration Client Secret",
+        "required": true
+      },
+      {
+        "name": "AZURE_TENANT_ID",
+        "description": "Azure Directory (tenant) ID",
+        "required": true
+      },
+      {
+        "name": "AZURE_USER_ACCESS_TOKEN",
+        "description": "Optional delegated OAuth user access token",
+        "required": false
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://learn.microsoft.com/en-us/graph/overview"
+  },
+  {
+    "id": "google-workspace",
+    "name": "google-workspace",
+    "description": "Google Workspace connector for Gmail, Google Calendar events, and Google Drive files. Supports Google Service Account Key JSON and interactive user OAuth.",
+    "icon": "mail",
+    "author": "Google Workspace",
+    "category": "Productivity",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-google-workspace"
+    ],
+    "env_vars": [
+      {
+        "name": "GOOGLE_SERVICE_ACCOUNT_KEY",
+        "description": "Google Service Account credentials JSON string or path",
+        "required": true
+      },
+      {
+        "name": "GOOGLE_USER_ACCESS_TOKEN",
+        "description": "Optional delegated OAuth user access token",
+        "required": false
+      }
+    ],
+    "is_verified": true,
+    "doc_url": "https://developers.google.com/workspace"
+  },
+  {
     "id": "brave-search",
     "name": "brave-search",
     "description": "High-quality, private web search for real-time information.",

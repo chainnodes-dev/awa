@@ -37,6 +37,8 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 
 		// Webhook Triggers
 		v1.POST("/triggers/webhook/:tenant_id/:workflow_name/:version/:trigger_name", h.HandleWebhook)
+		v1.POST("/webhooks/inbound-email", h.InboundEmailWebhook)
+		v1.POST("/webhooks/inbound-email/:tenant_id", h.InboundEmailWebhook)
 		
 		// Headless HITL (ChatOps)
 		v1.POST("/hitl/:id/chat-resolve", h.HandleChatOpsResolve)

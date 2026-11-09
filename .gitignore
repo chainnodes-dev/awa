@@ -53,6 +53,7 @@ docs/internal/
 
 #upload-folder
 data/uploads
+**/data/uploads/
 
 # Website (VitePress)
 website/node_modules/

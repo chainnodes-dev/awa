@@ -13,6 +13,7 @@ import (
 	"github.com/asm-platform/asm/internal/auth"
 	"github.com/asm-platform/asm/internal/config"
 	"github.com/asm-platform/asm/internal/designer"
+	"github.com/asm-platform/asm/internal/email"
 	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor/llm"
@@ -66,6 +67,15 @@ type Handlers struct {
 	cfg             *config.Config
 	secretMgr       secrets.SecretManager
 	knowledgeSvc    *knowledge.Service
+	emailService    *email.Service
+}
+
+func (h *Handlers) GetEmailService() *email.Service {
+	return h.emailService
+}
+
+func (h *Handlers) SetEmailService(svc *email.Service) {
+	h.emailService = svc
 }
 
 func (h *Handlers) GetKnowledgeService() *knowledge.Service {

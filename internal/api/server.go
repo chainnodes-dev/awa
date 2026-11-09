@@ -13,6 +13,7 @@ import (
 	"github.com/asm-platform/asm/internal/auth"
 	"github.com/asm-platform/asm/internal/config"
 	"github.com/asm-platform/asm/internal/designer"
+	"github.com/asm-platform/asm/internal/email"
 	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor/llm"
@@ -31,6 +32,7 @@ type Server struct {
 	mcpMgr     *mcp.Manager
 	triggerMgr *triggers.Manager
 	secretMgr  secrets.SecretManager
+	emailSvc   *email.Service
 }
 
 func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, bus events.Bus, gen *designer.Generator, mcpEntries []designer.MCPServerEntry, checker *health.Checker, sched SchedulerAdder, llmReg *llm.Registry, secretMgr secrets.SecretManager) *Server {
@@ -99,6 +101,28 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 
 	handlers := NewHandlers(cfg, engine, s, jwtSvc, gen, mcpEntries, sched, llmReg, verifier, signer, mcpMgr, triggerMgr, secretMgr)
 
+	emailSvc := email.NewService(s, bus, func(ctx context.Context, tenantID, workflowName, version string, inputs map[string]interface{}) (*asmtypes.WorkflowRun, error) {
+		return engine.StartRun(store.WithTenantID(ctx, tenantID), workflowName, version, inputs)
+	})
+	handlers.SetEmailService(emailSvc)
+
+	// If global IMAP connection settings are provided, start the background mailbox poller
+	if cfg.IMAPHost != "" && cfg.IMAPUsername != "" {
+		imapCfg := email.IMAPConfig{
+			Host:     cfg.IMAPHost,
+			Port:     cfg.IMAPPort,
+			Username: cfg.IMAPUsername,
+			Password: cfg.IMAPPassword,
+			Mailbox:  cfg.IMAPMailbox,
+			UseTLS:   cfg.IMAPUseTLS,
+		}
+		if err := emailSvc.RegisterIMAPPoller(context.Background(), store.DefaultTenantID, imapCfg, cfg.IMAPPollInterval); err != nil {
+			slog.Error("Failed to start default IMAP poller", "host", cfg.IMAPHost, "error", err)
+		} else {
+			slog.Info("Default background IMAP poller started", "host", cfg.IMAPHost, "mailbox", cfg.IMAPMailbox)
+		}
+	}
+
 	router := gin.New()
 	router.MaxMultipartMemory = 64 << 20 // 64 MiB
 	router.Use(gin.Recovery())
@@ -126,6 +150,8 @@ func NewServer(cfg *config.Config, engine *orchestrator.Engine, s store.Store, b
 		hub:        hub,
 		mcpMgr:     mcpMgr,
 		triggerMgr: triggerMgr,
+		secretMgr:  secretMgr,
+		emailSvc:   emailSvc,
 	}
 }
 
@@ -134,6 +160,9 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.emailSvc != nil {
+		s.emailSvc.StopAll()
+	}
 	s.mcpMgr.Shutdown()
 	return s.httpServer.Shutdown(ctx)
 }
