@@ -60,7 +60,7 @@
         </div>
 
         <div v-if="loading" class="flex flex-col items-center justify-center py-20 gap-4">
-          <div class="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"/>
+          <div class="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
           <p class="text-xs text-text-muted font-mono uppercase tracking-widest animate-pulse">Syncing My Servers...</p>
         </div>
 
@@ -83,15 +83,15 @@
               <div class="flex items-start justify-between mb-2.5">
                 <div class="flex items-center gap-2.5 min-w-0">
                   <div class="relative shrink-0">
-                    <div v-if="healthStatus[srv.id] === 'online'" class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="Online"/>
-                    <div v-else-if="healthStatus[srv.id] === 'offline'" class="w-2.5 h-2.5 rounded-full bg-red-500" :title="healthError[srv.id] || 'Offline'"/>
-                    <div v-else-if="healthStatus[srv.id] === 'checking'" class="w-2.5 h-2.5 rounded-full bg-accent animate-pulse" title="Checking..."/>
-                    <div v-else class="w-2.5 h-2.5 rounded-full bg-slate-600" title="Not checked"/>
+                    <span v-if="healthStatus[srv.id] === 'online'" class="block w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="Online"></span>
+                    <span v-else-if="healthStatus[srv.id] === 'offline'" class="block w-2.5 h-2.5 rounded-full bg-red-500" :title="healthError[srv.id] || 'Offline'"></span>
+                    <span v-else-if="healthStatus[srv.id] === 'checking'" class="block w-2.5 h-2.5 rounded-full bg-accent animate-pulse" title="Checking..."></span>
+                    <span v-else class="block w-2.5 h-2.5 rounded-full bg-slate-600" title="Not checked"></span>
                   </div>
                   <h4 
                     class="font-bold text-[13px] text-text uppercase tracking-tight truncate cursor-pointer hover:text-indigo-400 transition-colors" 
                     :title="canManage ? 'Click to configure' : srv.name"
-                    @click="canManage ? openModal(srv) : null"
+                    @click="canManage && openModal(srv)"
                   >
                     {{ srv.name }}
                   </h4>
@@ -208,7 +208,7 @@
         </div>
 
         <div v-if="marketLoading" class="flex flex-col items-center justify-center py-20 gap-4">
-          <div class="w-8 h-8 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"/>
+          <div class="w-8 h-8 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div>
           <p class="text-xs text-text-muted font-mono uppercase tracking-widest animate-pulse">Syncing Curated List...</p>
         </div>
 
@@ -229,7 +229,7 @@
               <svg v-else-if="item.icon === 'hard-drive'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400"><rect x="2" y="2" width="20" height="20" rx="2" ry="2"/><path d="M2 12h20"/><path d="M6 16h.01"/><path d="M10 16h.01"/></svg>
               <svg v-else-if="item.icon === 'table'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-green-500"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
               <svg v-else-if="item.icon === 'cloud-sun'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-sky-400"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.947 12.65a4 4 0 0 0-5.925-4.128"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/></svg>
-              <div v-else class="text-2xl font-bold text-indigo-500">{{ item.name[0] }}</div>
+              <div v-else class="text-2xl font-bold text-indigo-500">{{ (item.name || '?')[0] }}</div>
             </div>
 
             <!-- Info -->
@@ -515,19 +515,4 @@ onMounted(() => {
 
 <style scoped>
 .font-display { font-family: 'Outfit', sans-serif; }
-.card {
-  @apply bg-surface-1 border border-border rounded-2xl overflow-hidden;
-}
-.btn-primary {
-  @apply bg-indigo-600 hover:bg-indigo-700 text-white border-none transition-all;
-}
-.btn-ghost {
-  @apply transition-colors;
-}
-.btn-ghost:hover {
-  background-color: var(--color-surface-2);
-}
-.input {
-  @apply w-full bg-surface-2 border border-border rounded-xl px-4 py-2 text-text focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none;
-}
 </style>

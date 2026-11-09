@@ -222,3 +222,4 @@ func (t *EmailSendTool) Execute(ctx context.Context, input json.RawMessage) (jso
 	})
 	return resBytes, nil
 }
+

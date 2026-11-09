@@ -158,3 +158,4 @@ func (p *IMAPPoller) pollOnce(ctx context.Context) error {
 
 	return nil
 }
+

@@ -213,3 +213,4 @@ func (c *IMAPClient) Close() error {
 	_, _ = c.execCommand("LOGOUT")
 	return c.conn.Close()
 }
+

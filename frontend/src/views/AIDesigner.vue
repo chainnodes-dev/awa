@@ -8,7 +8,7 @@
           <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
         </svg>
       </RouterLink>
-      <div class="w-px h-4 bg-border"/>
+      <span class="w-px h-4 bg-border"></span>
       <span class="text-sm font-medium text-text">{{ workflowName || 'New Workflow' }}</span>
       <!-- Version selector -->
       <template v-if="versions.length > 1">
@@ -23,9 +23,9 @@
         </select>
       </template>
       <span v-else-if="meta.versionNumber" class="text-xs text-text-muted font-mono">v{{ meta.versionNumber }}</span>
-      <div v-if="isDirty" class="w-1.5 h-1.5 rounded-full bg-amber-500" title="Unsaved changes"/>
+      <span v-if="isDirty" class="w-1.5 h-1.5 rounded-full bg-amber-500" title="Unsaved changes"></span>
 
-      <div class="flex-1"/>
+      <div class="flex-1"></div>
 
       <!-- Auto-layout -->
       <button
@@ -99,7 +99,7 @@
                 @dragstart="onDragStart($event, node)"
                 class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface-0 transition-colors group text-xs text-text hover:bg-surface-2 cursor-grab active:cursor-grabbing"
               >
-                <div :class="['w-2 h-2 rounded-full shrink-0', node.dot]"/>
+                <span :class="['w-2 h-2 rounded-full shrink-0', node.dot]"></span>
                 <span class="truncate flex-1">{{ node.label }}</span>
               </div>
             </div>
@@ -120,7 +120,7 @@
                 class="flex items-center gap-2 p-2 rounded-lg border border-cyan-500/25 bg-cyan-500/5 hover:bg-cyan-500/15 cursor-grab active:cursor-grabbing text-xs text-cyan-200 transition-colors group"
                 :title="srv.description || srv.name"
               >
-                <div class="w-2 h-2 rounded-full shrink-0 bg-cyan-400"/>
+                <span class="w-2 h-2 rounded-full shrink-0 bg-cyan-400"></span>
                 <span class="truncate flex-1 font-medium">{{ srv.name }}</span>
                 <span v-if="srv.tools?.length" class="text-[9px] text-cyan-400/80 font-mono px-1 py-0.5 rounded bg-cyan-500/15">
                   {{ srv.tools.length }} {{ srv.tools.length === 1 ? 'func' : 'funcs' }}
@@ -150,7 +150,7 @@
                   class="flex items-center gap-2 p-1.5 rounded-lg border border-teal-500/20 bg-teal-500/5 hover:bg-teal-500/10 cursor-grab active:cursor-grabbing text-xs text-teal-200 transition-colors group"
                   :title="comp.description || comp.name"
                 >
-                  <div class="w-1.5 h-1.5 rounded-full shrink-0 bg-teal-400"/>
+                  <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-teal-400"></span>
                   <span class="truncate flex-1 text-[11px] font-medium">{{ comp.name }}</span>
                   <span v-if="comp.version" class="text-[9px] text-teal-400/60 font-mono">v{{ comp.version }}</span>
                 </div>
@@ -169,7 +169,7 @@
                 @dragstart="onDragStart($event, node)"
                 class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface-0 hover:bg-surface-2 cursor-grab active:cursor-grabbing text-xs text-text transition-colors group"
               >
-                <div :class="['w-2 h-2 rounded-full shrink-0 bg-emerald-400']"/>
+                <span :class="['w-2 h-2 rounded-full shrink-0 bg-emerald-400']"></span>
                 <span class="truncate flex-1">{{ node.label }}</span>
               </div>
             </div>
@@ -212,7 +212,7 @@
         <div 
           class="h-1.5 shrink-0 bg-border hover:bg-violet-500/80 active:bg-violet-500 cursor-row-resize transition-colors select-none z-10"
           @mousedown="startResize"
-        />
+        ></div>
 
         <!-- Bottom Generate Panel (Takes remaining space) -->
         <div class="flex-1 flex flex-col min-h-0 min-w-0">
@@ -236,7 +236,7 @@
       <div 
         class="w-1.5 shrink-0 bg-border hover:bg-violet-500/80 active:bg-violet-500 cursor-col-resize transition-colors select-none z-10"
         @mousedown="startSidebarResize"
-      />
+      ></div>
 
       <!-- Right Sidebar: Properties & Config Panel -->
       <aside :style="{ width: sidebarWidth + 'px' }" class="border-l border-border flex flex-col overflow-hidden bg-surface-1 shrink-0">
@@ -435,8 +435,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, nextTick, shallowRef, markRaw } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
+import { ref, reactive, computed, onMounted, nextTick, shallowRef, markRaw } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background }  from '@vue-flow/background'
 import { Controls }    from '@vue-flow/controls'
@@ -463,7 +463,6 @@ import SchemaEditorModal    from '@/components/designer/SchemaEditorModal.vue'
 
 import { api }              from '@/stores/auth'
 import { useWorkflowStore } from '@/stores/workflows'
-import { useEnterpriseStore } from '@/stores/enterprise'
 import { useWorkflowIO }    from '@/composables/useWorkflowIO'
 import { useCanvasSync }    from '@/composables/useCanvasSync'
 import { useCanvasActions } from '@/composables/useCanvasActions'
@@ -472,7 +471,6 @@ import { useLayout }        from '@/composables/useLayout'
 const route   = useRoute()
 const router  = useRouter()
 const wfStore = useWorkflowStore()
-const entStore = useEnterpriseStore()
 const { fitView, project } = useVueFlow()
 const { layout }  = useLayout()
 
@@ -504,7 +502,6 @@ const bbSchema = reactive({})
 const versions = ref([])
 
 const view              = ref('canvas') // mock for useWorkflowIO
-const rightTab          = ref('properties')
 const yamlSource        = ref('')
 const yamlErrors        = ref([])
 const saving            = ref(false)
@@ -877,7 +874,7 @@ const {
   wfStore, router: customRouter
 })
 
-const { onYamlInput } = useCanvasSync({
+useCanvasSync({
   nodes, edges, meta, isDirty, view, yamlSource, yamlErrors,
   flowKey, fromLoad, loadDefinition, buildDefinition
 })

@@ -197,7 +197,10 @@ func (h *Handlers) PingMCPServer(c *gin.Context) {
 		}
 		resp.Body.Close()
 		c.JSON(http.StatusOK, gin.H{"status": "online", "http_status": resp.StatusCode, "latency_ms": latency})
+		return
 	}
+
+	c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": fmt.Sprintf("unsupported transport '%s'", srv.Transport)})
 }
 
 // DiscoverMCPServer connects to an MCP server and retrieves its tool list.

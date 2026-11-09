@@ -40,3 +40,4 @@ func TestEmailSendTool_SchemaAndSimulation(t *testing.T) {
 		t.Errorf("unexpected status: %v", resMap["status"])
 	}
 }
+

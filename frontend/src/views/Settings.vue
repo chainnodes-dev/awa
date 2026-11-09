@@ -13,31 +13,31 @@
             <button @click="activeTab = 'general'" 
                     :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
                              activeTab === 'general' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
-                    style="background-color: activeTab === 'general' ? 'var(--color-accent)' : 'transparent'">
+                    :style="activeTab === 'general' ? 'background-color: var(--color-accent)' : ''">
               General
             </button>
             <button @click="activeTab = 'email'" 
                     :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
                              activeTab === 'email' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
-                    style="background-color: activeTab === 'email' ? 'var(--color-accent)' : 'transparent'">
+                    :style="activeTab === 'email' ? 'background-color: var(--color-accent)' : ''">
               Inbound Email
             </button>
             <button @click="activeTab = 'local_models'" 
                     :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
                              activeTab === 'local_models' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
-                    style="background-color: activeTab === 'local_models' ? 'var(--color-accent)' : 'transparent'">
+                    :style="activeTab === 'local_models' ? 'background-color: var(--color-accent)' : ''">
               Local Models
             </button>
             <button @click="activeTab = 'secrets'" 
                     :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
                              activeTab === 'secrets' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
-                    style="background-color: activeTab === 'secrets' ? 'var(--color-accent)' : 'transparent'">
+                    :style="activeTab === 'secrets' ? 'background-color: var(--color-accent)' : ''">
               Secrets
             </button>
             <button @click="activeTab = 'prompts'" 
                     :class="['px-6 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all', 
                              activeTab === 'prompts' ? 'bg-accent text-white shadow-lg shadow-indigo-500/20' : 'text-text-muted hover:text-text']"
-                    style="background-color: activeTab === 'prompts' ? 'var(--color-accent)' : 'transparent'">
+                    :style="activeTab === 'prompts' ? 'background-color: var(--color-accent)' : ''">
               System Prompts
             </button>
           </div>
