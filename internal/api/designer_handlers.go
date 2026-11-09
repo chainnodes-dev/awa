@@ -41,6 +41,7 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 		Description string            `json:"description"`
 		DocURL      string            `json:"doc_url"`
 		Tools       []store.MCPTool   `json:"tools"`
+		Scopes      []string          `json:"scopes"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -66,6 +67,7 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 		Description: body.Description,
 		DocURL:      body.DocURL,
 		Tools:       body.Tools,
+		Scopes:      body.Scopes,
 		CreatedBy:   createdBy,
 	}
 	slog.Info("Creating MCP server", "name", srv.Name, "tools_count", len(srv.Tools))
@@ -81,6 +83,7 @@ func (h *Handlers) CreateMCPServer(c *gin.Context) {
 func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 	id := c.Param("id")
 	var body struct {
+		Name        string            `json:"name"`
 		Transport   string            `json:"transport"`
 		URL         string            `json:"url"`
 		Command     string            `json:"command"`
@@ -89,6 +92,7 @@ func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 		Description string            `json:"description"`
 		DocURL      string            `json:"doc_url"`
 		Tools       []store.MCPTool   `json:"tools"`
+		Scopes      []string          `json:"scopes"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -101,10 +105,15 @@ func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 		return
 	}
 
+	name := existing.Name
+	if body.Name != "" {
+		name = body.Name
+	}
+
 	srv := &store.MCPServer{
 		ID:          id,
 		TenantID:    existing.TenantID,
-		Name:        existing.Name, // Keep existing name
+		Name:        name,
 		Transport:   body.Transport,
 		URL:         body.URL,
 		Command:     body.Command,
@@ -113,13 +122,20 @@ func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 		Description: body.Description,
 		DocURL:      body.DocURL,
 		Tools:       body.Tools,
+		Scopes:      body.Scopes,
 		CreatedBy:   existing.CreatedBy,
 		CreatedAt:   existing.CreatedAt,
 	}
-	slog.Info("Updating MCP server", "id", srv.ID, "tools_count", len(srv.Tools))
+	slog.Info("Updating MCP server", "id", srv.ID, "name", srv.Name, "tools_count", len(srv.Tools))
 	if err := h.store.UpdateMCPServer(c.Request.Context(), srv); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	if h.mcpManager != nil {
+		h.mcpManager.StopClient(existing.Name)
+		if existing.Name != srv.Name {
+			h.mcpManager.StopClient(srv.Name)
+		}
 	}
 	c.JSON(http.StatusOK, srv)
 }
@@ -128,9 +144,13 @@ func (h *Handlers) UpdateMCPServer(c *gin.Context) {
 // DELETE /api/v1/mcp-servers/:id   (admin only)
 func (h *Handlers) DeleteMCPServer(c *gin.Context) {
 	id := c.Param("id")
+	existing, _ := h.store.GetMCPServer(c.Request.Context(), id)
 	if err := h.store.DeleteMCPServer(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
+	}
+	if existing != nil && h.mcpManager != nil {
+		h.mcpManager.StopClient(existing.Name)
 	}
 	c.JSON(http.StatusNoContent, nil)
 }

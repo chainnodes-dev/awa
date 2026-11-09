@@ -203,6 +203,20 @@ func (p *stdioProcess) Close() error {
 	return nil
 }
 
+func (m *Manager) StopClient(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	normName := store.NormalizeMCPServerName(name)
+	for srvName, p := range m.procs {
+		if store.NormalizeMCPServerName(srvName) == normName {
+			slog.Info("Stopping and clearing MCP client", "name", srvName)
+			_ = p.Close()
+			delete(m.procs, srvName)
+		}
+	}
+}
+
 func (m *Manager) Shutdown() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

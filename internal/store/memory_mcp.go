@@ -81,6 +81,8 @@ func (s *MemoryStore) UpdateMCPServer(_ context.Context, srv *MCPServer) error {
 	existing.EnvVars = srv.EnvVars
 	existing.Description = srv.Description
 	existing.DocURL = srv.DocURL
+	existing.Tools = srv.Tools
+	existing.Scopes = srv.Scopes
 	return nil
 }
 
