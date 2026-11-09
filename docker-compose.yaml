@@ -1,7 +1,7 @@
 services:
   # ── Infrastructure ─────────────────────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: chainnode-postgres
     environment:
       POSTGRES_USER: ${DB_USER:-chainnode}

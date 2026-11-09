@@ -1,7 +1,7 @@
 services:
   # ── Infrastructure ─────────────────────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: chainnode_db
     restart: unless-stopped
     environment:

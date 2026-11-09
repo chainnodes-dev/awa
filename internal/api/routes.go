@@ -187,6 +187,16 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			mixed.GET("/uploads/:id/:filename", h.GetUploadedFile)
 			mixed.POST("/invoke/:name", h.InvokeProcess)
 			mixed.GET("/invoke/:name/runs/:run_id", h.GetProcessInvocation)
+
+			// Vector RAG Knowledge Base
+			knowledge := mixed.Group("/knowledge")
+			{
+				knowledge.POST("/upload", h.UploadKnowledgeDocument)
+				knowledge.GET("/documents", h.ListKnowledgeDocuments)
+				knowledge.DELETE("/documents/:id", h.DeleteKnowledgeDocument)
+				knowledge.GET("/collections", h.ListKnowledgeCollections)
+				knowledge.POST("/search", h.SearchKnowledge)
+			}
 		}
 	}
 }

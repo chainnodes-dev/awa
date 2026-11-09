@@ -16,6 +16,7 @@ import (
 	"github.com/asm-platform/asm/internal/enterprise"
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor/llm"
+	"github.com/asm-platform/asm/internal/knowledge"
 	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/secrets"
@@ -64,6 +65,18 @@ type Handlers struct {
 	mcpEntries      []designer.MCPServerEntry
 	cfg             *config.Config
 	secretMgr       secrets.SecretManager
+	knowledgeSvc    *knowledge.Service
+}
+
+func (h *Handlers) GetKnowledgeService() *knowledge.Service {
+	if h.knowledgeSvc == nil {
+		h.knowledgeSvc = knowledge.NewService(h.store, h.cfg)
+	}
+	return h.knowledgeSvc
+}
+
+func (h *Handlers) SetKnowledgeService(svc *knowledge.Service) {
+	h.knowledgeSvc = svc
 }
 
 

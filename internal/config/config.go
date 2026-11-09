@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -35,6 +36,12 @@ type Config struct {
 	GrokKey     string // xAI Grok
 	DeepseekKey string // Deepseek
 	GeminiKey   string // Google AI Studio
+
+	// Embeddings & Vector RAG
+	EmbeddingAPIKey  string
+	EmbeddingBaseURL string
+	EmbeddingModel   string
+	EmbeddingDim     int
 
 	// Auth
 	JWTSecret     string // HS256 signing key — must be set in production
@@ -81,7 +88,20 @@ func Load() *Config {
 		MCPMarketSource:   getEnv("MCP_MARKET_SOURCE", "configs/mcp-market.json"),
 		NodeCatalogSource: getEnv("NODE_CATALOG_SOURCE", "configs/node-catalog.json"),
 		EnableTelemetry:   getEnv("ENABLE_TELEMETRY", "false") == "true",
+		EmbeddingAPIKey:   getEnv("EMBEDDING_API_KEY", ""),
+		EmbeddingBaseURL:  getEnv("EMBEDDING_BASE_URL", ""),
+		EmbeddingModel:    getEnv("EMBEDDING_MODEL", "text-embedding-3-small"),
+		EmbeddingDim:      getEnvInt("EMBEDDING_DIM", 1536),
 	}
+}
+
+func getEnvInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return fallback
 }
 
 func getEnv(key, fallback string) string {

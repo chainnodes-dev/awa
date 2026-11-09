@@ -67,6 +67,12 @@ const routes = [
     meta: { title: 'MCP Servers' }
   },
   {
+    path: '/knowledge',
+    name: 'KnowledgeBase',
+    component: () => import('@/views/KnowledgeBase.vue'),
+    meta: { title: 'Knowledge Base' }
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('@/views/Settings.vue'),

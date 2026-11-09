@@ -47,6 +47,8 @@ type MemoryStore struct {
 	auditLogs     []*AuditLog
 
 	systemSettings map[string]string
+	knowledgeDocs   map[string]*KnowledgeDocument // key: id
+	knowledgeChunks map[string]*KnowledgeChunk    // key: id
 }
 
 type defEntry struct {
@@ -73,6 +75,8 @@ func NewMemoryStore() *MemoryStore {
 		apiKeysByHash: make(map[string]string),
 		mcpLogs:       make(map[string][]*asmtypes.MCPAuditLog),
 		systemSettings: make(map[string]string),
+		knowledgeDocs:   make(map[string]*KnowledgeDocument),
+		knowledgeChunks: make(map[string]*KnowledgeChunk),
 	}
 }
 

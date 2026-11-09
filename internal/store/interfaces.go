@@ -106,6 +106,7 @@ type Store interface {
 	EventSubscriptionStore
 	APIKeyStore
 	SystemSettingsStore
+	KnowledgeStore
 	Close() error
 }
 

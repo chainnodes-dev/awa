@@ -17,12 +17,14 @@ import (
 	"github.com/asm-platform/asm/internal/events"
 	"github.com/asm-platform/asm/internal/executor"
 	"github.com/asm-platform/asm/internal/executor/llm"
+	"github.com/asm-platform/asm/internal/knowledge"
 	"github.com/asm-platform/asm/internal/logger"
 	"github.com/asm-platform/asm/internal/mcp"
 	"github.com/asm-platform/asm/internal/orchestrator"
 	"github.com/asm-platform/asm/internal/secrets"
 	"github.com/asm-platform/asm/internal/store"
 	temporalpkg "github.com/asm-platform/asm/internal/temporal"
+	"github.com/asm-platform/asm/internal/tools"
 )
 
 func main() {
@@ -165,6 +167,9 @@ func main() {
 	temporalEngine := temporalpkg.NewEngineClient(temporalClient, cfg.TemporalTaskQueue)
 	engine := orchestrator.NewEngine(s, bus, temporalEngine)
 	exec := executor.NewExecutor(llmRegistry, bus, s, activeLLMProvider, mcpManager, engine, secretMgr)
+	knowledgeSvc := knowledge.NewService(s, cfg)
+	defer knowledgeSvc.Close()
+	exec.RegisterTool(tools.NewKnowledgeSearchTool(knowledgeSvc, ""))
 
 	acts := temporalpkg.NewActivities(s, bus, exec, temporalClient, verifier, secretMgr)
 	w := temporalpkg.NewWorker(temporalClient, cfg.TemporalTaskQueue, acts)
