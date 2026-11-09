@@ -84,14 +84,14 @@
                 <div class="flex items-center gap-2.5 min-w-0">
                   <div class="relative shrink-0">
                     <div v-if="healthStatus[srv.id] === 'online'" class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" title="Online"/>
-                    <div v-else-if="healthStatus[srv.id] === 'offline'" class="w-2.5 h-2.5 rounded-full bg-red-500" title="Offline"/>
+                    <div v-else-if="healthStatus[srv.id] === 'offline'" class="w-2.5 h-2.5 rounded-full bg-red-500" :title="healthError[srv.id] || 'Offline'"/>
                     <div v-else-if="healthStatus[srv.id] === 'checking'" class="w-2.5 h-2.5 rounded-full bg-accent animate-pulse" title="Checking..."/>
                     <div v-else class="w-2.5 h-2.5 rounded-full bg-slate-600" title="Not checked"/>
                   </div>
                   <h4 
                     class="font-bold text-[13px] text-text uppercase tracking-tight truncate cursor-pointer hover:text-indigo-400 transition-colors" 
                     :title="canManage ? 'Click to configure' : srv.name"
-                    @click="canManage && openModal(srv)"
+                    @click="canManage ? openModal(srv) : null"
                   >
                     {{ srv.name }}
                   </h4>
@@ -220,7 +220,7 @@
           >
             <!-- Icon / Brand -->
             <div class="w-16 h-16 shrink-0 rounded-2xl bg-surface-2 flex items-center justify-center border border-border shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
-              <img v-if="item.icon && item.icon.startsWith('http')" :src="item.icon" class="w-10 h-10 object-contain" />
+              <img v-if="item.icon && item.icon.startsWith('http')" :src="item.icon" :alt="item.name || 'MCP Server'" class="w-10 h-10 object-contain" />
               <svg v-else-if="item.id === 'sec-edgar' || item.icon === 'trending-up'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-amber-500"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
               <svg v-else-if="item.id === 'brave-search' || item.icon === 'search'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-indigo-500"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <svg v-else-if="item.id === 'slack' || item.icon === 'message-square'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-pink-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -292,10 +292,10 @@
 
     <!-- Modals -->
     <MCPServerModal 
-      v-if="modalServer !== undefined" 
+      v-if="isModalOpen" 
       :server="modalServer" 
       :servers="servers" 
-      @close="modalServer = undefined" 
+      @close="closeModal" 
       @saved="onSaved" 
       @deleted="onDeleted" 
     />
@@ -309,7 +309,6 @@ import MCPServerModal from '@/components/designer/MCPServerModal.vue'
 
 const authStore = useAuthStore()
 const canManage = computed(() => authStore.hasRole(['admin', 'editor', 'super_admin']))
-const isAdmin = canManage
 
 const activeTab = ref('registered')
 const servers = ref([])
@@ -319,7 +318,8 @@ const marketLoading = ref(false)
 const marketSearch = ref('')
 const selectedCategory = ref('All')
 const pingingAll = ref(false)
-const modalServer = ref(undefined)
+const isModalOpen = ref(false)
+const modalServer = ref(null)
 
 // Health state
 const healthStatus  = reactive({})
@@ -389,8 +389,14 @@ async function pingAll() {
   pingingAll.value = false
 }
 
-function openModal(srv) { 
+function openModal(srv = null) { 
   modalServer.value = srv 
+  isModalOpen.value = true
+}
+
+function closeModal() {
+  isModalOpen.value = false
+  modalServer.value = null
 }
 
 function onSaved(srv) {
@@ -400,12 +406,12 @@ function onSaved(srv) {
   } else {
     servers.value.push(srv)
   }
-  modalServer.value = undefined
+  closeModal()
 }
 
 function onDeleted(srvID) {
   servers.value = servers.value.filter(s => s.id !== srvID)
-  modalServer.value = undefined
+  closeModal()
 }
 
 const normalize = (val) => {
@@ -444,11 +450,16 @@ function exportToYaml() {
   let yaml = 'mcp_servers:\n'
   servers.value.forEach(s => {
     yaml += `  - name: ${s.name}\n`
-    if (s.description) yaml += `    description: "${s.description.replace(/"/g, '\\"')}"\n`
+    if (s.description) {
+      yaml += `    description: "${s.description.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`
+    }
     if (s.transport)   yaml += `    transport: ${s.transport}\n`
     if (s.command)     yaml += `    command: ${s.command}\n`
-    if (s.args && s.args.length > 0) {
-      yaml += `    args: [${s.args.map(a => `"${a}"`).join(', ')}]\n`
+    const argsList = Array.isArray(s.args) 
+      ? s.args 
+      : (typeof s.args === 'string' && s.args.trim() ? s.args.trim().split(/\s+/) : [])
+    if (argsList.length > 0) {
+      yaml += `    args: [${argsList.map(a => `"${a}"`).join(', ')}]\n`
     }
     if (s.url)         yaml += `    url: ${s.url}\n`
     if (s.env_vars && Object.keys(s.env_vars).length > 0) {
