@@ -100,3 +100,4 @@ func (s *MemoryStore) RevokeGuestToken(_ context.Context, id string) error {
 	tok.Status = "revoked"
 	return nil
 }
+

@@ -402,3 +402,4 @@ func (h *Handlers) GenerateRunGuestToken(c *gin.Context) {
 		"expires_at": gt.ExpiresAt,
 	})
 }
+

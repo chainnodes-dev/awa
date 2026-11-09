@@ -21,3 +21,4 @@ CREATE TABLE IF NOT EXISTS guest_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_guest_tokens_hash ON guest_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_guest_tokens_run_state ON guest_tokens(run_id, state_name);
+

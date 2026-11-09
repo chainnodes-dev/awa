@@ -63,3 +63,4 @@ func GenerateGuestToken() (rawToken string, tokenHash string, err error) {
 	tokenHash = HashGuestToken(rawToken)
 	return rawToken, tokenHash, nil
 }
+

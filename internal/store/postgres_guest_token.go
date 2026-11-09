@@ -148,3 +148,4 @@ func (s *PostgresStore) RevokeGuestToken(ctx context.Context, id string) error {
 	}
 	return nil
 }
+

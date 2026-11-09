@@ -121,3 +121,4 @@ func TestGuestToken_Expiry(t *testing.T) {
 		t.Errorf("expected error getting active token when expired")
 	}
 }
+
