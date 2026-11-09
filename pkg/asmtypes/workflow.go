@@ -89,6 +89,7 @@ const (
 	StateEmitEvent    StateType = "emit_event" // Fires a named platform event to the bus
 	StateTelegramOutput StateType = "telegram_output"
 	StateDiscordOutput  StateType = "discord_output"
+	StateAction         StateType = "action"         // Deterministic MCP tool execution without LLM
 )
 
 type StateDef struct {
@@ -109,6 +110,8 @@ type StateDef struct {
 	OnCondition string `yaml:"on_condition,omitempty" json:"on_condition,omitempty"`
 	// Code is set when type == "code" (JavaScript executed via goja).
 	Code *CodeDef `yaml:"code,omitempty" json:"code,omitempty"`
+	// Action is set when type == "action" (deterministic MCP tool execution).
+	Action *ActionDef `yaml:"action,omitempty" json:"action,omitempty"`
 	// SubProcess is set when type == "subprocess".
 	SubProcess *SubProcessDef `yaml:"subprocess,omitempty" json:"subprocess,omitempty"`
 	// EmitEvent is set when type == "emit_event".
@@ -169,6 +172,15 @@ type DiscordOutputDef struct {
 	ChannelID         string `yaml:"channel_id" json:"channel_id"`
 	MessageText       string `yaml:"message_text" json:"message_text"`
 	CompletionTrigger string `yaml:"completion_trigger,omitempty" json:"completion_trigger,omitempty"`
+}
+
+// ActionDef defines the deterministic invocation of an MCP tool without an LLM.
+type ActionDef struct {
+	MCPServer  string            `yaml:"mcp_server"            json:"mcp_server"`            // Name of registered MCP server
+	Tool       string            `yaml:"tool"                  json:"tool"`                  // Tool name exposed by MCP server
+	Inputs     map[string]string `yaml:"inputs,omitempty"      json:"inputs,omitempty"`      // Input field -> expr-lang expression or literal
+	OutputPath string            `yaml:"output_path,omitempty" json:"output_path,omitempty"` // Blackboard key to store tool output
+	OnError    string            `yaml:"on_error,omitempty"    json:"on_error,omitempty"`    // Custom trigger on failure (defaults to "error")
 }
 
 // SubProcessDef describes a delegation to another reusable workflow.

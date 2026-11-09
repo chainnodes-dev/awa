@@ -1,0 +1,261 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: ticket-triage-agent
+  version: v1
+  description: |
+    Intelligent customer and IT support ticket triage: ingests incoming tickets, performs sentiment
+    and intent classification, categorizes priority (P1 to P4), enriches with customer CRM tier,
+    routes to designated team queue, auto-drafts high-quality contextual responses, and gates critical
+    or high-risk tickets through human agent review.
+  labels:
+    department: customer-support
+    category: ticket-triage
+
+inputs:
+  - name: ticket_id
+    type: string
+    required: true
+    description: "Support ticket identifier (e.g. TICKET-1049)"
+  - name: customer_email
+    type: string
+    required: true
+    description: "Customer email address"
+  - name: subject
+    type: string
+    required: true
+    description: "Ticket subject line"
+  - name: body
+    type: string
+    required: true
+    description: "Full message body or inquiry text"
+
+blackboard:
+  schema:
+    ticket_id:
+      type: string
+      required: true
+    customer_email:
+      type: string
+      required: true
+    subject:
+      type: string
+      required: true
+    body:
+      type: string
+      required: true
+    category:
+      type: string
+    urgency:
+      type: string
+    sentiment:
+      type: string
+    customer_tier:
+      type: string
+      default: "STANDARD"
+    assigned_team:
+      type: string
+    draft_response:
+      type: string
+    final_response:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: support_ticket_webhook
+    type: webhook
+    config:
+      path: /webhook/tickets
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"triage_start"'
+      updates:
+        status: '"RECEIVED"'
+    position:
+      x: 320
+      y: 60
+
+  - name: ANALYZE_TICKET
+    type: prompt
+    agent: support-triage-analyst
+    instructions: |
+      Analyze the customer ticket subject and body:
+      Subject: {{ blackboard.subject }}
+      Body: {{ blackboard.body }}
+
+      Determine:
+      1. category: One of ["BILLING", "TECHNICAL_BUG", "ACCOUNT_ACCESS", "FEATURE_REQUEST", "GENERAL_INQUIRY"].
+      2. urgency: One of ["P1_CRITICAL", "P2_HIGH", "P3_MEDIUM", "P4_LOW"]. (System outages or data loss are P1).
+      3. sentiment: One of ["POSITIVE", "NEUTRAL", "FRUSTRATED", "ANGRY"].
+
+      Update the blackboard fields and trigger "classified".
+    position:
+      x: 320
+      y: 200
+
+  - name: LOOKUP_CUSTOMER
+    type: action
+    action:
+      mcp_server: crm-service
+      tool: get_customer_tier
+      inputs:
+        email: "bb.customer_email"
+      output_path: "customer_tier"
+      on_error: "crm_lookup_failed"
+    position:
+      x: 320
+      y: 340
+
+  - name: ROUTE_AND_POLICY
+    type: code
+    code:
+      language: javascript
+      code: |
+        var cat = bb.category || "GENERAL_INQUIRY";
+        var urgency = bb.urgency || "P3_MEDIUM";
+        var tier = bb.customer_tier || "STANDARD";
+        var sentiment = bb.sentiment || "NEUTRAL";
+
+        // Team routing
+        var team = "l1-support";
+        if (cat === "BILLING") {
+          team = "finance-support";
+        } else if (cat === "TECHNICAL_BUG" || urgency === "P1_CRITICAL") {
+          team = "engineering-escalation";
+        } else if (cat === "ACCOUNT_ACCESS") {
+          team = "security-admin";
+        }
+        bb.assigned_team = team;
+
+        // Determine if human gate is mandatory
+        var requiresHumanReview = (urgency === "P1_CRITICAL" || sentiment === "ANGRY" || tier === "VIP");
+        bb.status = requiresHumanReview ? "QUEUED_FOR_AGENT" : "AUTO_PROCESSING";
+
+        if (requiresHumanReview) {
+          trigger("high_touch");
+        } else {
+          trigger("standard_flow");
+        }
+    position:
+      x: 320
+      y: 480
+
+  - name: DRAFT_RESPONSE
+    type: prompt
+    agent: support-response-writer
+    instructions: |
+      Draft an empathetic, clear, and comprehensive reply to {{ blackboard.customer_email }}.
+      Customer Tier: {{ blackboard.customer_tier }}.
+      Issue Category: {{ blackboard.category }}.
+      Sentiment: {{ blackboard.sentiment }}.
+
+      Original Complaint:
+      {{ blackboard.body }}
+
+      Provide actionable troubleshooting steps or clear commitments on resolution timeline.
+      Set draft_response and final_response.
+      Trigger: "response_drafted".
+    position:
+      x: 320
+      y: 620
+
+  - name: AGENT_REVIEW
+    type: hitl
+    assignee: support-lead
+    instructions: |
+      High-touch ticket review required for Ticket #{{ blackboard.ticket_id }} ({{ blackboard.urgency }} - {{ blackboard.sentiment }}).
+      Customer Tier: {{ blackboard.customer_tier }}.
+      Assigned Team: {{ blackboard.assigned_team }}.
+      Review and approve or adjust the drafted response.
+    form_schema:
+      type: object
+      properties:
+        final_response:
+          type: string
+          description: "Approved response text to send to customer"
+        action:
+          type: string
+          enum: ["send_response", "reassign_internally"]
+      required: ["final_response", "action"]
+    position:
+      x: 140
+      y: 760
+
+  - name: DISPATCH_RESPONSE
+    type: action
+    action:
+      mcp_server: helpdesk-system
+      tool: send_ticket_reply
+      inputs:
+        ticket_id: "bb.ticket_id"
+        reply_body: "bb.final_response"
+        status: "'PENDING_CUSTOMER'"
+        assignee_team: "bb.assigned_team"
+      output_path: "dispatch_result"
+    position:
+      x: 320
+      y: 900
+
+  - name: RESOLVED
+    type: terminal
+    position:
+      x: 320
+      y: 1040
+
+transitions:
+  - from: INTAKE
+    to: ANALYZE_TICKET
+    trigger: triage_start
+
+  - from: ANALYZE_TICKET
+    to: LOOKUP_CUSTOMER
+    trigger: classified
+
+  - from: LOOKUP_CUSTOMER
+    to: ROUTE_AND_POLICY
+    trigger: ""
+
+  - from: LOOKUP_CUSTOMER
+    to: ROUTE_AND_POLICY
+    trigger: crm_lookup_failed
+
+  - from: ROUTE_AND_POLICY
+    to: DRAFT_RESPONSE
+    trigger: standard_flow
+
+  - from: ROUTE_AND_POLICY
+    to: DRAFT_RESPONSE
+    trigger: high_touch
+
+  - from: DRAFT_RESPONSE
+    to: AGENT_REVIEW
+    trigger: response_drafted
+    guard: "urgency == 'P1_CRITICAL' || sentiment == 'ANGRY' || customer_tier == 'VIP'"
+
+  - from: DRAFT_RESPONSE
+    to: DISPATCH_RESPONSE
+    trigger: response_drafted
+
+  - from: AGENT_REVIEW
+    to: DISPATCH_RESPONSE
+    trigger: approved
+
+  - from: DISPATCH_RESPONSE
+    to: RESOLVED
+    trigger: ""
+
+agents:
+  - name: support-triage-analyst
+    rules:
+      - "Classify urgency objectively based on business impact and service interruption."
+      - "Flag potential churn or angry sentiment accurately."
+
+  - name: support-response-writer
+    rules:
+      - "Never overpromise technical resolution times unless confirmed in SLA."
+      - "Maintain a courteous, de-escalating, and professional tone."
+

@@ -1,0 +1,303 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: credit-control-assistant
+  version: v1
+  description: |
+    Automated accounts receivable and credit control recovery: monitors overdue invoices, categorizes
+    debt aging brackets (7, 14, 30+ days), computes statutory late payment fees, audits dispute status
+    in CRM, sends progressive dunning reminders with instant payment links, and escalates severely
+    delinquent or high-value accounts to Credit Control leadership for collection action.
+  labels:
+    department: finance
+    category: credit-control
+
+inputs:
+  - name: invoice_id
+    type: string
+    required: true
+    description: "Overdue invoice number (e.g. INV-98432)"
+  - name: customer_id
+    type: string
+    required: true
+    description: "Account / customer identifier"
+  - name: customer_name
+    type: string
+    required: true
+    description: "Customer or company legal name"
+  - name: customer_email
+    type: string
+    required: true
+    description: "Billing contact email address"
+  - name: invoice_balance
+    type: number
+    required: true
+    description: "Outstanding balance in GBP"
+  - name: days_overdue
+    type: number
+    required: true
+    description: "Days elapsed past payment due date"
+
+blackboard:
+  schema:
+    invoice_id:
+      type: string
+      required: true
+    customer_id:
+      type: string
+      required: true
+    customer_name:
+      type: string
+    customer_email:
+      type: string
+      required: true
+    invoice_balance:
+      type: number
+      required: true
+    days_overdue:
+      type: number
+      required: true
+    dispute_info:
+      type: object
+    statutory_interest:
+      type: number
+    total_payable:
+      type: number
+    dunning_tier:
+      type: string
+    payment_link:
+      type: string
+    dunning_letter:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: overdue_invoice_event
+    type: webhook
+    config:
+      path: /webhook/finance/overdue-invoice
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"check_dispute_status"'
+      updates:
+        status: '"TRIAGING_DEBT"'
+    position:
+      x: 320
+      y: 60
+
+  - name: CHECK_CRM_DISPUTES
+    type: action
+    action:
+      mcp_server: crm-service
+      tool: check_invoice_dispute
+      inputs:
+        invoice_id: "bb.invoice_id"
+        customer_id: "bb.customer_id"
+      output_path: "dispute_info"
+      on_error: "no_dispute_found"
+    position:
+      x: 320
+      y: 190
+
+  - name: CLASSIFY_AGING_TIER
+    type: code
+    code:
+      language: javascript
+      code: |
+        var dispute = bb.dispute_info || {};
+        if (dispute.is_disputed) {
+          bb.status = "HALTED_DUE_TO_DISPUTE";
+          trigger("halt_for_dispute");
+          return;
+        }
+
+        var days = Number(bb.days_overdue) || 0;
+        var balance = Number(bb.invoice_balance) || 0;
+        var interest = 0;
+
+        // UK/EU Statutory late payment calculation (8% + base rate / 365)
+        if (days > 14) {
+          interest = Number((balance * (0.12 * (days / 365))).toFixed(2));
+        }
+
+        bb.statutory_interest = interest;
+        bb.total_payable = balance + interest;
+
+        if (days >= 30 || balance >= 5000) {
+          bb.dunning_tier = "TIER3_FINAL_DEMAND";
+          bb.status = "COLLECTIONS_ESCALATION";
+          trigger("escalate_collections");
+        } else if (days >= 14) {
+          bb.dunning_tier = "TIER2_FORMAL";
+          bb.status = "SENDING_TIER2_NOTICE";
+          trigger("automated_notice");
+        } else {
+          bb.dunning_tier = "TIER1_FRIENDLY";
+          bb.status = "SENDING_TIER1_NOTICE";
+          trigger("automated_notice");
+        }
+    position:
+      x: 320
+      y: 330
+
+  - name: GENERATE_PAYMENT_LINK
+    type: action
+    action:
+      mcp_server: payment-gateway
+      tool: create_instant_payment_link
+      inputs:
+        invoice_id: "bb.invoice_id"
+        amount: "bb.total_payable"
+        customer_email: "bb.customer_email"
+      output_path: "payment_link"
+    position:
+      x: 320
+      y: 470
+
+  - name: DRAFT_DUNNING_COMMUNICATION
+    type: prompt
+    agent: credit-controller
+    instructions: |
+      Draft an appropriate dunning notice for invoice {{ blackboard.invoice_id }} to {{ blackboard.customer_name }}.
+      Days Overdue: {{ blackboard.days_overdue }}.
+      Dunning Tier: {{ blackboard.dunning_tier }}.
+      Original Balance: £{{ blackboard.invoice_balance }}.
+      Accrued Statutory Interest: £{{ blackboard.statutory_interest }}.
+      Total Payable: £{{ blackboard.total_payable }}.
+      Direct Payment URL: {{ blackboard.payment_link }}.
+
+      Tier Guidelines:
+      - TIER1_FRIENDLY: Polite check-in assume it was an oversight.
+      - TIER2_FORMAL: Serious tone referencing credit terms and late payment statutory interest.
+      - TIER3_FINAL_DEMAND: Formal 7-day final notice before legal escalation or service suspension.
+
+      Set dunning_letter on blackboard.
+      Trigger: "letter_ready".
+    position:
+      x: 320
+      y: 610
+
+  - name: DISPATCH_COLLECTION_NOTICE
+    type: action
+    action:
+      mcp_server: email-service
+      tool: send_email
+      inputs:
+        to: "bb.customer_email"
+        subject: "'Statement of Account - Invoice ' + bb.invoice_id + ' Overdue'"
+        body: "bb.dunning_letter"
+      output_path: "email_receipt"
+    position:
+      x: 320
+      y: 750
+
+  - name: COLLECTIONS_MANAGER_REVIEW
+    type: hitl
+    assignee: collections-lead
+    instructions: |
+      Severely overdue account flagged: Invoice {{ blackboard.invoice_id }} ({{ blackboard.days_overdue }} days overdue).
+      Customer: {{ blackboard.customer_name }} | Balance: £{{ blackboard.total_payable }}.
+      Review account history before dispatching final legal demand or pausing service.
+    form_schema:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: ["send_final_notice", "suspend_services"]
+        manager_notes:
+          type: string
+      required: ["action"]
+    position:
+      x: 140
+      y: 470
+
+  - name: PAUSE_CUSTOMER_SERVICES
+    type: action
+    action:
+      mcp_server: provisioning-service
+      tool: suspend_account_services
+      inputs:
+        customer_id: "bb.customer_id"
+        reason: "'Overdue balance exceeding credit period'"
+      output_path: "suspension_id"
+    position:
+      x: 140
+      y: 610
+
+  - name: DEBT_NOTIFIED
+    type: terminal
+    position:
+      x: 320
+      y: 890
+
+  - name: COLLECTIONS_ACTIONED
+    type: terminal
+    position:
+      x: 140
+      y: 750
+
+  - name: DISPUTE_HALTED
+    type: terminal
+    position:
+      x: 520
+      y: 330
+
+transitions:
+  - from: INTAKE
+    to: CHECK_CRM_DISPUTES
+    trigger: check_dispute_status
+
+  - from: CHECK_CRM_DISPUTES
+    to: CLASSIFY_AGING_TIER
+    trigger: ""
+
+  - from: CHECK_CRM_DISPUTES
+    to: CLASSIFY_AGING_TIER
+    trigger: no_dispute_found
+
+  - from: CLASSIFY_AGING_TIER
+    to: DISPUTE_HALTED
+    trigger: halt_for_dispute
+
+  - from: CLASSIFY_AGING_TIER
+    to: GENERATE_PAYMENT_LINK
+    trigger: automated_notice
+
+  - from: CLASSIFY_AGING_TIER
+    to: COLLECTIONS_MANAGER_REVIEW
+    trigger: escalate_collections
+
+  - from: GENERATE_PAYMENT_LINK
+    to: DRAFT_DUNNING_COMMUNICATION
+    trigger: ""
+
+  - from: DRAFT_DUNNING_COMMUNICATION
+    to: DISPATCH_COLLECTION_NOTICE
+    trigger: letter_ready
+
+  - from: DISPATCH_COLLECTION_NOTICE
+    to: DEBT_NOTIFIED
+    trigger: ""
+
+  - from: COLLECTIONS_MANAGER_REVIEW
+    to: GENERATE_PAYMENT_LINK
+    trigger: send_final_notice
+
+  - from: COLLECTIONS_MANAGER_REVIEW
+    to: PAUSE_CUSTOMER_SERVICES
+    trigger: suspend_services
+
+  - from: PAUSE_CUSTOMER_SERVICES
+    to: COLLECTIONS_ACTIONED
+    trigger: ""
+
+agents:
+  - name: credit-controller
+    rules:
+      - "Comply with commercial debt collection statutory standards."
+      - "Always provide clear payment link and dispute contact details."
+

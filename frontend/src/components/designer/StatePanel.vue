@@ -32,6 +32,7 @@
           <option value="terminal">Terminal (End)</option>
           <optgroup label="──────────────"></optgroup>
           <option value="prompt">Prompt (LLM Agent)</option>
+          <option value="action">Action (MCP Tool)</option>
           <option value="script">Script (Expressions)</option>
           <option value="code">Code (JavaScript)</option>
           <optgroup label="──────────────"></optgroup>
@@ -152,59 +153,179 @@
             </div>
             <p v-else class="text-[10px] text-text-muted italic">No blackboard updates configured.</p>
           </div>
+
+          <!-- Publish to Marketplace -->
+          <div class="pt-3 border-t border-border flex items-center justify-between">
+            <span class="text-[10px] text-text-muted">Share script with organization</span>
+            <button
+              type="button"
+              @click="openPublishModal"
+              class="btn text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-colors"
+            >
+              <span>📦</span>
+              <span>Publish to Catalog</span>
+            </button>
+          </div>
         </div>
       </template>
 
-      <!-- CODE (JavaScript Sandbox) -->
-      <template v-if="form.type === 'code'">
+      <!-- ACTION (Deterministic MCP Tool) -->
+      <template v-if="form.type === 'action'">
         <div class="space-y-3">
           <div class="space-y-1">
+            <label class="text-xs text-text-muted">MCP Server</label>
+            <select class="input" v-model="form.action_server" @change="onActionServerChange">
+              <option value="">Select an MCP server...</option>
+              <option v-for="s in mcpServers" :key="s.name" :value="s.name">{{ s.name }} ({{ s.transport }})</option>
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-xs text-text-muted">Tool</label>
+            <select class="input" v-model="form.action_tool" @change="onActionToolChange">
+              <option value="">Select a tool...</option>
+              <option v-for="t in availableActionTools" :key="t.name" :value="t.name">{{ t.name }}</option>
+            </select>
+            <p v-if="selectedActionTool?.description" class="text-[10px] text-text-muted/80 italic mt-0.5">
+              {{ selectedActionTool.description }}
+            </p>
+          </div>
+
+          <!-- Dynamic Tool Inputs -->
+          <div class="space-y-2 pt-2 border-t border-border">
             <div class="flex items-center justify-between">
-              <label class="text-xs text-text-muted">Goal Instructions (AI Codegen Input)</label>
-            </div>
-            <textarea class="input text-xs leading-relaxed resize-none h-16" v-model="form.instructions" placeholder="Describe the javascript logic needed..." />
-            
-            <div class="pt-0.5">
-              <button
-                :class="['w-full flex items-center justify-center gap-1.5 text-xs py-1.5 px-3 rounded font-medium transition-colors border',
-                  codegenLoading
-                    ? 'bg-teal-500/10 text-teal-500/60 border-teal-500/20 cursor-not-allowed'
-                    : 'bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border-teal-500/30 hover:border-teal-500/60']"
-                :disabled="codegenLoading || !form.instructions.trim()"
-                @click="generateCode"
-              >
-                <svg v-if="!codegenLoading" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
-                </svg>
-                <svg v-else class="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                </svg>
-                {{ codegenLoading ? 'Generating…' : 'Generate Code' }}
+              <label class="text-xs font-semibold text-cyan-400 uppercase tracking-wider">Tool Inputs</label>
+              <button @click="addActionInput" class="text-[10px] text-accent hover:underline flex items-center gap-1">
+                + Add Input
               </button>
-              <p v-if="codegenError" class="text-[10px] text-red-400 font-mono mt-1">{{ codegenError }}</p>
-              <p v-if="codegenExplanation" class="text-[10px] text-teal-400/70 mt-1 leading-relaxed">✓ {{ codegenExplanation }}</p>
+            </div>
+            
+            <div v-if="form.action_inputs.length === 0" class="text-[11px] text-text-muted/60 italic py-1">
+              No inputs configured. Tool will be called with empty arguments.
+            </div>
+
+            <div v-for="(inp, idx) in form.action_inputs" :key="idx" class="flex items-center gap-2">
+              <input class="input text-xs w-1/3" v-model="inp.key" placeholder="parameter_name" />
+              <input class="input text-xs flex-1 font-mono" v-model="inp.expr" placeholder="expr or literal" />
+              <button @click="form.action_inputs.splice(idx, 1)" class="text-text-muted hover:text-red-400 text-xs px-1">✕</button>
             </div>
           </div>
 
-          <div class="space-y-1.5 pt-2 border-t border-border">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold text-teal-400 uppercase tracking-wider flex-1">JS Editor</span>
-              <button
-                class="text-text-muted hover:text-teal-400 transition-colors"
-                title="Open in fullscreen editor"
-                @click="showCodeModal = true"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-                  <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-                </svg>
+          <!-- Output Path -->
+          <div class="space-y-1 pt-2 border-t border-border">
+            <label class="text-xs text-text-muted">Result Blackboard Field (Output Path)</label>
+            <input class="input text-xs font-mono" v-model="form.action_output_path" placeholder="e.g. customer_data (leave empty to merge root)" />
+            <p class="text-[9px] text-text-muted/60">Where on the blackboard the JSON response will be saved.</p>
+          </div>
+
+          <!-- On Error trigger -->
+          <div class="space-y-1">
+            <label class="text-xs text-text-muted">On Failure Trigger</label>
+            <input class="input text-xs font-mono" v-model="form.action_on_error" placeholder="error" />
+          </div>
+        </div>
+      </template>
+
+      <!-- CODE (JavaScript Sandbox) / Custom Component -->
+      <template v-if="form.type === 'code'">
+        <div class="space-y-3">
+          <!-- Component Header & Custom Form if packaged component -->
+          <div v-if="form.component_id" class="p-3 bg-teal-500/10 border border-teal-500/30 rounded-xl space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-teal-300">📦 {{ componentDetails?.name || form.component_id }}</span>
+              <span class="text-[10px] font-mono text-teal-400/80 bg-teal-500/10 px-1.5 py-0.5 rounded">v{{ form.component_version || '1.0.0' }}</span>
+            </div>
+            <p v-if="componentDetails?.description" class="text-[10px] text-text-muted leading-relaxed">
+              {{ componentDetails.description }}
+            </p>
+
+            <!-- Dynamic Schema Inputs -->
+            <div v-if="componentProperties.length" class="space-y-2 pt-2 border-t border-teal-500/20">
+              <div v-for="prop in componentProperties" :key="prop.key" class="space-y-1">
+                <label class="text-xs text-text-muted flex justify-between">
+                  <span>{{ prop.title || prop.key }}</span>
+                  <span v-if="prop.description" class="text-[9px] text-text-muted/60">{{ prop.description }}</span>
+                </label>
+                <select v-if="prop.enum" class="input text-xs" v-model="form.component_inputs[prop.key]">
+                  <option v-for="opt in prop.enum" :key="opt" :value="opt">{{ opt }}</option>
+                </select>
+                <input v-else class="input text-xs font-mono" v-model="form.component_inputs[prop.key]" :placeholder="prop.default || ''" />
+              </div>
+            </div>
+
+            <div class="pt-1 flex items-center justify-between border-t border-teal-500/20">
+              <button @click="showRawCode = !showRawCode" class="text-[10px] text-teal-400 hover:underline">
+                {{ showRawCode ? 'Hide JavaScript Code' : 'Inspect / Edit JavaScript' }}
+              </button>
+              <button @click="ejectComponent" class="text-[10px] text-text-muted hover:text-red-400">
+                Eject to Custom Script
               </button>
             </div>
-            <CodeEditor
-              v-model="form.code"
-              :bb-schema="bbSchema"
-              height="200px"
-            />
+          </div>
+
+          <!-- Raw Code Section (shown if not a component OR user expanded raw code) -->
+          <div v-show="!form.component_id || showRawCode" class="space-y-3">
+            <div class="space-y-1">
+              <div class="flex items-center justify-between">
+                <label class="text-xs text-text-muted">Goal Instructions (AI Codegen Input)</label>
+              </div>
+              <textarea class="input text-xs leading-relaxed resize-none h-16" v-model="form.instructions" placeholder="Describe the javascript logic needed..." />
+              
+              <div class="pt-0.5">
+                <button
+                  :class="['w-full flex items-center justify-center gap-1.5 text-xs py-1.5 px-3 rounded font-medium transition-colors border',
+                    codegenLoading
+                      ? 'bg-teal-500/10 text-teal-500/60 border-teal-500/20 cursor-not-allowed'
+                      : 'bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border-teal-500/30 hover:border-teal-500/60']"
+                  :disabled="codegenLoading || !form.instructions.trim()"
+                  @click="generateCode"
+                >
+                  <svg v-if="!codegenLoading" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                  </svg>
+                  <svg v-else class="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                  {{ codegenLoading ? 'Generating…' : 'Generate Code' }}
+                </button>
+                <p v-if="codegenError" class="text-[10px] text-red-400 font-mono mt-1">{{ codegenError }}</p>
+                <p v-if="codegenExplanation" class="text-[10px] text-teal-400/70 mt-1 leading-relaxed">✓ {{ codegenExplanation }}</p>
+              </div>
+            </div>
+
+            <div class="space-y-1.5 pt-2 border-t border-border">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-teal-400 uppercase tracking-wider flex-1">JS Editor</span>
+                <button
+                  class="text-text-muted hover:text-teal-400 transition-colors"
+                  title="Open in fullscreen editor"
+                  @click="showCodeModal = true"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                    <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                  </svg>
+                </button>
+              </div>
+              <CodeEditor
+                v-model="form.code"
+                :bb-schema="bbSchema"
+                height="200px"
+              />
+            </div>
+
+            <!-- Publish to Marketplace -->
+            <div class="pt-3 border-t border-border flex items-center justify-between">
+              <span class="text-[10px] text-text-muted">Share script with organization</span>
+              <button
+                type="button"
+                @click="openPublishModal"
+                class="btn text-xs bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-colors"
+              >
+                <span>📦</span>
+                <span>Publish to Catalog</span>
+              </button>
+            </div>
           </div>
         </div>
       </template>
@@ -657,9 +778,33 @@ const props = defineProps({
   bbSchema: { type: Object, default: () => ({}) },
   agents:   { type: Array,  default: () => [] },
 })
-const emit = defineEmits(['update', 'delete'])
+const emit = defineEmits(['update', 'delete', 'publish-component'])
 const entStore = useEnterpriseStore()
 const llmStore = useLLMStore()
+
+function openPublishModal() {
+  let code = ''
+  let desc = form.instructions || ''
+  if (form.type === 'code') {
+    code = form.code || ''
+  } else if (form.type === 'script') {
+    const lines = ['// Script Node Logic (packaged as component)']
+    for (const u of form.script_updates) {
+      if (u.key) lines.push(`bb[${JSON.stringify(u.key)}] = ${u.expr};`)
+    }
+    const trig = form.script_trigger ? JSON.stringify(form.script_trigger) : "'done'"
+    lines.push(`trigger(${trig});`)
+    code = lines.join('\n')
+    desc = `Script component: evaluates expressions and triggers ${form.script_trigger || 'done'}`
+  }
+
+  emit('publish-component', {
+    name: form.name || 'Custom Component',
+    description: desc,
+    code: code,
+    category: 'Custom',
+  })
+}
 
 // Codegen & script setup refs
 const codegenLoading = ref(false)
@@ -738,7 +883,83 @@ const form = reactive({
   hitl_notify_service: props.node.notify?.service ?? '',
   hitl_notify_channel: props.node.notify?.channel ?? '',
   hitl_notify_message: props.node.notify?.message ?? '',
+  action_server: props.node.action?.mcp_server ?? '',
+  action_tool: props.node.action?.tool ?? '',
+  action_inputs: props.node.action?.inputs
+    ? Object.entries(props.node.action.inputs).map(([k, v]) => ({ key: k, expr: String(v) }))
+    : [],
+  action_output_path: props.node.action?.output_path ?? '',
+  action_on_error: props.node.action?.on_error ?? 'error',
+  component_id: props.node.metadata?.component_id ?? '',
+  component_version: props.node.metadata?.component_version ?? '',
+  component_inputs: props.node.code?.inputs ? { ...props.node.code.inputs } : {},
 })
+
+const showRawCode = ref(!props.node.metadata?.component_id)
+const nodeCatalog = ref([])
+
+async function fetchNodeCatalog() {
+  try {
+    const { data } = await api.get('/node-catalog')
+    nodeCatalog.value = data || []
+  } catch (e) {
+    console.error('Failed to fetch node catalog', e)
+  }
+}
+
+const componentDetails = computed(() => {
+  if (!form.component_id) return null
+  return nodeCatalog.value.find(c => c.id === form.component_id) || null
+})
+
+const componentProperties = computed(() => {
+  const schema = componentDetails.value?.inputs_schema
+  if (!schema?.properties) return []
+  return Object.entries(schema.properties).map(([k, v]) => ({
+    key: k,
+    ...v,
+  }))
+})
+
+function ejectComponent() {
+  form.component_id = ''
+  form.component_version = ''
+  showRawCode.value = true
+}
+
+const selectedServerObj = computed(() => {
+  if (!form.action_server) return null
+  return mcpServers.value.find(s => s.name === form.action_server) || null
+})
+
+const availableActionTools = computed(() => {
+  return selectedServerObj.value?.tools || []
+})
+
+const selectedActionTool = computed(() => {
+  return availableActionTools.value.find(t => t.name === form.action_tool) || null
+})
+
+function onActionServerChange() {
+  form.action_tool = ''
+  form.action_inputs = []
+}
+
+function onActionToolChange() {
+  form.action_inputs = []
+  if (selectedActionTool.value?.inputSchema?.properties) {
+    for (const [k, p] of Object.entries(selectedActionTool.value.inputSchema.properties)) {
+      form.action_inputs.push({
+        key: k,
+        expr: p.default !== undefined ? String(p.default) : '',
+      })
+    }
+  }
+}
+
+function addActionInput() {
+  form.action_inputs.push({ key: '', expr: '' })
+}
 
 function detectInitialProfile(agentDef) {
   if (agentDef?.config?.profile) return agentDef.config.profile
@@ -785,6 +1006,7 @@ async function fetchMcpServers() {
 
 onMounted(() => {
   fetchMcpServers()
+  fetchNodeCatalog()
   if (Object.keys(llmStore.profiles).length === 0) {
     llmStore.fetchProfiles()
   }
@@ -822,6 +1044,15 @@ const headerStyles = computed(() => {
       border: 'border-indigo-500/20',
       iconBg: 'bg-indigo-500',
       iconSvg: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>'
+    }
+  } else if (t === 'action') {
+    return {
+      title: 'Deterministic MCP Action',
+      description: 'Executes an MCP tool directly without LLM latency or token costs.',
+      bg: 'bg-cyan-500/5',
+      border: 'border-cyan-500/20',
+      iconBg: 'bg-cyan-500',
+      iconSvg: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'
     }
   } else if (t === 'script') {
     return {
@@ -1101,9 +1332,25 @@ function onApply() {
       : undefined,
   } : undefined
 
+  const actionDef = form.type === 'action' ? {
+    mcp_server: form.action_server || '',
+    tool: form.action_tool || '',
+    inputs: form.action_inputs.length
+      ? Object.fromEntries(form.action_inputs.filter(r => r.key).map(r => [r.key, r.expr]))
+      : undefined,
+    output_path: form.action_output_path || undefined,
+    on_error: form.action_on_error || undefined,
+  } : undefined
+
   const codeDef = form.type === 'code' ? {
     language: 'javascript',
     code:     form.code || '',
+    inputs:   (form.component_id && Object.keys(form.component_inputs).length) ? form.component_inputs : undefined,
+  } : undefined
+
+  const metadataDef = form.component_id ? {
+    component_id: form.component_id,
+    component_version: form.component_version || '1.0.0',
   } : undefined
 
   const subprocessDef = form.type === 'subprocess' ? {
@@ -1130,9 +1377,11 @@ function onApply() {
     name:            form.name,
     type:            form.type,
     instructions:    form.instructions || undefined,
-    agent:           (!['script', 'wait', 'code', 'subprocess', 'telegram_output', 'discord_output', 'timeout_node'].includes(form.type)) ? (form.agent || undefined) : undefined,
+    agent:           (!['script', 'wait', 'code', 'action', 'subprocess', 'telegram_output', 'discord_output', 'timeout_node'].includes(form.type)) ? (form.agent || undefined) : undefined,
     script:          scriptDef,
     code:            codeDef,
+    action:          actionDef,
+    metadata:        metadataDef,
     condition:       form.type === 'wait' ? (form.condition || undefined) : undefined,
     timeout:         (form.type !== 'terminal' && form.type !== 'timeout_node') ? (form.timeout || undefined) : undefined,
     on_timeout:      (form.type !== 'terminal' && form.type !== 'timeout_node') ? (form.on_timeout || undefined) : undefined,
@@ -1151,7 +1400,7 @@ function onApply() {
     default_timeout: form.type === 'timeout_node' ? (form.default_timeout || '10s') : undefined,
   }
   
-  const agentData = (!['script', 'code', 'subprocess', 'telegram_output', 'discord_output', 'timeout_node'].includes(form.type) && form.agent) ? {
+  const agentData = (!['script', 'code', 'action', 'subprocess', 'telegram_output', 'discord_output', 'timeout_node'].includes(form.type) && form.agent) ? {
     name:       form.agent,
     model:      agentForm.profile === 'custom' ? (agentForm.model || undefined) : `@profile:${agentForm.profile}`,
     task_queue: agentForm.task_queue || undefined,

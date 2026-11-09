@@ -123,14 +123,17 @@
       <template v-else>
 
         <!-- Left Node Palette Sidebar -->
-        <aside class="w-56 border-r border-border flex flex-col bg-surface-1 shrink-0 select-none overflow-y-auto">
+        <aside class="w-60 border-r border-border flex flex-col bg-surface-1 shrink-0 select-none overflow-y-auto">
           <div class="px-4 py-3 border-b border-border flex items-center justify-between bg-surface-1 shrink-0">
             <span class="text-xs font-semibold text-text-muted uppercase tracking-wider">Node Palette</span>
+            <button @click="showComponentModal = true" class="text-[10px] text-teal-400 hover:text-teal-300 font-medium flex items-center gap-0.5" title="Create Custom Component">
+              + New Component
+            </button>
           </div>
           <div class="p-3 space-y-4">
             <!-- reasoning & logic -->
             <div class="space-y-1.5">
-              <div class="text-[10px] text-text-muted font-bold uppercase tracking-wider px-1">AI & Logic</div>
+              <div class="text-[10px] text-text-muted font-bold uppercase tracking-wider px-1">AI & Flow Logic</div>
               <div class="grid grid-cols-1 gap-1.5">
                 <div
                   v-for="node in paletteLogic"
@@ -144,6 +147,60 @@
                 </div>
               </div>
             </div>
+
+            <!-- deterministic mcp servers (1 node per server) -->
+            <div v-if="mcpServers.length > 0" class="space-y-1.5">
+              <div class="text-[10px] text-cyan-400 font-bold uppercase tracking-wider px-1 flex items-center justify-between">
+                <span>MCP Servers</span>
+                <span class="text-[9px] text-text-muted font-normal">Deterministic</span>
+              </div>
+              <div class="grid grid-cols-1 gap-1.5">
+                <div
+                  v-for="srv in mcpServers"
+                  :key="srv.id || srv.name"
+                  draggable="true"
+                  @dragstart="onDragStart($event, { isAction: true, server: srv.name, label: `${srv.name} (MCP)` })"
+                  class="flex items-center gap-2 p-2 rounded-lg border border-cyan-500/25 bg-cyan-500/5 hover:bg-cyan-500/15 cursor-grab active:cursor-grabbing text-xs text-cyan-200 transition-colors group"
+                  :title="srv.description || srv.name"
+                >
+                  <div class="w-2 h-2 rounded-full shrink-0 bg-cyan-400"/>
+                  <span class="truncate flex-1 font-medium">{{ srv.name }}</span>
+                  <span v-if="srv.tools?.length" class="text-[9px] text-cyan-400/80 font-mono px-1 py-0.5 rounded bg-cyan-500/15">
+                    {{ srv.tools.length }} {{ srv.tools.length === 1 ? 'func' : 'funcs' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- custom component catalog grouped by category -->
+            <div v-if="nodeCatalog.length > 0" class="space-y-2">
+              <div class="text-[10px] text-teal-400 font-bold uppercase tracking-wider px-1 flex items-center justify-between">
+                <span>Component Catalog</span>
+                <span class="text-[9px] text-text-muted font-normal">{{ nodeCatalog.length }}</span>
+              </div>
+              
+              <div v-for="(comps, cat) in catalogByCategory" :key="cat" class="space-y-1">
+                <div class="text-[9px] font-semibold uppercase tracking-wider text-text-muted/70 px-1 pt-1 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-teal-400/60"></span>
+                  <span>{{ cat }}</span>
+                </div>
+                <div class="grid grid-cols-1 gap-1">
+                  <div
+                    v-for="comp in comps"
+                    :key="comp.id"
+                    draggable="true"
+                    @dragstart="onDragStart($event, { isComponent: true, component: comp, label: comp.name })"
+                    class="flex items-center gap-2 p-1.5 rounded-lg border border-teal-500/20 bg-teal-500/5 hover:bg-teal-500/10 cursor-grab active:cursor-grabbing text-xs text-teal-200 transition-colors group"
+                    :title="comp.description || comp.name"
+                  >
+                    <div class="w-1.5 h-1.5 rounded-full shrink-0 bg-teal-400"/>
+                    <span class="truncate flex-1 text-[11px] font-medium">{{ comp.name }}</span>
+                    <span v-if="comp.version" class="text-[9px] text-teal-400/60 font-mono">v{{ comp.version }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- triggers (low code) -->
             <div class="space-y-1.5">
               <div class="text-[10px] text-text-muted font-bold uppercase tracking-wider px-1">Triggers (Low-Code)</div>
@@ -327,6 +384,7 @@
               :agents="agents"
               @update="updateNode"
               @delete="deleteSelected"
+              @publish-component="onPublishComponentRequest"
             />
 
             <!-- Edge selected -->
@@ -387,6 +445,75 @@
       @change="isDirty = true"
       @open-popout="onOpenSchemaPopout"
     />
+
+    <!-- Component Builder Modal -->
+    <Teleport to="body">
+      <div v-if="showComponentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="bg-surface-1 border border-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+            <h3 class="text-sm font-bold text-text flex items-center gap-2">
+              <span class="text-teal-400">📦</span> Package Reusable Custom Component
+            </h3>
+            <button @click="showComponentModal = false" class="text-text-muted hover:text-text">✕</button>
+          </div>
+          <div class="p-5 space-y-4 overflow-y-auto flex-1">
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-1">
+                <label class="text-xs text-text-muted">Component ID (kebab-case)</label>
+                <input class="input text-xs font-mono" v-model="newComponent.id" placeholder="e.g. tax-calc-eu" />
+              </div>
+              <div class="space-y-1">
+                <label class="text-xs text-text-muted">Display Name</label>
+                <input class="input text-xs" v-model="newComponent.name" placeholder="e.g. EU Tax Calculator" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-1">
+                <label class="text-xs text-text-muted">Category</label>
+                <div class="flex gap-1.5">
+                  <select class="input text-xs flex-1" v-model="newComponent.category">
+                    <option v-for="cat in availableCategories" :key="cat" :value="cat">{{ cat }}</option>
+                    <option value="__new__">+ New Category...</option>
+                  </select>
+                  <input
+                    v-if="newComponent.category === '__new__'"
+                    class="input text-xs flex-1"
+                    v-model="newComponent.customCategory"
+                    placeholder="Enter category..."
+                  />
+                </div>
+              </div>
+              <div class="space-y-1">
+                <label class="text-xs text-text-muted">Version</label>
+                <input class="input text-xs font-mono" v-model="newComponent.version" placeholder="1.0.0" />
+              </div>
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-text-muted">Description</label>
+              <textarea class="input text-xs leading-relaxed resize-none h-14" v-model="newComponent.description" placeholder="What does this component do?" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-text-muted flex justify-between">
+                <span>Inputs JSON Schema</span>
+                <span class="text-[10px] text-text-muted/60">Defines form fields for low-code users</span>
+              </label>
+              <CodeEditor v-model="newComponent.inputs_schema_json" language="json" height="130px" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-text-muted flex justify-between">
+                <span>JavaScript Code Template</span>
+                <span class="text-[10px] text-text-muted/60">Access inputs via <code>inputs.&lt;field&gt;</code>, blackboard via <code>bb</code></span>
+              </label>
+              <CodeEditor v-model="newComponent.code_template" language="javascript" height="150px" />
+            </div>
+          </div>
+          <div class="px-5 py-3 border-t border-border flex justify-end gap-2 bg-surface-2/30">
+            <button @click="showComponentModal = false" class="btn-ghost text-xs">Cancel</button>
+            <button @click="saveNewComponent" class="btn-primary text-xs bg-teal-600 hover:bg-teal-500 text-white">Save & Publish to Catalog</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -413,9 +540,11 @@ import BlackboardSchemaEditor from '@/components/designer/BlackboardSchemaEditor
 import AddStateModal          from '@/components/designer/AddStateModal.vue'
 import GeneratePanel          from '@/components/designer/GeneratePanel.vue'
 import CodeEditorModal       from '@/components/designer/CodeEditorModal.vue'
+import CodeEditor            from '@/components/designer/CodeEditor.vue'
 import BBFieldModal         from '@/components/designer/BBFieldModal.vue'
 import SchemaEditorModal    from '@/components/designer/SchemaEditorModal.vue'
 
+import { api }              from '@/stores/auth'
 import { useWorkflowStore } from '@/stores/workflows'
 import { useEnterpriseStore } from '@/stores/enterprise'
 import { useWorkflowIO }    from '@/composables/useWorkflowIO'
@@ -496,6 +625,7 @@ const edgeTypes = shallowRef({ transitionEdge: markRaw(TransitionEdge) })
 const paletteLogic = [
   { type: 'initial', label: 'Initial (Start)', dot: 'bg-indigo-400' },
   { type: 'prompt', label: 'Prompt (Agent)', dot: 'bg-indigo-500' },
+  { type: 'action', label: 'Action (MCP Tool)', dot: 'bg-cyan-400' },
   { type: 'script', label: 'Script (Expr)', dot: 'bg-amber-400' },
   { type: 'code', label: 'Code (JS)', dot: 'bg-teal-400' },
   { type: 'hitl', label: 'HITL (Human)', dot: 'bg-amber-500' },
@@ -511,7 +641,111 @@ const paletteTriggers = [
   { isTrigger: true, triggerType: 'webhook', label: 'Webhook Trigger' },
 ]
 
-const paletteActions = []
+const mcpServers = ref([])
+const nodeCatalog = ref([])
+const showComponentModal = ref(false)
+const newComponent = reactive({
+  id: '',
+  name: '',
+  version: '1.0.0',
+  category: 'Custom',
+  customCategory: '',
+  description: '',
+  inputs_schema_json: JSON.stringify({
+    type: 'object',
+    properties: {
+      input_val: { type: 'string', title: 'Input Value', default: 'blackboard.data' },
+      output_field: { type: 'string', title: 'Output Field', default: 'result' }
+    }
+  }, null, 2),
+  code_template: `// Custom Component Logic\nconst input = inputs.input_val;\nbb[inputs.output_field || 'result'] = input;\ntrigger('done');`
+})
+
+const catalogByCategory = computed(() => {
+  const map = {}
+  for (const comp of nodeCatalog.value) {
+    const cat = comp.category || 'General'
+    if (!map[cat]) map[cat] = []
+    map[cat].push(comp)
+  }
+  return map
+})
+
+const availableCategories = computed(() => {
+  const set = new Set(['Finance', 'Transform', 'Validation', 'Integration', 'Utility', 'Custom'])
+  for (const c of nodeCatalog.value) {
+    if (c.category) set.add(c.category)
+  }
+  return Array.from(set)
+})
+
+function onPublishComponentRequest(payload) {
+  const rawId = (payload.name || 'custom_node').toLowerCase().replace(/[^a-z0-9_-]/g, '-')
+  newComponent.id = rawId
+  newComponent.name = payload.name || ''
+  newComponent.category = payload.category || 'Custom'
+  newComponent.customCategory = ''
+  newComponent.version = '1.0.0'
+  newComponent.description = payload.description || ''
+  newComponent.code_template = payload.code || ''
+  newComponent.inputs_schema_json = JSON.stringify({
+    type: 'object',
+    properties: {
+      output_field: { type: 'string', title: 'Output Field', default: 'result' }
+    }
+  }, null, 2)
+  showComponentModal.value = true
+}
+
+async function fetchPaletteData() {
+  try {
+    const [srvRes, catRes] = await Promise.allSettled([
+      api.get('/mcp-servers'),
+      api.get('/node-catalog')
+    ])
+    if (srvRes.status === 'fulfilled') {
+      mcpServers.value = srvRes.value.data || []
+    }
+    if (catRes.status === 'fulfilled') {
+      nodeCatalog.value = catRes.value.data || []
+    }
+  } catch (e) {
+    console.error('Failed to load palette data', e)
+  }
+}
+
+async function saveNewComponent() {
+  if (!newComponent.id || !newComponent.name || !newComponent.code_template) {
+    alert('ID, Name, and JavaScript Code Template are required')
+    return
+  }
+  let schema = {}
+  try {
+    schema = JSON.parse(newComponent.inputs_schema_json)
+  } catch (e) {
+    alert('Invalid JSON Schema: ' + e.message)
+    return
+  }
+  const cat = newComponent.category === '__new__'
+    ? (newComponent.customCategory.trim() || 'Custom')
+    : newComponent.category
+
+  try {
+    await api.post('/node-catalog', {
+      id: newComponent.id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
+      name: newComponent.name.trim(),
+      version: newComponent.version || '1.0.0',
+      category: cat,
+      description: newComponent.description,
+      inputs_schema: schema,
+      code_template: newComponent.code_template,
+    })
+    showComponentModal.value = false
+    await fetchPaletteData()
+  } catch (e) {
+    alert('Failed to publish component: ' + (e.response?.data?.error || e.message))
+  }
+}
 
 function onDragStart(event, node) {
   event.dataTransfer.setData('application/vueflow', JSON.stringify(node))
@@ -539,9 +773,13 @@ function onDrop(event) {
   let name = ''
   let type = paletteNode.type || 'prompt'
 
-
-
-  if (paletteNode.isTrigger) {
+  if (paletteNode.isAction) {
+    type = 'action'
+    name = `${(paletteNode.server || 'action').toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Math.random().toString(36).substring(2, 7)}`
+  } else if (paletteNode.isComponent) {
+    type = 'code'
+    name = `${(paletteNode.component?.id || 'comp').replace(/[^a-z0-9]/gi, '_')}_${Math.random().toString(36).substring(2, 7)}`
+  } else if (paletteNode.isTrigger) {
     type = 'initial'
     name = `trigger_${paletteNode.triggerType}`
   } else if (type === 'timeout_node') {
@@ -568,7 +806,36 @@ function onDrop(event) {
     }
   }
 
-  if (paletteNode.isTrigger) {
+  if (paletteNode.isAction) {
+    newNode.data.type = 'action'
+    newNode.data.action = {
+      mcp_server: paletteNode.server || '',
+      tool: paletteNode.tool || '',
+      inputs: {},
+      output_path: '',
+      on_error: 'error',
+    }
+  } else if (paletteNode.isComponent) {
+    const comp = paletteNode.component
+    newNode.data.type = 'code'
+    newNode.data.metadata = {
+      component_id: comp.id,
+      component_version: comp.version || '1.0.0',
+    }
+    const defaultInputs = {}
+    if (comp.inputs_schema?.properties) {
+      for (const [k, p] of Object.entries(comp.inputs_schema.properties)) {
+        if (p.default !== undefined) {
+          defaultInputs[k] = String(p.default)
+        }
+      }
+    }
+    newNode.data.code = {
+      language: 'javascript',
+      code: comp.code_template,
+      inputs: defaultInputs,
+    }
+  } else if (paletteNode.isTrigger) {
     newNode.data.type = 'initial'
     newNode.data.triggerType = paletteNode.triggerType
     newNode.data.triggerConfig = {}
@@ -815,6 +1082,7 @@ function stopSidebarResize() {
 
 onMounted(async () => {
   sessionStorage.setItem('chainnodes_preferred_designer', 'legacy')
+  fetchPaletteData()
 
   // Check for AI-proposed fix from the Monitor
   const fixData = sessionStorage.getItem('chainnodes_ai_fix')

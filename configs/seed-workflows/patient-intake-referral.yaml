@@ -1,0 +1,241 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: patient-intake-referral
+  version: v1
+  description: |
+    Healthcare patient intake and clinical referral triage: parses unstructured GP and specialist
+    referral letters, extracts clinical markers and urgency tier, deterministically validates prerequisite
+    diagnostic completeness, acknowledges receipt to the referrer, routes to the appropriate specialty
+    clinic, and flags fast-track (2-week wait) or incomplete cases for triage nurse sign-off.
+  labels:
+    department: healthcare
+    category: clinical-intake
+
+inputs:
+  - name: referral_id
+    type: string
+    required: true
+    description: "Referral reference ID"
+  - name: patient_identifier
+    type: string
+    required: true
+    description: "Patient NHS or Medical Record Number"
+  - name: referral_document
+    type: file
+    required: true
+    description: "Upload referral letter or clinical document (PDF/Image)"
+
+blackboard:
+  schema:
+    referral_id:
+      type: string
+      required: true
+    patient_identifier:
+      type: string
+      required: true
+    referrer_name:
+      type: string
+    referrer_email:
+      type: string
+    referral_document:
+      type: file
+      required: true
+    suspected_condition:
+      type: string
+    clinical_specialty:
+      type: string
+    urgency_level:
+      type: string
+    is_complete:
+      type: bool
+    missing_requirements:
+      type: string
+    triage_notes:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: referral_inbox_webhook
+    type: webhook
+    config:
+      path: /webhook/clinical/referrals
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"parse_document"'
+      updates:
+        status: '"IN_TRIAGE"'
+    position:
+      x: 320
+      y: 60
+
+  - name: PARSE_REFERRAL
+    type: prompt
+    agent: clinical-nlp-specialist
+    instructions: |
+      Analyze the clinical referral document for patient {{ blackboard.patient_identifier }}.
+      Extract:
+      1. referrer_name: Physician or practice name.
+      2. referrer_email: Contact email for communications.
+      3. suspected_condition: Diagnostic hypothesis or symptoms.
+      4. clinical_specialty: Match to one of [CARDIOLOGY, ONCOLOGY, ORTHOPEDICS, NEUROLOGY, GENERAL_MEDICINE].
+      5. urgency_level: One of [TWO_WEEK_WAIT, URGENT, ROUTINE]. Flag suspected malignancies as TWO_WEEK_WAIT.
+
+      Update blackboard fields and trigger "parsed".
+    position:
+      x: 320
+      y: 200
+
+  - name: VALIDATE_COMPLETENESS
+    type: code
+    code:
+      language: javascript
+      code: |
+        var missing = [];
+        if (!bb.patient_identifier) missing.push("Patient NHS/ID Number");
+        if (!bb.suspected_condition) missing.push("Clinical Indication / Diagnosis");
+        if (!bb.referrer_email) missing.push("Referring Doctor Contact Info");
+
+        var isTwoWeekWait = (bb.urgency_level === "TWO_WEEK_WAIT");
+        var isComplete = (missing.length === 0);
+
+        bb.is_complete = isComplete;
+        bb.missing_requirements = missing.join("; ");
+
+        // Incomplete referrals or 2-week wait cancer pathways mandate human clinical oversight
+        if (!isComplete || isTwoWeekWait) {
+          trigger("incomplete_or_urgent");
+        } else {
+          trigger("complete");
+        }
+    position:
+      x: 320
+      y: 340
+
+  - name: ACKNOWLEDGE_REFERRAL
+    type: action
+    action:
+      mcp_server: clinical-comm-service
+      tool: send_referrer_acknowledgement
+      inputs:
+        referral_id: "bb.referral_id"
+        referrer_email: "bb.referrer_email"
+        patient_id: "bb.patient_identifier"
+        specialty: "bb.clinical_specialty"
+      output_path: "ack_receipt"
+    position:
+      x: 480
+      y: 480
+
+  - name: NURSE_CLINICAL_REVIEW
+    type: hitl
+    assignee: clinical-triage-nurse
+    instructions: |
+      Clinical review required for Referral #{{ blackboard.referral_id }} (Patient: {{ blackboard.patient_identifier }}).
+      Specialty: {{ blackboard.clinical_specialty }} | Urgency: {{ blackboard.urgency_level }}.
+      Missing Prerequisites: {{ blackboard.missing_requirements }}.
+    form_schema:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: ["accept_and_queue", "request_more_information"]
+        override_urgency:
+          type: string
+          enum: ["TWO_WEEK_WAIT", "URGENT", "ROUTINE"]
+        triage_notes:
+          type: string
+      required: ["action"]
+    position:
+      x: 160
+      y: 480
+
+  - name: REQUEST_ADDITIONAL_INFO
+    type: action
+    action:
+      mcp_server: clinical-comm-service
+      tool: request_missing_diagnostics
+      inputs:
+        referral_id: "bb.referral_id"
+        referrer_email: "bb.referrer_email"
+        missing_fields: "bb.missing_requirements"
+        notes: "bb.triage_notes"
+      output_path: "info_request_result"
+    position:
+      x: 160
+      y: 620
+
+  - name: COMMIT_TO_EHR_QUEUE
+    type: action
+    action:
+      mcp_server: ehr-system
+      tool: enqueue_referral
+      inputs:
+        patient_id: "bb.patient_identifier"
+        specialty: "bb.clinical_specialty"
+        urgency: "bb.urgency_level"
+        referral_id: "bb.referral_id"
+      output_path: "ehr_entry"
+    position:
+      x: 360
+      y: 620
+
+  - name: ENQUEUED
+    type: terminal
+    position:
+      x: 360
+      y: 760
+
+  - name: RETURNED_FOR_INFO
+    type: terminal
+    position:
+      x: 160
+      y: 760
+
+transitions:
+  - from: INTAKE
+    to: PARSE_REFERRAL
+    trigger: parse_document
+
+  - from: PARSE_REFERRAL
+    to: VALIDATE_COMPLETENESS
+    trigger: parsed
+
+  - from: VALIDATE_COMPLETENESS
+    to: ACKNOWLEDGE_REFERRAL
+    trigger: complete
+
+  - from: VALIDATE_COMPLETENESS
+    to: NURSE_CLINICAL_REVIEW
+    trigger: incomplete_or_urgent
+
+  - from: ACKNOWLEDGE_REFERRAL
+    to: COMMIT_TO_EHR_QUEUE
+    trigger: ""
+
+  - from: NURSE_CLINICAL_REVIEW
+    to: COMMIT_TO_EHR_QUEUE
+    trigger: accept_and_queue
+
+  - from: NURSE_CLINICAL_REVIEW
+    to: REQUEST_ADDITIONAL_INFO
+    trigger: request_more_information
+
+  - from: COMMIT_TO_EHR_QUEUE
+    to: ENQUEUED
+    trigger: ""
+
+  - from: REQUEST_ADDITIONAL_INFO
+    to: RETURNED_FOR_INFO
+    trigger: ""
+
+agents:
+  - name: clinical-nlp-specialist
+    rules:
+      - "Comply strictly with clinical data safety guidelines and NHS terminology."
+      - "Never down-prioritize potential red flag cancer symptoms; mark as TWO_WEEK_WAIT."
+

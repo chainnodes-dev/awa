@@ -21,6 +21,7 @@ import (
 	"github.com/asm-platform/asm/internal/store"
 	"github.com/asm-platform/asm/internal/tools"
 	"github.com/asm-platform/asm/pkg/asmtypes"
+	"github.com/expr-lang/expr"
 )
 
 // maxToolIterations caps the tool-calling loop to prevent runaway agents.
@@ -969,4 +970,184 @@ func (e *Executor) resolveModelProfile(ctx context.Context, agent asmtypes.Agent
 	}
 
 	return "", ""
+}
+
+// ExecuteAction executes an MCP tool deterministically without routing through an LLM agent.
+func (e *Executor) ExecuteAction(ctx context.Context, task orchestrator.ActionTask) (*asmtypes.AgentOutput, error) {
+	action := task.StateDef.Action
+	if action == nil {
+		return nil, fmt.Errorf("action definition missing on state %s", task.StateDef.Name)
+	}
+	if action.MCPServer == "" || action.Tool == "" {
+		return nil, fmt.Errorf("action requires mcp_server and tool on state %s", task.StateDef.Name)
+	}
+
+	// 1. Resolve MCP Client
+	var client mcp.Client
+	serverName := action.MCPServer
+
+	if !strings.HasPrefix(serverName, "http") && !strings.HasPrefix(serverName, "/") && !strings.HasPrefix(serverName, ".") {
+		if e.mcpManager != nil {
+			if dynamic, err := e.store.ListMCPServers(ctx); err == nil {
+				for _, d := range dynamic {
+					if strings.EqualFold(d.Name, serverName) || strings.EqualFold(strings.ReplaceAll(d.Name, "-", "_"), strings.ReplaceAll(serverName, "-", "_")) {
+						client, err = e.mcpManager.GetClient(ctx, d.Name)
+						if err != nil {
+							slog.Error("Failed to get MCP client for action", "name", d.Name, "error", err)
+						}
+						serverName = d.Name
+						break
+					}
+				}
+			}
+		}
+	} else if strings.HasPrefix(serverName, "http") {
+		client = mcp.NewSSEClient(serverName)
+	}
+
+	if client == nil {
+		errTrigger := action.OnError
+		if errTrigger == "" {
+			errTrigger = "error"
+		}
+		errMsg := fmt.Sprintf("MCP server %q not found or unreachable", action.MCPServer)
+		return &asmtypes.AgentOutput{
+			Trigger: errTrigger,
+			BlackboardUpdates: map[string]interface{}{
+				"last_error": errMsg,
+			},
+			Reasoning: errMsg,
+		}, fmt.Errorf("%s", errMsg)
+	}
+
+	// 2. Evaluate Inputs using Expr-lang against Blackboard
+	resolvedArgs := make(map[string]interface{})
+	for k, exprStr := range action.Inputs {
+		resolvedArgs[k] = evalActionInput(exprStr, task.Blackboard)
+	}
+
+	// 3. Audit logging observer
+	start := time.Now()
+	var auditErr error
+	var auditOutput interface{}
+	defer func() {
+		dur := time.Since(start)
+		if e.store != nil {
+			log := &asmtypes.MCPAuditLog{
+				RunID:      task.RunID,
+				StateName:  task.StateDef.Name,
+				AgentName:  "action-runner",
+				ServerURL:  serverName,
+				Method:     "tools/call",
+				ToolName:   action.Tool,
+				Input:      resolvedArgs,
+				Output:     auditOutput,
+				DurationMs: int(dur.Milliseconds()),
+				IsError:    auditErr != nil,
+			}
+			if auditErr != nil {
+				log.ErrorMsg = auditErr.Error()
+			}
+			_ = e.store.RecordMCPCall(ctx, log)
+		}
+	}()
+
+	// 4. Call Tool
+	callParams := map[string]interface{}{
+		"name":      action.Tool,
+		"arguments": resolvedArgs,
+	}
+	resBytes, err := client.Call(ctx, "tools/call", callParams)
+	if err != nil {
+		auditErr = err
+		errTrigger := action.OnError
+		if errTrigger == "" {
+			errTrigger = "error"
+		}
+		return &asmtypes.AgentOutput{
+			Trigger: errTrigger,
+			BlackboardUpdates: map[string]interface{}{
+				"last_error": err.Error(),
+			},
+			Reasoning: fmt.Sprintf("tool call %s failed: %v", action.Tool, err),
+		}, err
+	}
+
+	// 5. Parse Tool Result
+	var toolResult struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	_ = json.Unmarshal(resBytes, &toolResult)
+
+	if toolResult.IsError {
+		errorText := "mcp tool returned error"
+		if len(toolResult.Content) > 0 {
+			errorText = toolResult.Content[0].Text
+		}
+		auditErr = fmt.Errorf("%s", errorText)
+		errTrigger := action.OnError
+		if errTrigger == "" {
+			errTrigger = "error"
+		}
+		return &asmtypes.AgentOutput{
+			Trigger: errTrigger,
+			BlackboardUpdates: map[string]interface{}{
+				"last_error": errorText,
+			},
+			Reasoning: fmt.Sprintf("tool call returned error: %s", errorText),
+		}, nil
+	}
+
+	// Extract content text
+	var rawText string
+	if len(toolResult.Content) > 0 {
+		rawText = toolResult.Content[0].Text
+	} else {
+		rawText = string(resBytes)
+	}
+
+	// Try to unmarshal into structured JSON
+	var parsedOutput interface{}
+	if err := json.Unmarshal([]byte(rawText), &parsedOutput); err != nil {
+		parsedOutput = rawText
+	}
+	auditOutput = parsedOutput
+
+	updates := make(map[string]interface{})
+	if action.OutputPath != "" {
+		updates[action.OutputPath] = parsedOutput
+	} else if obj, ok := parsedOutput.(map[string]interface{}); ok {
+		for k, v := range obj {
+			updates[k] = v
+		}
+	} else {
+		updates["action_result"] = parsedOutput
+	}
+
+	return &asmtypes.AgentOutput{
+		Trigger:           "done",
+		BlackboardUpdates: updates,
+		Reasoning:         fmt.Sprintf("deterministic action %s:%s completed", action.MCPServer, action.Tool),
+	}, nil
+}
+
+func evalActionInput(exprStr string, bb map[string]interface{}) interface{} {
+	env := make(map[string]interface{}, len(bb)+2)
+	for k, v := range bb {
+		env[k] = v
+	}
+	env["blackboard"] = bb
+	env["bb"] = bb
+
+	prog, err := expr.Compile(exprStr, expr.Env(env), expr.AllowUndefinedVariables())
+	if err == nil {
+		if val, err := expr.Run(prog, env); err == nil {
+			return val
+		}
+	}
+	return exprStr
 }

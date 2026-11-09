@@ -253,7 +253,7 @@ Decompose the provided process description into a sequence of logical states and
    - **Entry Point (Start Node)**: The first state in the array MUST be the workflow entry point (mark it as the start). To prevent runtime execution errors, this entry point state MUST have exactly ONE outgoing transition, and it MUST be unconditional (no guard). Place any initial routing, input validation, or decision logic in subsequent nodes rather than the start node.
    - **Exit Point**: At least one state (usually the last one) MUST represent the logical conclusion of the process (terminal).
 2. **Data Contract**: For every state, define exactly which Blackboard keys it reads and which it writes.
-3. **Workflow Ports**: Identify which data points are required as initial **Inputs** to the entire workflow and which represent the final **Outputs**.
+3. **Workflow Ports & Field Types**: Identify which data points are required as initial **Inputs** to the entire workflow and which represent the final **Outputs**. Supported types are 'string', 'number', 'bool', 'object', 'list', and 'file'. If an input represents an uploaded document, bill, receipt, or PDF, mark its type as "file".
 4. **Technical Requirements**: Provide a machine-readable technical requirement defining the logic, logical conditions, and tool hints.
 
 ### Output Format
@@ -406,7 +406,8 @@ Review the complete workflow structure, including all node implementations, data
 2. **Global Schema Review**: Ensure the Blackboard Schema correctly represents every variable used by every state.
 3. **Ports Finalization**: Finalize the Workflow Inputs and Outputs based on the entire flow logic.
 4. **Agent & MCP Review**: Ensure every 'prompt' node has a corresponding agent in the 'agents' section, and every required MCP server is listed in 'workflow_capabilities'.
-5. **Consistency Check**: Ensure all transition triggers and guards are correctly implemented.
+5. **Field Types & File Uploads**: Valid blackboard and input field types are 'string', 'number', 'bool', 'object', 'list', and 'file'. If an input or blackboard field represents an uploaded document, invoice, receipt, image, or PDF file, you MUST explicitly specify "type": "file" so that the UI renders the interactive file upload widget.
+6. **Consistency Check**: Ensure all transition triggers and guards are correctly implemented.
 
 ### Output Format
 **IMPORTANT**: Return ONLY a valid JSON block containing the finalized metadata and schema.

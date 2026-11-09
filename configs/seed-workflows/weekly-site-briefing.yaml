@@ -1,0 +1,172 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: weekly-site-briefing
+  version: v1
+  description: |
+    Multi-site operational synthesis and leadership intelligence digest: runs on a scheduled Monday
+    morning cadence, aggregates operational telemetry from distributed facilities (safety incidents,
+    shift staffing levels, equipment downtime, output targets), deterministically scores site health,
+    synthesizes an executive markdown briefing, and publishes the digest to leadership channels.
+  schedule: "0 0 6 * * 1"
+  labels:
+    department: operations
+    category: multi-site-intelligence
+
+inputs:
+  - name: reporting_period
+    type: string
+    required: false
+    description: "Optional audit period override (default: Prior 7 Days)"
+
+blackboard:
+  schema:
+    report_date:
+      type: string
+    reporting_period:
+      type: string
+      default: "Prior 7 Days"
+    raw_site_metrics:
+      type: object
+    critical_sites_count:
+      type: number
+    safety_incidents_total:
+      type: number
+    downtime_hours_total:
+      type: number
+    executive_briefing:
+      type: string
+    status:
+      type: string
+
+states:
+  - name: SCHEDULED_TRIGGER
+    type: initial
+    script:
+      trigger: '"fetch_site_data"'
+      updates:
+        status: '"GATHERING_TELEMETRY"'
+    position:
+      x: 320
+      y: 60
+
+  - name: FETCH_SITE_TELEMETRY
+    type: action
+    action:
+      mcp_server: facility-monitor
+      tool: get_weekly_site_metrics
+      inputs:
+        period: "bb.reporting_period"
+      output_path: "raw_site_metrics"
+      on_error: "telemetry_fetch_failed"
+    position:
+      x: 320
+      y: 190
+
+  - name: AGGREGATE_METRICS
+    type: code
+    code:
+      language: javascript
+      code: |
+        var data = bb.raw_site_metrics || {};
+        var sites = Array.isArray(data.sites) ? data.sites : [];
+
+        var totalSafety = 0;
+        var totalDowntime = 0;
+        var criticalSites = 0;
+
+        sites.forEach(function(s) {
+          totalSafety += Number(s.safety_incidents) || 0;
+          totalDowntime += Number(s.downtime_hours) || 0;
+          if (s.status === "RED" || (s.safety_incidents && s.safety_incidents > 0)) {
+            criticalSites++;
+          }
+        });
+
+        bb.safety_incidents_total = totalSafety;
+        bb.downtime_hours_total = totalDowntime;
+        bb.critical_sites_count = criticalSites;
+        bb.status = "SYNTHESIZING_BRIEFING";
+
+        trigger("synthesize_report");
+    position:
+      x: 320
+      y: 330
+
+  - name: SYNTHESIZE_EXECUTIVE_BRIEFING
+    type: prompt
+    agent: operations-synthesizer
+    instructions: |
+      You are the Chief Operating Officer's executive intelligence aide.
+      Synthesize the weekly multi-site operational report.
+
+      Reporting Period: {{ blackboard.reporting_period }}
+      Total Safety Incidents: {{ blackboard.safety_incidents_total }}
+      Total Equipment Downtime: {{ blackboard.downtime_hours_total }} hours
+      Sites Requiring Attention: {{ blackboard.critical_sites_count }}
+
+      Raw Site Data:
+      {{ blackboard.raw_site_metrics }}
+
+      Structure the executive briefing:
+      1. Executive Overview: 3-sentence summary of overall operational health.
+      2. Health & Safety: Details of any incidents, zero-tolerance infractions, or safety accomplishments.
+      3. Critical Sites & Blockers: Specific facilities experiencing staffing shortages or equipment outages.
+      4. Recommendations: Immediate priorities for the Monday operations call.
+
+      Set executive_briefing on blackboard.
+      Trigger: "briefing_ready".
+    position:
+      x: 320
+      y: 470
+
+  - name: BROADCAST_LEADERSHIP_SLACK
+    type: action
+    action:
+      mcp_server: slack-service
+      tool: post_channel_message
+      inputs:
+        channel: "'#operations-leadership'"
+        message: "bb.executive_briefing"
+      output_path: "slack_post_receipt"
+    position:
+      x: 320
+      y: 610
+
+  - name: BRIEFING_PUBLISHED
+    type: terminal
+    position:
+      x: 320
+      y: 750
+
+transitions:
+  - from: SCHEDULED_TRIGGER
+    to: FETCH_SITE_TELEMETRY
+    trigger: fetch_site_data
+
+  - from: FETCH_SITE_TELEMETRY
+    to: AGGREGATE_METRICS
+    trigger: ""
+
+  - from: FETCH_SITE_TELEMETRY
+    to: AGGREGATE_METRICS
+    trigger: telemetry_fetch_failed
+
+  - from: AGGREGATE_METRICS
+    to: SYNTHESIZE_EXECUTIVE_BRIEFING
+    trigger: synthesize_report
+
+  - from: SYNTHESIZE_EXECUTIVE_BRIEFING
+    to: BROADCAST_LEADERSHIP_SLACK
+    trigger: briefing_ready
+
+  - from: BROADCAST_LEADERSHIP_SLACK
+    to: BRIEFING_PUBLISHED
+    trigger: ""
+
+agents:
+  - name: operations-synthesizer
+    rules:
+      - "Present high-signal, executive-level insights without vanity metrics."
+      - "Highlight safety concerns and production risks with high visibility."
+

@@ -564,6 +564,99 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 				continue
 			}
 
+			// ── Action state (Deterministic MCP Tool execution) ─────────────────
+			if state.Type == asmtypes.StateAction && state.Action != nil {
+				var stateTimeout time.Duration
+				if state.Timeout != "" {
+					if d, err := time.ParseDuration(state.Timeout); err == nil {
+						stateTimeout = d
+					}
+				}
+				actionOpts := makeAgentOpts(bCtx, "", stateTimeout)
+				var output *asmtypes.AgentOutput
+				err := workflow.ExecuteActivity(actionOpts, (*Activities).ExecuteAction, ExecuteActionParams{
+					RunID:           p.RunID,
+					TenantID:        p.TenantID,
+					WorkflowName:    p.Def.Metadata.Name,
+					WorkflowVersion: p.Def.Metadata.Version,
+					StateDef:        *state,
+					Blackboard:      bb,
+					Def:             p.Def,
+				}).Get(bCtx, &output)
+				if err != nil {
+					if temporalsdk.IsTimeoutError(err) {
+						trigger := state.OnTimeout
+						if trigger == "" {
+							trigger = "timeout"
+						}
+						nextStates, transErr := applyTransition(p.Def, currentState, trigger, bb)
+						if transErr != nil {
+							workflowErr = fmt.Errorf("action execution timed out and no transition found for trigger '%s': %w", trigger, err)
+							return
+						}
+						if len(nextStates) == 0 {
+							return
+						}
+						if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], trigger, bb, nil); err != nil {
+							workflowErr = err
+							return
+						}
+						for i := 1; i < len(nextStates); i++ {
+							target := nextStates[i]
+							workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+						}
+						currentState = nextStates[0]
+						continue
+					}
+
+					// Route through error transition if configured
+					errTrigger := state.Action.OnError
+					if errTrigger == "" {
+						errTrigger = "error"
+					}
+					nextStates, transErr := applyTransition(p.Def, currentState, errTrigger, bb)
+					if transErr == nil && len(nextStates) > 0 {
+						bb["last_error"] = err.Error()
+						if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], errTrigger, bb, nil); err != nil {
+							workflowErr = err
+							return
+						}
+						for i := 1; i < len(nextStates); i++ {
+							target := nextStates[i]
+							workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+						}
+						currentState = nextStates[0]
+						continue
+					}
+
+					workflowErr = fmt.Errorf("action execution failed: %w", err)
+					return
+				}
+
+				for k, v := range output.BlackboardUpdates {
+					bb[k] = v
+				}
+
+				nextStates, err := applyTransition(p.Def, currentState, output.Trigger, bb)
+				if err != nil {
+					workflowErr = err
+					return
+				}
+				if len(nextStates) == 0 {
+					return
+				}
+				if err := persistTransition(shortOpts, bCtx, p.RunID, p.Def, p.TenantID, currentState, nextStates[0], output.Trigger, bb, output); err != nil {
+					workflowErr = err
+					return
+				}
+				for i := 1; i < len(nextStates); i++ {
+					target := nextStates[i]
+					workflow.Go(bCtx, func(gCtx workflow.Context) { execBranch(gCtx, target) })
+				}
+				currentState = nextStates[0]
+				continue
+			}
+
 			// ── Emit Event ──────────────────────────────────────────────────────
 			if state.Type == asmtypes.StateEmitEvent && state.EmitEvent != nil {
 				ee := state.EmitEvent

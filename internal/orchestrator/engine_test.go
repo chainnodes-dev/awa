@@ -12,11 +12,19 @@ import (
 // --- mock executor ---
 
 type mockExecutor struct {
-	fn func(task AgentTask) (*asmtypes.AgentOutput, error)
+	fn       func(task AgentTask) (*asmtypes.AgentOutput, error)
+	actionFn func(task ActionTask) (*asmtypes.AgentOutput, error)
 }
 
 func (m *mockExecutor) Execute(_ context.Context, task AgentTask) (*asmtypes.AgentOutput, error) {
 	return m.fn(task)
+}
+
+func (m *mockExecutor) ExecuteAction(_ context.Context, task ActionTask) (*asmtypes.AgentOutput, error) {
+	if m.actionFn != nil {
+		return m.actionFn(task)
+	}
+	return &asmtypes.AgentOutput{Trigger: "done"}, nil
 }
 
 // --- workflow fixtures ---

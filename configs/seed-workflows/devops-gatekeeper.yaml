@@ -10,6 +10,19 @@ metadata:
   schedule: ''
   process_description: ''
   reusable: false
+inputs:
+  - name: incident_id
+    type: string
+    required: true
+    description: "Alert / incident ID"
+  - name: alert_title
+    type: string
+    required: true
+    description: "Incident title or alert synopsis"
+  - name: service_name
+    type: string
+    required: true
+    description: "Affected service or subsystem name"
 blackboard:
   schema:
     alert_title:

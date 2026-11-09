@@ -1,0 +1,211 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: staff-compliance-tracker
+  version: v1
+  description: |
+    Automated staff compliance and credential audit for regulated industries: runs on a scheduled
+    daily cadence, queries employee records for expiring licenses, certifications, and mandatory
+    training, categorizes risk into progressive notice tiers, sends automated reminders, and escalates
+    non-compliant or expired personnel to HR leadership for roster suspension.
+  schedule: "0 0 8 * * *"
+  labels:
+    department: human-resources
+    category: compliance
+
+inputs:
+  - name: department
+    type: string
+    required: false
+    description: "Specific department to audit or ALL"
+
+blackboard:
+  schema:
+    scan_date:
+      type: string
+    department:
+      type: string
+      default: "ALL"
+    audit_results:
+      type: object
+    expiring_count:
+      type: number
+    expired_count:
+      type: number
+    escalation_needed:
+      type: bool
+    hr_action:
+      type: string
+    notice_summary:
+      type: string
+    status:
+      type: string
+
+states:
+  - name: SCHEDULED_TRIGGER
+    type: initial
+    script:
+      trigger: '"run_scan"'
+      updates:
+        status: '"SCANNING"'
+    position:
+      x: 320
+      y: 60
+
+  - name: QUERY_EXPIRED_CREDENTIALS
+    type: action
+    action:
+      mcp_server: hr-registry
+      tool: audit_credential_expiries
+      inputs:
+        threshold_days: "60"
+        department: "bb.department"
+      output_path: "audit_results"
+    position:
+      x: 320
+      y: 190
+
+  - name: ANALYZE_COMPLIANCE_STATUS
+    type: code
+    code:
+      language: javascript
+      code: |
+        var results = bb.audit_results || {};
+        var expiring = results.expiring ? results.expiring.length : 0;
+        var expired = results.expired ? results.expired.length : 0;
+
+        bb.expiring_count = expiring;
+        bb.expired_count = expired;
+
+        if (expired > 0) {
+          bb.escalation_needed = true;
+          bb.status = "REQUIRES_HR_ESCALATION";
+          trigger("escalate_hr");
+        } else if (expiring > 0) {
+          bb.escalation_needed = false;
+          bb.status = "DISPATCHING_REMINDERS";
+          trigger("send_reminders");
+        } else {
+          bb.status = "ALL_COMPLIANT";
+          trigger("all_clear");
+        }
+    position:
+      x: 320
+      y: 330
+
+  - name: HR_MANAGER_ESCALATION
+    type: hitl
+    assignee: hr-compliance-officer
+    instructions: |
+      CRITICAL: {{ blackboard.expired_count }} staff member(s) have expired certifications/licenses!
+      {{ blackboard.expiring_count }} credentials are expiring within 60 days.
+      Immediate action required to avoid regulatory violation.
+    form_schema:
+      type: object
+      properties:
+        hr_action:
+          type: string
+          enum: ["suspend_roster_eligibility", "grant_temporary_grace_extension"]
+        notes:
+          type: string
+          description: "Justification or remediation plan"
+      required: ["hr_action"]
+    position:
+      x: 140
+      y: 470
+
+  - name: RESTRICT_ROSTER_ACCESS
+    type: action
+    action:
+      mcp_server: scheduling-system
+      tool: suspend_shift_eligibility
+      inputs:
+        expired_records: "bb.audit_results.expired"
+        reason: "'Expired regulatory credentials'"
+      output_path: "suspension_receipt"
+    position:
+      x: 140
+      y: 610
+
+  - name: DISPATCH_EMPLOYEE_REMINDERS
+    type: action
+    action:
+      mcp_server: email-service
+      tool: send_compliance_reminders
+      inputs:
+        target_list: "bb.audit_results.expiring"
+        template_id: "'credential_renewal_notice'"
+      output_path: "email_dispatch_log"
+    position:
+      x: 480
+      y: 470
+
+  - name: LOG_AUDIT_REPORT
+    type: action
+    action:
+      mcp_server: compliance-system
+      tool: archive_daily_audit
+      inputs:
+        expiring_count: "bb.expiring_count"
+        expired_count: "bb.expired_count"
+        status: "bb.status"
+      output_path: "archive_id"
+    position:
+      x: 320
+      y: 750
+
+  - name: COMPLIANCE_CLEAN
+    type: terminal
+    position:
+      x: 520
+      y: 330
+
+  - name: ACTION_COMPLETED
+    type: terminal
+    position:
+      x: 320
+      y: 890
+
+transitions:
+  - from: SCHEDULED_TRIGGER
+    to: QUERY_EXPIRED_CREDENTIALS
+    trigger: run_scan
+
+  - from: QUERY_EXPIRED_CREDENTIALS
+    to: ANALYZE_COMPLIANCE_STATUS
+    trigger: ""
+
+  - from: ANALYZE_COMPLIANCE_STATUS
+    to: COMPLIANCE_CLEAN
+    trigger: all_clear
+
+  - from: ANALYZE_COMPLIANCE_STATUS
+    to: DISPATCH_EMPLOYEE_REMINDERS
+    trigger: send_reminders
+
+  - from: ANALYZE_COMPLIANCE_STATUS
+    to: HR_MANAGER_ESCALATION
+    trigger: escalate_hr
+
+  - from: HR_MANAGER_ESCALATION
+    to: RESTRICT_ROSTER_ACCESS
+    trigger: suspend_roster_eligibility
+
+  - from: HR_MANAGER_ESCALATION
+    to: DISPATCH_EMPLOYEE_REMINDERS
+    trigger: grant_temporary_grace_extension
+
+  - from: RESTRICT_ROSTER_ACCESS
+    to: LOG_AUDIT_REPORT
+    trigger: ""
+
+  - from: DISPATCH_EMPLOYEE_REMINDERS
+    to: LOG_AUDIT_REPORT
+    trigger: ""
+
+  - from: LOG_AUDIT_REPORT
+    to: ACTION_COMPLETED
+    trigger: ""
+
+agents: []
+

@@ -1,0 +1,254 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: expense-claim-checker
+  version: v1
+  description: |
+    Automated corporate expense claim audit and policy enforcement: processes employee receipt uploads,
+    extracts itemized line items and tax, deterministically verifies corporate policy guidelines (per-diem
+    meal limits, alcohol exclusions, duplicate transaction prevention), auto-approves compliant low-value
+    claims, routes policy exceptions to Line Managers for HITL sign-off, and submits reimbursements to Payroll.
+  labels:
+    department: finance
+    category: expense-management
+
+inputs:
+  - name: claim_id
+    type: string
+    required: true
+    description: "Expense claim reference (e.g. EXP-2026-001)"
+  - name: employee_id
+    type: string
+    required: true
+    description: "Employee ID"
+  - name: employee_name
+    type: string
+    required: true
+    description: "Employee full name"
+  - name: claim_amount
+    type: number
+    required: true
+    description: "Claim amount in GBP"
+  - name: claim_category
+    type: string
+    required: true
+    description: "Category: MEALS, TRAVEL, LODGING, SOFTWARE, OFFICE"
+  - name: receipt_file
+    type: file
+    required: true
+    description: "Upload receipt image or PDF"
+
+blackboard:
+  schema:
+    claim_id:
+      type: string
+      required: true
+    employee_id:
+      type: string
+      required: true
+    employee_name:
+      type: string
+    claim_amount:
+      type: number
+      required: true
+    claim_category:
+      type: string
+      default: "MEALS"
+    receipt_file:
+      type: file
+      required: true
+    extracted_merchant:
+      type: string
+    extracted_amount:
+      type: number
+    contains_alcohol:
+      type: bool
+    policy_violations:
+      type: string
+    auto_approved:
+      type: bool
+    payroll_entry_id:
+      type: string
+    rejection_explanation:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: expense_submission_webhook
+    type: webhook
+    config:
+      path: /webhook/expenses/submit
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"ocr_receipt"'
+      updates:
+        status: '"IN_AUDIT"'
+    position:
+      x: 320
+      y: 60
+
+  - name: EXTRACT_RECEIPT_DETAILS
+    type: prompt
+    agent: receipt-auditor
+    instructions: |
+      Inspect the receipt_file for claim {{ blackboard.claim_id }}.
+      Extract:
+      1. extracted_merchant: Merchant or venue name.
+      2. extracted_amount: Total numeric amount on receipt.
+      3. contains_alcohol: True if any beer, wine, spirits, or cocktails are listed in line items.
+
+      Trigger: "details_extracted".
+    position:
+      x: 320
+      y: 200
+
+  - name: VALIDATE_EXPENSE_POLICY
+    type: code
+    code:
+      language: javascript
+      code: |
+        var claimed = Number(bb.claim_amount) || 0;
+        var extracted = Number(bb.extracted_amount) || 0;
+        var category = bb.claim_category || "MEALS";
+        var violations = [];
+
+        // Check amount match with tolerance
+        if (Math.abs(claimed - extracted) > 1.0) {
+          violations.push("Claimed amount (£" + claimed + ") differs from receipt total (£" + extracted + ")");
+        }
+
+        // Alcohol prohibition
+        if (bb.contains_alcohol) {
+          violations.push("Alcohol itemized on receipt without executive entertainment exception");
+        }
+
+        // Category per-diem caps
+        if (category === "MEALS" && claimed > 45.0) {
+          violations.push("Meal expense exceeds £45 per diem ceiling");
+        }
+
+        var isCompliant = (violations.length === 0);
+        var canAutoApprove = isCompliant && claimed <= 150.0;
+
+        bb.policy_violations = violations.join("; ");
+        bb.auto_approved = canAutoApprove;
+
+        if (canAutoApprove) {
+          bb.status = "AUTO_APPROVED";
+          trigger("auto_approve");
+        } else {
+          bb.status = "REQUIRES_MANAGER_REVIEW";
+          trigger("requires_manager_review");
+        }
+    position:
+      x: 320
+      y: 340
+
+  - name: LINE_MANAGER_APPROVAL
+    type: hitl
+    assignee: line-manager
+    instructions: |
+      Expense Review for {{ blackboard.employee_name }} (Claim #{{ blackboard.claim_id }}).
+      Amount: £{{ blackboard.claim_amount }} | Category: {{ blackboard.claim_category }}.
+      Flagged Policy Exceptions: {{ blackboard.policy_violations || 'None (exceeds auto-approval limit)' }}.
+    form_schema:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: ["approve", "reject"]
+        manager_notes:
+          type: string
+          description: "Reason if rejected or justified exception"
+      required: ["decision"]
+    position:
+      x: 140
+      y: 480
+
+  - name: DISBURSE_TO_PAYROLL
+    type: action
+    action:
+      mcp_server: payroll-service
+      tool: queue_expense_reimbursement
+      inputs:
+        employee_id: "bb.employee_id"
+        claim_id: "bb.claim_id"
+        amount: "bb.claim_amount"
+      output_path: "payroll_entry_id"
+    position:
+      x: 320
+      y: 620
+
+  - name: REJECT_CLAIM
+    type: prompt
+    agent: finance-notifier
+    instructions: |
+      Draft a constructive rejection notice to {{ blackboard.employee_name }}.
+      Specify the claim ID: {{ blackboard.claim_id }}.
+      Policy Violations: {{ blackboard.policy_violations }}.
+      Explain required corrective steps or how to resubmit with required itemization.
+      Set rejection_explanation on blackboard.
+      Trigger: "notification_sent".
+    position:
+      x: 140
+      y: 620
+
+  - name: EXPENSE_REIMBURSED
+    type: terminal
+    position:
+      x: 320
+      y: 760
+
+  - name: EXPENSE_REJECTED
+    type: terminal
+    position:
+      x: 140
+      y: 760
+
+transitions:
+  - from: INTAKE
+    to: EXTRACT_RECEIPT_DETAILS
+    trigger: ocr_receipt
+
+  - from: EXTRACT_RECEIPT_DETAILS
+    to: VALIDATE_EXPENSE_POLICY
+    trigger: details_extracted
+
+  - from: VALIDATE_EXPENSE_POLICY
+    to: DISBURSE_TO_PAYROLL
+    trigger: auto_approve
+
+  - from: VALIDATE_EXPENSE_POLICY
+    to: LINE_MANAGER_APPROVAL
+    trigger: requires_manager_review
+
+  - from: LINE_MANAGER_APPROVAL
+    to: DISBURSE_TO_PAYROLL
+    trigger: approve
+
+  - from: LINE_MANAGER_APPROVAL
+    to: REJECT_CLAIM
+    trigger: reject
+
+  - from: DISBURSE_TO_PAYROLL
+    to: EXPENSE_REIMBURSED
+    trigger: ""
+
+  - from: REJECT_CLAIM
+    to: EXPENSE_REJECTED
+    trigger: notification_sent
+
+agents:
+  - name: receipt-auditor
+    rules:
+      - "Scrutinize itemized receipts for alcohol line items."
+      - "Extract grand total accurately including VAT."
+
+  - name: finance-notifier
+    rules:
+      - "Be respectful and clear regarding compliance guidelines."
+

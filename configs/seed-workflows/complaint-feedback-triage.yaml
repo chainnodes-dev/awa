@@ -1,0 +1,264 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: complaint-feedback-triage
+  version: v1
+  description: |
+    Customer grievance resolution and churn prevention: ingests customer complaints and negative
+    feedback across review platforms and support channels, performs sentiment and churn-risk scoring,
+    enriches with customer lifetime value (LTV) from CRM, computes policy-based goodwill compensation,
+    routes high-value or severe complaints to CX leadership for HITL review, and delivers personalized
+    apology communications.
+  labels:
+    department: customer-experience
+    category: complaint-management
+
+inputs:
+  - name: complaint_id
+    type: string
+    required: true
+    description: "Complaint record ID (e.g. CMP-8472)"
+  - name: customer_id
+    type: string
+    required: true
+    description: "Customer account identifier"
+  - name: customer_name
+    type: string
+    required: true
+    description: "Customer full name"
+  - name: complaint_text
+    type: string
+    required: true
+    description: "Customer feedback or complaint description"
+  - name: channel
+    type: string
+    required: false
+    description: "Intake channel (EMAIL, TRUSTPILOT, ZENDESK)"
+
+blackboard:
+  schema:
+    complaint_id:
+      type: string
+      required: true
+    customer_id:
+      type: string
+      required: true
+    customer_name:
+      type: string
+    complaint_text:
+      type: string
+      required: true
+    channel:
+      type: string
+      default: "EMAIL"
+    sentiment_score:
+      type: number
+    churn_risk:
+      type: string
+    issue_category:
+      type: string
+    customer_metrics:
+      type: object
+    customer_ltv:
+      type: number
+    proposed_compensation:
+      type: string
+    requires_manager_review:
+      type: bool
+    resolution_letter:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: complaint_inbox_webhook
+    type: webhook
+    config:
+      path: /webhook/complaints/intake
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"evaluate_sentiment"'
+      updates:
+        status: '"ANALYZING_FEEDBACK"'
+    position:
+      x: 320
+      y: 60
+
+  - name: ANALYZE_COMPLAINT
+    type: prompt
+    agent: complaint-analyst
+    instructions: |
+      Analyze the customer complaint:
+      "{{ blackboard.complaint_text }}"
+
+      Evaluate:
+      1. issue_category: One of [SERVICE_QUALITY, DELIVERY_DELAY, BILLING_DISPUTE, PRODUCT_DEFECT, STAFF_CONDUCT].
+      2. sentiment_score: Number between -1.0 (extremely negative/hostile) to 0.0 (mildly displeased).
+      3. churn_risk: One of [HIGH, MEDIUM, LOW]. High risk indicates explicit threats to cancel or switch vendors.
+
+      Update blackboard and trigger "sentiment_evaluated".
+    position:
+      x: 320
+      y: 200
+
+  - name: FETCH_CUSTOMER_VALUE
+    type: action
+    action:
+      mcp_server: crm-service
+      tool: get_customer_metrics
+      inputs:
+        customer_id: "bb.customer_id"
+      output_path: "customer_metrics"
+      on_error: "crm_metrics_failed"
+    position:
+      x: 320
+      y: 340
+
+  - name: COMPENSATION_ENGINE
+    type: code
+    code:
+      language: javascript
+      code: |
+        var metrics = bb.customer_metrics || {};
+        var ltv = Number(metrics.lifetime_value) || 0;
+        var churn = bb.churn_risk || "LOW";
+        var sentiment = Number(bb.sentiment_score) || -0.5;
+
+        bb.customer_ltv = ltv;
+
+        // Goodwill compensation tiers
+        var compensation = "None";
+        if (churn === "HIGH" || sentiment <= -0.7) {
+          compensation = ltv > 1000 ? "Full refund + £50 goodwill voucher" : "£25 service credit";
+        } else if (churn === "MEDIUM") {
+          compensation = "15% discount on next renewal";
+        }
+        bb.proposed_compensation = compensation;
+
+        // Escalate VIPs or high churn risk to CX leadership
+        var needsReview = (churn === "HIGH" || ltv >= 2500);
+        bb.requires_manager_review = needsReview;
+        bb.status = needsReview ? "PENDING_CX_LEAD_REVIEW" : "AUTO_RESOLVING";
+
+        if (needsReview) {
+          trigger("lead_review");
+        } else {
+          trigger("auto_resolve");
+        }
+    position:
+      x: 320
+      y: 480
+
+  - name: CX_LEAD_REVIEW
+    type: hitl
+    assignee: cx-director
+    instructions: |
+      High-risk customer complaint flagged for {{ blackboard.customer_name }} (ID: {{ blackboard.customer_id }}).
+      LTV: £{{ blackboard.customer_ltv }} | Churn Risk: {{ blackboard.churn_risk }}.
+      Proposed Goodwill Settlement: {{ blackboard.proposed_compensation }}.
+    form_schema:
+      type: object
+      properties:
+        approved_compensation:
+          type: string
+          description: "Confirm or customize the goodwill offer"
+        action:
+          type: string
+          enum: ["approve_settlement", "escalate_to_executive_call"]
+      required: ["approved_compensation", "action"]
+    position:
+      x: 140
+      y: 620
+
+  - name: DRAFT_RESOLUTION_COMMUNICATION
+    type: prompt
+    agent: empathy-specialist
+    instructions: |
+      Draft an empathetic, sincere, and reassuring resolution email to {{ blackboard.customer_name }}.
+      Issue Category: {{ blackboard.issue_category }}.
+      Acknowledged Incident: {{ blackboard.complaint_text }}.
+      Goodwill Offer: {{ blackboard.proposed_compensation }}.
+
+      Ensure the response takes full ownership without defensive legalistic language.
+      Set resolution_letter on blackboard.
+      Trigger: "resolution_drafted".
+    position:
+      x: 320
+      y: 760
+
+  - name: DISPATCH_RESOLUTION
+    type: action
+    action:
+      mcp_server: helpdesk-system
+      tool: send_resolution_email
+      inputs:
+        customer_id: "bb.customer_id"
+        complaint_id: "bb.complaint_id"
+        body: "bb.resolution_letter"
+        compensation: "bb.proposed_compensation"
+      output_path: "dispatch_status"
+    position:
+      x: 320
+      y: 900
+
+  - name: CASE_RESOLVED
+    type: terminal
+    position:
+      x: 320
+      y: 1040
+
+transitions:
+  - from: INTAKE
+    to: ANALYZE_COMPLAINT
+    trigger: evaluate_sentiment
+
+  - from: ANALYZE_COMPLAINT
+    to: FETCH_CUSTOMER_VALUE
+    trigger: sentiment_evaluated
+
+  - from: FETCH_CUSTOMER_VALUE
+    to: COMPENSATION_ENGINE
+    trigger: ""
+
+  - from: FETCH_CUSTOMER_VALUE
+    to: COMPENSATION_ENGINE
+    trigger: crm_metrics_failed
+
+  - from: COMPENSATION_ENGINE
+    to: DRAFT_RESOLUTION_COMMUNICATION
+    trigger: auto_resolve
+
+  - from: COMPENSATION_ENGINE
+    to: CX_LEAD_REVIEW
+    trigger: lead_review
+
+  - from: CX_LEAD_REVIEW
+    to: DRAFT_RESOLUTION_COMMUNICATION
+    trigger: approve_settlement
+
+  - from: CX_LEAD_REVIEW
+    to: DRAFT_RESOLUTION_COMMUNICATION
+    trigger: escalate_to_executive_call
+
+  - from: DRAFT_RESOLUTION_COMMUNICATION
+    to: DISPATCH_RESOLUTION
+    trigger: resolution_drafted
+
+  - from: DISPATCH_RESOLUTION
+    to: CASE_RESOLVED
+    trigger: ""
+
+agents:
+  - name: complaint-analyst
+    rules:
+      - "Score sentiment objectively based on customer distress and frustration."
+      - "Accurately flag threats of litigation or contract termination as HIGH churn risk."
+
+  - name: empathy-specialist
+    rules:
+      - "Adopt a de-escalating, genuinely apologetic, and solutions-oriented voice."
+      - "Never make statements admitting unlawful negligence without qualification."
+

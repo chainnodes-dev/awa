@@ -1,0 +1,249 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: appointment-admin-assistant
+  version: v1
+  description: |
+    Comprehensive appointment lifecycle orchestration: handles booking intake, checks practitioner
+    calendar availability, confirms slot via SMS, enters a durable wait state until T-24 hours before
+    the visit, dispatches reminder confirmations, handles patient cancellations or no-shows, and triggers
+    post-consultation follow-up care instructions.
+  labels:
+    department: healthcare
+    category: appointment-scheduling
+
+inputs:
+  - name: booking_id
+    type: string
+    required: true
+    description: "Booking reference (e.g. BKG-2026-081)"
+  - name: patient_name
+    type: string
+    required: true
+    description: "Patient full name"
+  - name: patient_phone
+    type: string
+    required: true
+    description: "Patient phone number for SMS"
+  - name: practitioner_id
+    type: string
+    required: true
+    description: "Doctor / practitioner ID"
+  - name: appointment_slot
+    type: string
+    required: true
+    description: "Requested date and time slot (ISO 8601, e.g. 2026-11-15T10:30:00Z)"
+  - name: service_type
+    type: string
+    required: false
+    description: "Consultation type"
+
+blackboard:
+  schema:
+    booking_id:
+      type: string
+      required: true
+    patient_name:
+      type: string
+      required: true
+    patient_phone:
+      type: string
+      required: true
+    practitioner_id:
+      type: string
+      required: true
+    appointment_slot:
+      type: string
+      required: true
+    service_type:
+      type: string
+      default: "General Consultation"
+    slot_reservation:
+      type: object
+    patient_reply:
+      type: string
+      default: "PENDING"
+    followup_instructions:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: booking_request_webhook
+    type: webhook
+    config:
+      path: /webhook/appointments/book
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"check_availability"'
+      updates:
+        status: '"SCHEDULING"'
+    position:
+      x: 320
+      y: 60
+
+  - name: CHECK_CALENDAR
+    type: action
+    action:
+      mcp_server: calendar-service
+      tool: reserve_slot
+      inputs:
+        practitioner_id: "bb.practitioner_id"
+        slot_time: "bb.appointment_slot"
+        reference_id: "bb.booking_id"
+      output_path: "slot_reservation"
+      on_error: "slot_unavailable"
+    position:
+      x: 320
+      y: 190
+
+  - name: SEND_INITIAL_CONFIRMATION
+    type: action
+    action:
+      mcp_server: sms-service
+      tool: send_sms
+      inputs:
+        recipient: "bb.patient_phone"
+        message: "'Hi ' + bb.patient_name + ', your appointment for ' + bb.service_type + ' is confirmed for ' + bb.appointment_slot + '.'"
+      output_path: "initial_sms_status"
+    position:
+      x: 320
+      y: 320
+
+  - name: WAIT_FOR_REMINDER_WINDOW
+    type: wait
+    timeout: "24h"
+    on_timeout: "send_reminder"
+    position:
+      x: 320
+      y: 450
+
+  - name: SEND_REMINDER_SMS
+    type: action
+    action:
+      mcp_server: sms-service
+      tool: send_sms
+      inputs:
+        recipient: "bb.patient_phone"
+        message: "'Reminder: You have an appointment tomorrow at ' + bb.appointment_slot + '. Reply YES to confirm or NO to reschedule.'"
+      output_path: "reminder_sms_status"
+    position:
+      x: 320
+      y: 580
+
+  - name: WAIT_PATIENT_REPLY
+    type: wait
+    on_event: "appointment.reply_received"
+    on_event_match: "reply_received"
+    timeout: "8h"
+    on_timeout: "no_reply"
+    position:
+      x: 320
+      y: 710
+
+  - name: EVALUATE_REPLY
+    type: script
+    script:
+      trigger: 'bb.patient_reply == "CANCEL" ? "cancel_slot" : "confirmed"'
+      updates:
+        status: 'bb.patient_reply == "CANCEL" ? "CANCELLED" : "CONFIRMED_ATTENDING"'
+    position:
+      x: 320
+      y: 840
+
+  - name: RELEASE_SLOT
+    type: action
+    action:
+      mcp_server: calendar-service
+      tool: release_slot
+      inputs:
+        practitioner_id: "bb.practitioner_id"
+        slot_time: "bb.appointment_slot"
+      output_path: "release_status"
+    position:
+      x: 140
+      y: 970
+
+  - name: POST_APPOINTMENT_FOLLOWUP
+    type: prompt
+    agent: care-coordinator
+    instructions: |
+      The appointment for {{ blackboard.patient_name }} (Booking #{{ blackboard.booking_id }}) has concluded.
+      Generate personalized follow-up care instructions for {{ blackboard.service_type }}.
+      Include emergency contact guidelines, prescription refill advice, and a 1-question feedback survey.
+      Set followup_instructions on blackboard.
+      Trigger: "followup_complete".
+    position:
+      x: 480
+      y: 970
+
+  - name: COMPLETED
+    type: terminal
+    position:
+      x: 480
+      y: 1100
+
+  - name: CANCELLED
+    type: terminal
+    position:
+      x: 140
+      y: 1100
+
+transitions:
+  - from: INTAKE
+    to: CHECK_CALENDAR
+    trigger: check_availability
+
+  - from: CHECK_CALENDAR
+    to: SEND_INITIAL_CONFIRMATION
+    trigger: ""
+
+  - from: CHECK_CALENDAR
+    to: CANCELLED
+    trigger: slot_unavailable
+
+  - from: SEND_INITIAL_CONFIRMATION
+    to: WAIT_FOR_REMINDER_WINDOW
+    trigger: ""
+
+  - from: WAIT_FOR_REMINDER_WINDOW
+    to: SEND_REMINDER_SMS
+    trigger: send_reminder
+
+  - from: SEND_REMINDER_SMS
+    to: WAIT_PATIENT_REPLY
+    trigger: ""
+
+  - from: WAIT_PATIENT_REPLY
+    to: EVALUATE_REPLY
+    trigger: reply_received
+
+  - from: WAIT_PATIENT_REPLY
+    to: EVALUATE_REPLY
+    trigger: no_reply
+
+  - from: EVALUATE_REPLY
+    to: RELEASE_SLOT
+    trigger: cancel_slot
+
+  - from: EVALUATE_REPLY
+    to: POST_APPOINTMENT_FOLLOWUP
+    trigger: confirmed
+
+  - from: RELEASE_SLOT
+    to: CANCELLED
+    trigger: ""
+
+  - from: POST_APPOINTMENT_FOLLOWUP
+    to: COMPLETED
+    trigger: followup_complete
+
+agents:
+  - name: care-coordinator
+    rules:
+      - "Follow empathetic and clear clinical communication tone."
+      - "Clearly advise patients to dial emergency services for acute medical issues."
+

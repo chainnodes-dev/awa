@@ -1,0 +1,268 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: invoice-automation
+  version: v1
+  description: |
+    End-to-end accounts payable automation: multi-channel invoice intake, intelligent OCR field
+    extraction, deterministic 3-way matching against Purchase Orders and ERP contracts, tolerance
+    validation, automated straight-through processing for low-risk invoices, and human-in-the-loop
+    review for discrepancies.
+  labels:
+    department: finance
+    category: accounts-payable
+
+inputs:
+  - name: invoice_file
+    type: file
+    required: true
+    description: "Upload supplier invoice (PDF or scanned image)"
+
+blackboard:
+  schema:
+    invoice_file:
+      type: file
+      required: true
+    vendor_name:
+      type: string
+    invoice_number:
+      type: string
+    po_number:
+      type: string
+    net_amount:
+      type: number
+    vat_amount:
+      type: number
+    total_amount:
+      type: number
+    currency:
+      type: string
+      default: "EUR"
+    iban:
+      type: string
+    po_details:
+      type: object
+    po_match_status:
+      type: string
+    needs_approval:
+      type: bool
+    approval_status:
+      type: string
+    rejection_reason:
+      type: string
+    payment_reference:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: invoice_upload_webhook
+    type: webhook
+    config:
+      path: /webhook/invoices
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"ocr_needed"'
+      updates:
+        status: '"PENDING_EXTRACTION"'
+    position:
+      x: 320
+      y: 60
+
+  - name: EXTRACT_INVOICE_FIELDS
+    type: prompt
+    agent: invoice-extractor
+    instructions: |
+      Analyze the attached invoice_file document.
+      Extract the following structured fields and update the blackboard:
+      - vendor_name: Official legal company name of supplier.
+      - invoice_number: Unique invoice identifier string.
+      - po_number: Purchase order reference if present (e.g. PO-98432), else empty.
+      - net_amount: Net subtotal excluding tax (numeric float).
+      - vat_amount: Tax/VAT portion (numeric float).
+      - total_amount: Grand total payable (numeric float).
+      - currency: Standard 3-letter currency code (e.g. EUR, USD, GBP).
+      - iban: Bank account IBAN for disbursement if specified.
+
+      Set trigger: "extracted".
+    position:
+      x: 320
+      y: 200
+
+  - name: LOOKUP_PURCHASE_ORDER
+    type: action
+    action:
+      mcp_server: erp-system
+      tool: lookup_po
+      inputs:
+        po_number: "bb.po_number"
+      output_path: "po_details"
+      on_error: "po_lookup_failed"
+    position:
+      x: 320
+      y: 340
+
+  - name: THREE_WAY_MATCH
+    type: code
+    code:
+      language: javascript
+      code: |
+        var total = Number(bb.total_amount) || 0;
+        var po = bb.po_details;
+        var matchStatus = "NO_PO";
+        var needsReview = false;
+
+        if (po && po.total_amount) {
+          var poTotal = Number(po.total_amount);
+          var variance = Math.abs(total - poTotal);
+          if (variance < 0.01) {
+            matchStatus = "EXACT_MATCH";
+          } else if (variance <= poTotal * 0.02) { // 2% tolerance allowed
+            matchStatus = "TOLERANCE_PASS";
+          } else {
+            matchStatus = "DISCREPANCY";
+            needsReview = true;
+          }
+        } else if (bb.po_number) {
+          matchStatus = "PO_NOT_FOUND";
+          needsReview = true;
+        } else {
+          // No PO provided - invoices over 500 require human approval
+          needsReview = total > 500;
+        }
+
+        // Mandatory approval for high value (> 2500)
+        if (total >= 2500) {
+          needsReview = true;
+        }
+
+        bb.po_match_status = matchStatus;
+        bb.needs_approval = needsReview;
+        bb.status = needsReview ? "PENDING_APPROVAL" : "AUTO_APPROVED";
+
+        if (needsReview) {
+          trigger("needs_review");
+        } else {
+          trigger("auto_approve");
+        }
+    position:
+      x: 320
+      y: 480
+
+  - name: FINANCE_APPROVAL
+    type: hitl
+    assignee: finance-lead
+    instructions: |
+      Invoice #{{ blackboard.invoice_number }} from {{ blackboard.vendor_name }} for {{ blackboard.currency }} {{ blackboard.total_amount }}
+      requires human review. Match Status: {{ blackboard.po_match_status }}.
+    form_schema:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: ["approved", "rejected"]
+          description: "Approve payment or reject invoice"
+        rejection_reason:
+          type: string
+          description: "Explanation if rejected"
+      required: ["decision"]
+    position:
+      x: 140
+      y: 620
+
+  - name: DISPATCH_PAYMENT
+    type: action
+    action:
+      mcp_server: banking-service
+      tool: schedule_payment
+      inputs:
+        beneficiary_name: "bb.vendor_name"
+        iban: "bb.iban"
+        amount: "bb.total_amount"
+        currency: "bb.currency"
+        remittance_info: "bb.invoice_number"
+      output_path: "payment_reference"
+    position:
+      x: 320
+      y: 760
+
+  - name: RECORD_REJECTION
+    type: prompt
+    agent: vendor-comms
+    instructions: |
+      Draft a formal vendor discrepancy notification regarding invoice {{ blackboard.invoice_number }}.
+      State the reason for rejection: {{ blackboard.rejection_reason }}.
+      Invite the supplier to reissue a corrected invoice or contact the accounts team.
+      Update blackboard.status = "REJECTED".
+      Set trigger: "rejected_done".
+    position:
+      x: 140
+      y: 880
+
+  - name: COMPLETED
+    type: terminal
+    position:
+      x: 320
+      y: 920
+
+  - name: FAILED_OR_REJECTED
+    type: terminal
+    position:
+      x: 140
+      y: 1040
+
+transitions:
+  - from: INTAKE
+    to: EXTRACT_INVOICE_FIELDS
+    trigger: ocr_needed
+
+  - from: EXTRACT_INVOICE_FIELDS
+    to: LOOKUP_PURCHASE_ORDER
+    trigger: extracted
+
+  - from: LOOKUP_PURCHASE_ORDER
+    to: THREE_WAY_MATCH
+    trigger: ""
+
+  - from: LOOKUP_PURCHASE_ORDER
+    to: THREE_WAY_MATCH
+    trigger: po_lookup_failed
+
+  - from: THREE_WAY_MATCH
+    to: DISPATCH_PAYMENT
+    trigger: auto_approve
+
+  - from: THREE_WAY_MATCH
+    to: FINANCE_APPROVAL
+    trigger: needs_review
+
+  - from: FINANCE_APPROVAL
+    to: DISPATCH_PAYMENT
+    trigger: approved
+
+  - from: FINANCE_APPROVAL
+    to: RECORD_REJECTION
+    trigger: rejected
+
+  - from: DISPATCH_PAYMENT
+    to: COMPLETED
+    trigger: ""
+
+  - from: RECORD_REJECTION
+    to: FAILED_OR_REJECTED
+    trigger: rejected_done
+
+agents:
+  - name: invoice-extractor
+    rules:
+      - "Extract numerical quantities strictly as raw numbers without currency symbols."
+      - "Normalize IBANs by stripping whitespace."
+      - "Identify the formal vendor entity from the letterhead."
+
+  - name: vendor-comms
+    rules:
+      - "Be professional, polite, and specific regarding invoice reference and discrepancies."
+

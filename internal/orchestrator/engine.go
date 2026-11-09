@@ -15,9 +15,10 @@ import (
 	"github.com/asm-platform/asm/pkg/asmtypes"
 )
 
-// Executor is the interface the engine calls to dispatch agent work.
+// Executor is the interface the engine calls to dispatch agent or deterministic action work.
 type Executor interface {
 	Execute(ctx context.Context, task AgentTask) (*asmtypes.AgentOutput, error)
+	ExecuteAction(ctx context.Context, task ActionTask) (*asmtypes.AgentOutput, error)
 }
 
 // AgentTask carries everything an executor needs to run an agent.
@@ -29,6 +30,15 @@ type AgentTask struct {
 	Blackboard         map[string]interface{}
 	Def                *asmtypes.WorkflowDef
 	CapabilityMappings map[string]string
+}
+
+// ActionTask carries everything an executor needs to run a deterministic MCP action.
+type ActionTask struct {
+	RunID      string
+	TenantID   string
+	StateDef   asmtypes.StateDef
+	Blackboard map[string]interface{}
+	Def        *asmtypes.WorkflowDef
 }
 
 // TemporalEngineClient abstracts the Temporal client used by the engine.

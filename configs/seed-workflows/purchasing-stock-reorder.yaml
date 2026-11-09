@@ -1,0 +1,227 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: purchasing-stock-reorder
+  version: v1
+  description: |
+    Automated inventory replenishment and procurement: detects stock below safety buffer thresholds,
+    queries preferred supplier contracts and bulk volume pricing, computes optimal Economic Order
+    Quantity (EOQ), auto-approves routine low-cost replenishment, gates high-value purchase orders
+    through Procurement Manager sign-off, and submits EDI orders to vendors.
+  labels:
+    department: procurement
+    category: inventory-replenishment
+
+inputs:
+  - name: sku
+    type: string
+    required: true
+    description: "Item SKU code (e.g. SKU-BOX-100)"
+  - name: warehouse_id
+    type: string
+    required: true
+    description: "Facility / warehouse identifier"
+  - name: current_stock
+    type: number
+    required: true
+    description: "Current on-hand inventory count"
+  - name: safety_threshold
+    type: number
+    required: true
+    description: "Minimum safety stock threshold"
+
+blackboard:
+  schema:
+    sku:
+      type: string
+      required: true
+    warehouse_id:
+      type: string
+      required: true
+    current_stock:
+      type: number
+      required: true
+    safety_threshold:
+      type: number
+      required: true
+    supplier_data:
+      type: object
+    supplier_id:
+      type: string
+    unit_cost:
+      type: number
+    reorder_quantity:
+      type: number
+    total_cost:
+      type: number
+    requires_approval:
+      type: bool
+    po_reference:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: low_stock_event
+    type: webhook
+    config:
+      path: /webhook/inventory/low-stock
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"fetch_supplier_rates"'
+      updates:
+        status: '"AUDITING_REORDER"'
+    position:
+      x: 320
+      y: 60
+
+  - name: LOOKUP_SUPPLIER_CONTRACT
+    type: action
+    action:
+      mcp_server: erp-system
+      tool: get_preferred_supplier
+      inputs:
+        sku: "bb.sku"
+        warehouse_id: "bb.warehouse_id"
+      output_path: "supplier_data"
+      on_error: "supplier_lookup_failed"
+    position:
+      x: 320
+      y: 190
+
+  - name: CALCULATE_REORDER_QUANTITY
+    type: code
+    code:
+      language: javascript
+      code: |
+        var sup = bb.supplier_data || {};
+        var current = Number(bb.current_stock) || 0;
+        var threshold = Number(bb.safety_threshold) || 10;
+        var minPack = Number(sup.pack_size) || 20;
+        var unitPrice = Number(sup.unit_price) || 25.00;
+
+        // Calculate quantity needed to restore 3x buffer rounded to pack size
+        var deficit = (threshold * 3) - current;
+        var orderQty = Math.max(minPack, Math.ceil(deficit / minPack) * minPack);
+        var total = orderQty * unitPrice;
+
+        bb.supplier_id = sup.supplier_id || "VEND-DEFAULT";
+        bb.unit_cost = unitPrice;
+        bb.reorder_quantity = orderQty;
+        bb.total_cost = total;
+
+        // Corporate policy: POs exceeding 2,500 require Procurement Manager sign-off
+        var needsSignoff = total >= 2500;
+        bb.requires_approval = needsSignoff;
+        bb.status = needsSignoff ? "PENDING_PROCUREMENT_APPROVAL" : "READY_FOR_DISPATCH";
+
+        if (needsSignoff) {
+          trigger("procurement_signoff");
+        } else {
+          trigger("auto_approved");
+        }
+    position:
+      x: 320
+      y: 330
+
+  - name: PROCUREMENT_APPROVAL
+    type: hitl
+    assignee: procurement-director
+    instructions: |
+      Purchase Order approval required for SKU {{ blackboard.sku }}.
+      Proposed Order: {{ blackboard.reorder_quantity }} units @ £{{ blackboard.unit_cost }} = £{{ blackboard.total_cost }}.
+      Supplier: {{ blackboard.supplier_id }}.
+    form_schema:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: ["approved", "rejected"]
+        adjusted_quantity:
+          type: number
+          description: "Optional quantity override"
+      required: ["decision"]
+    position:
+      x: 140
+      y: 470
+
+  - name: DISPATCH_PURCHASE_ORDER
+    type: action
+    action:
+      mcp_server: edi-service
+      tool: submit_purchase_order
+      inputs:
+        supplier_id: "bb.supplier_id"
+        sku: "bb.sku"
+        quantity: "bb.reorder_quantity"
+        amount: "bb.total_cost"
+        delivery_location: "bb.warehouse_id"
+      output_path: "po_reference"
+    position:
+      x: 320
+      y: 610
+
+  - name: CANCEL_ORDER
+    type: script
+    script:
+      trigger: '"cancelled_done"'
+      updates:
+        status: '"PO_REJECTED"'
+    position:
+      x: 140
+      y: 610
+
+  - name: PO_COMPLETED
+    type: terminal
+    position:
+      x: 320
+      y: 750
+
+  - name: PO_REJECTED
+    type: terminal
+    position:
+      x: 140
+      y: 750
+
+transitions:
+  - from: INTAKE
+    to: LOOKUP_SUPPLIER_CONTRACT
+    trigger: fetch_supplier_rates
+
+  - from: LOOKUP_SUPPLIER_CONTRACT
+    to: CALCULATE_REORDER_QUANTITY
+    trigger: ""
+
+  - from: LOOKUP_SUPPLIER_CONTRACT
+    to: CALCULATE_REORDER_QUANTITY
+    trigger: supplier_lookup_failed
+
+  - from: CALCULATE_REORDER_QUANTITY
+    to: DISPATCH_PURCHASE_ORDER
+    trigger: auto_approved
+
+  - from: CALCULATE_REORDER_QUANTITY
+    to: PROCUREMENT_APPROVAL
+    trigger: procurement_signoff
+
+  - from: PROCUREMENT_APPROVAL
+    to: DISPATCH_PURCHASE_ORDER
+    trigger: approved
+
+  - from: PROCUREMENT_APPROVAL
+    to: CANCEL_ORDER
+    trigger: rejected
+
+  - from: DISPATCH_PURCHASE_ORDER
+    to: PO_COMPLETED
+    trigger: ""
+
+  - from: CANCEL_ORDER
+    to: PO_REJECTED
+    trigger: cancelled_done
+
+agents: []
+

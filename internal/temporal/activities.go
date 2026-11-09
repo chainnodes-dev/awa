@@ -406,6 +406,35 @@ func (a *Activities) ExecuteCode(ctx context.Context, p ExecuteCodeParams) (*asm
 	return code.Execute(p.StateDef.Code.Code, p.Blackboard, p.ValidTriggers, timeout, heartbeat)
 }
 
+// ExecuteAction runs a deterministic MCP tool call without an LLM.
+func (a *Activities) ExecuteAction(ctx context.Context, p ExecuteActionParams) (*asmtypes.AgentOutput, error) {
+	if a.Executor == nil {
+		return nil, fmt.Errorf("executor not configured on activities")
+	}
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				temporalactivity.RecordHeartbeat(ctx, "action running")
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	return a.Executor.ExecuteAction(ctx, orchestrator.ActionTask{
+		RunID:      p.RunID,
+		TenantID:   p.TenantID,
+		StateDef:   p.StateDef,
+		Blackboard: p.Blackboard,
+		Def:        p.Def,
+	})
+}
+
 // ExecuteAgent runs an LLM agent and returns its structured output.
 // This activity has a longer timeout than the others (10 min vs 10 s).
 func (a *Activities) ExecuteAgent(ctx context.Context, p ExecuteAgentParams) (*asmtypes.AgentOutput, error) {

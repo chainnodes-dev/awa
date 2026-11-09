@@ -61,11 +61,27 @@
           <circle cx="12" cy="12" r="10"/><path d="m12 6-2 6h4l-2 6"/>
         </svg>
       </span>
+      <span v-if="data.type === 'action'" class="ml-auto text-cyan-400" title="MCP Action">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+      </span>
     </div>
 
     <!-- Agent badge -->
     <div v-if="data.agent" class="flex items-center gap-1">
       <span class="text-[10px] font-mono text-text-muted truncate">⚡ {{ data.agent }}</span>
+    </div>
+
+    <!-- Action tool badge -->
+    <div v-if="data.type === 'action'" class="flex items-center gap-1">
+      <span v-if="data.action?.tool" class="text-[10px] font-mono text-cyan-400 truncate">⚡ {{ data.action.mcp_server ? `${data.action.mcp_server}:${data.action.tool}` : data.action.tool }}</span>
+      <span v-else class="text-[10px] font-mono text-amber-400/90 italic truncate">⚠ Select function...</span>
+    </div>
+
+    <!-- Custom component badge -->
+    <div v-if="data.metadata?.component_id" class="flex items-center gap-1">
+      <span class="text-[10px] font-mono text-teal-400 truncate">📦 {{ data.metadata.component_id }}</span>
     </div>
 
     <!-- Timeout badge -->
@@ -124,6 +140,7 @@ const TYPE_STYLES = {
   telegram_output: 'border-blue-500/50 bg-blue-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(59,130,246,0.12)]',
   discord_output:  'border-indigo-500/50 bg-indigo-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(99,102,241,0.12)]',
   timeout_node:    'border-red-500/50 bg-red-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(239,68,68,0.12)]',
+  action:          'border-cyan-500/50 bg-cyan-500/5 backdrop-blur-md shadow-[0_0_12px_rgba(6,182,212,0.12)]',
 }
 const TYPE_DOTS = {
   initial:      'bg-indigo-400',
@@ -138,6 +155,7 @@ const TYPE_DOTS = {
   telegram_output: 'bg-blue-400',
   discord_output:  'bg-indigo-400',
   timeout_node:    'bg-red-500',
+  action:          'bg-cyan-400',
 }
 const TYPE_COLORS = {
   initial: '#818cf8', terminal: '#818cf8', prompt: '#6366f1',
@@ -145,6 +163,7 @@ const TYPE_COLORS = {
   hitl: '#f59e0b', wait: '#94a3b8', emit_event: '#60a5fa',
   telegram_output: '#60a5fa', discord_output: '#818cf8',
   timeout_node:    '#ef4444',
+  action:          '#06b6d4',
 }
 
 const nodeStyle = computed(() => {

@@ -43,6 +43,7 @@ type Config struct {
 	LicensePublicKey  string // PEM-encoded RSA public key for verification
 	LicensePrivateKey string // PEM-encoded RSA private key for signing (optional)
 	MCPMarketSource   string // URL or local file path for MCP Marketplace data
+	NodeCatalogSource string // URL or local file path for custom node catalog data
 
 	// Logging
 	LogLevel string
@@ -78,6 +79,7 @@ func Load() *Config {
 		LicensePublicKey:  getEnv("LICENSE_PUBLIC_KEY", ""),
 		LicensePrivateKey: getEnv("LICENSE_PRIVATE_KEY", ""),
 		MCPMarketSource:   getEnv("MCP_MARKET_SOURCE", "configs/mcp-market.json"),
+		NodeCatalogSource: getEnv("NODE_CATALOG_SOURCE", "configs/node-catalog.json"),
 		EnableTelemetry:   getEnv("ENABLE_TELEMETRY", "false") == "true",
 	}
 }

@@ -7,6 +7,16 @@ metadata:
     AgSOP for diagnosing crashing Kubernetes pods. Fetches container logs, reads GitHub commits,
     correlates events to identify the culprit, and recommends the fix to the team.
 
+inputs:
+  - name: incident_id
+    type: string
+    required: true
+    description: "Incident ID from monitoring"
+  - name: service_name
+    type: string
+    required: true
+    description: "Name of failing Kubernetes service"
+
 blackboard:
   schema:
     incident_id: { type: string, required: true }

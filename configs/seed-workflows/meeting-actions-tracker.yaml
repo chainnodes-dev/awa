@@ -1,0 +1,221 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: meeting-actions-tracker
+  version: v1
+  description: |
+    Automated meeting operations and action item distribution: ingests raw meeting transcripts or minutes,
+    extracts executive summaries, strategic decisions, and structured action items with assignees and
+    deadlines, automatically provisions issues in Jira/Linear, and publishes formatted executive recaps
+    to the team Discord or Slack channel.
+  labels:
+    department: operations
+    category: productivity
+
+inputs:
+  - name: meeting_id
+    type: string
+    required: true
+    description: "Meeting unique identifier (e.g. MTG-2026-W45)"
+  - name: meeting_title
+    type: string
+    required: true
+    description: "Meeting topic or title"
+  - name: attendees
+    type: string
+    required: false
+    description: "Attendee names and emails (comma-separated)"
+  - name: raw_notes
+    type: string
+    required: true
+    description: "Raw notes, minutes, or transcribed text"
+
+blackboard:
+  schema:
+    meeting_id:
+      type: string
+      required: true
+    meeting_title:
+      type: string
+      required: true
+    raw_notes:
+      type: string
+      required: true
+    attendees:
+      type: string
+    executive_summary:
+      type: string
+    key_decisions:
+      type: string
+    extracted_actions:
+      type: object
+    created_tasks:
+      type: object
+    digest_message:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: meeting_ended_webhook
+    type: webhook
+    config:
+      path: /webhook/meetings/complete
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"extract_intelligence"'
+      updates:
+        status: '"PARSING_NOTES"'
+    position:
+      x: 320
+      y: 60
+
+  - name: EXTRACT_DECISIONS_AND_ACTIONS
+    type: prompt
+    agent: meeting-synthesizer
+    instructions: |
+      Analyze the notes for meeting: "{{ blackboard.meeting_title }}".
+      Transcript / Notes:
+      {{ blackboard.raw_notes }}
+
+      Extract:
+      1. executive_summary: High-level overview of discussions (2-3 paragraphs).
+      2. key_decisions: Bullet list of binding choices agreed during the meeting.
+      3. extracted_actions: JSON array of action items:
+         [
+           {
+             "owner": "Name",
+             "email": "user@example.com",
+             "task": "Task description",
+             "due_date": "YYYY-MM-DD",
+             "priority": "HIGH|MEDIUM|LOW"
+           }
+         ]
+
+      Set blackboard variables and trigger "actions_extracted".
+    position:
+      x: 320
+      y: 200
+
+  - name: VALIDATE_AND_FORMAT_TASKS
+    type: code
+    code:
+      language: javascript
+      code: |
+        var actions = bb.extracted_actions;
+        if (!Array.isArray(actions)) {
+          actions = [];
+        }
+
+        // Validate and ensure defaults
+        var validTasks = actions.map(function(item, idx) {
+          return {
+            title: item.task || ("Action Item #" + (idx + 1)),
+            assignee: item.email || item.owner || "unassigned",
+            due: item.due_date || "2026-12-31",
+            priority: item.priority || "MEDIUM"
+          };
+        });
+
+        bb.extracted_actions = validTasks;
+        bb.status = "DISPATCHING_TASKS";
+        trigger("sync_tasks");
+    position:
+      x: 320
+      y: 340
+
+  - name: DISPATCH_PROJECT_TASKS
+    type: action
+    action:
+      mcp_server: jira-service
+      tool: bulk_create_issues
+      inputs:
+        project_key: "'OPS'"
+        issue_list: "bb.extracted_actions"
+        source_meeting: "bb.meeting_title"
+      output_path: "created_tasks"
+      on_error: "task_sync_failed"
+    position:
+      x: 320
+      y: 480
+
+  - name: BROADCAST_MEETING_DIGEST
+    type: prompt
+    agent: comms-broadcaster
+    instructions: |
+      Draft a concise markdown meeting digest for the leadership team:
+      Meeting: {{ blackboard.meeting_title }}
+
+      Executive Summary:
+      {{ blackboard.executive_summary }}
+
+      Key Decisions:
+      {{ blackboard.key_decisions }}
+
+      Assigned Tasks Synced to Jira:
+      {{ blackboard.created_tasks }}
+
+      Set digest_message on blackboard.
+      Trigger: "digest_ready".
+    position:
+      x: 320
+      y: 620
+
+  - name: DISPATCH_DISCORD_NOTIFICATION
+    type: discord_output
+    discord_output:
+      channel_id: "operations-general"
+      message_text: "{{ blackboard.digest_message }}"
+      completion_trigger: "posted"
+    position:
+      x: 320
+      y: 760
+
+  - name: SYNC_COMPLETED
+    type: terminal
+    position:
+      x: 320
+      y: 900
+
+transitions:
+  - from: INTAKE
+    to: EXTRACT_DECISIONS_AND_ACTIONS
+    trigger: extract_intelligence
+
+  - from: EXTRACT_DECISIONS_AND_ACTIONS
+    to: VALIDATE_AND_FORMAT_TASKS
+    trigger: actions_extracted
+
+  - from: VALIDATE_AND_FORMAT_TASKS
+    to: DISPATCH_PROJECT_TASKS
+    trigger: sync_tasks
+
+  - from: DISPATCH_PROJECT_TASKS
+    to: BROADCAST_MEETING_DIGEST
+    trigger: ""
+
+  - from: DISPATCH_PROJECT_TASKS
+    to: BROADCAST_MEETING_DIGEST
+    trigger: task_sync_failed
+
+  - from: BROADCAST_MEETING_DIGEST
+    to: DISPATCH_DISCORD_NOTIFICATION
+    trigger: digest_ready
+
+  - from: DISPATCH_DISCORD_NOTIFICATION
+    to: SYNC_COMPLETED
+    trigger: posted
+
+agents:
+  - name: meeting-synthesizer
+    rules:
+      - "Extract explicit commitments, owners, and dates clearly without ambiguity."
+      - "Distinguish between conversational brainstorming and agreed binding decisions."
+
+  - name: comms-broadcaster
+    rules:
+      - "Format output clearly in structured markdown suitable for team channels."
+

@@ -1,0 +1,238 @@
+apiVersion: chainnodes/v1
+kind: Workflow
+metadata:
+  name: clinical-documentation-assistant
+  version: v1
+  description: |
+    Ambient clinical documentation and electronic health record automation: ingests raw consultation
+    transcripts or clinician dictation, structures notes into standardized SOAP format (Subjective,
+    Objective, Assessment, Plan), extracts ICD-10 diagnostic codes, audits proposed medications against
+    patient drug allergies, and enforces mandatory clinician review (HITL) before committing to the EHR.
+  labels:
+    department: healthcare
+    category: clinical-documentation
+
+inputs:
+  - name: encounter_id
+    type: string
+    required: true
+    description: "Clinical encounter reference ID (e.g. ENC-90412)"
+  - name: patient_id
+    type: string
+    required: true
+    description: "Patient identifier"
+  - name: doctor_id
+    type: string
+    required: true
+    description: "Attending clinician identifier"
+  - name: raw_transcript
+    type: string
+    required: true
+    description: "Consultation dictation or encounter transcript text"
+
+blackboard:
+  schema:
+    encounter_id:
+      type: string
+      required: true
+    patient_id:
+      type: string
+      required: true
+    doctor_id:
+      type: string
+      required: true
+    raw_transcript:
+      type: string
+      required: true
+    patient_allergies:
+      type: string
+    soap_subjective:
+      type: string
+    soap_objective:
+      type: string
+    soap_assessment:
+      type: string
+    soap_plan:
+      type: string
+    icd10_codes:
+      type: string
+    prescriptions:
+      type: string
+    contraindication_warning:
+      type: string
+    signed_note:
+      type: string
+    ehr_record_id:
+      type: string
+    status:
+      type: string
+
+triggers:
+  - name: consultation_recording_webhook
+    type: webhook
+    config:
+      path: /webhook/clinical/consultation-ended
+
+states:
+  - name: INTAKE
+    type: initial
+    script:
+      trigger: '"fetch_safety_profile"'
+      updates:
+        status: '"PROCESSING_TRANSCRIPT"'
+    position:
+      x: 320
+      y: 60
+
+  - name: LOOKUP_PATIENT_SAFETY
+    type: action
+    action:
+      mcp_server: ehr-system
+      tool: get_patient_allergies
+      inputs:
+        patient_id: "bb.patient_id"
+      output_path: "patient_allergies"
+      on_error: "safety_profile_empty"
+    position:
+      x: 320
+      y: 190
+
+  - name: GENERATE_SOAP_NOTE
+    type: prompt
+    agent: clinical-scribe
+    instructions: |
+      You are an expert medical scribe. Analyze the clinical encounter transcript:
+      {{ blackboard.raw_transcript }}
+
+      Generate structured documentation:
+      1. soap_subjective: Chief complaint, history of present illness, patient symptoms.
+      2. soap_objective: Vital signs, physical examination findings, diagnostic observations.
+      3. soap_assessment: Primary and differential diagnoses.
+      4. soap_plan: Treatment roadmap, prescribed medications, follow-up tests.
+      5. icd10_codes: Relevant ICD-10 diagnostic code(s) comma-separated.
+      6. prescriptions: List of all suggested medications and dosages.
+
+      Trigger: "draft_generated".
+    position:
+      x: 320
+      y: 330
+
+  - name: CHECK_CONTRAINDICATIONS
+    type: action
+    action:
+      mcp_server: pharmacology-service
+      tool: check_drug_interactions
+      inputs:
+        patient_allergies: "bb.patient_allergies"
+        prescriptions: "bb.prescriptions"
+      output_path: "contraindication_warning"
+      on_error: "skip_pharma_check"
+    position:
+      x: 320
+      y: 470
+
+  - name: DOCTOR_SIGN_OFF
+    type: hitl
+    assignee: attending-physician
+    instructions: |
+      Mandatory Physician Sign-off for Encounter #{{ blackboard.encounter_id }} (Patient: {{ blackboard.patient_id }}).
+      Contraindication Warnings: {{ blackboard.contraindication_warning }}.
+      Review, modify if necessary, and approve the SOAP clinical record.
+    form_schema:
+      type: object
+      properties:
+        soap_assessment:
+          type: string
+          description: "Assessment & Diagnosis"
+        soap_plan:
+          type: string
+          description: "Treatment & Prescription Plan"
+        signed_note:
+          type: string
+          description: "Final consolidated clinical note"
+        decision:
+          type: string
+          enum: ["sign_and_commit", "discard"]
+      required: ["signed_note", "decision"]
+    position:
+      x: 320
+      y: 610
+
+  - name: COMMIT_TO_EHR
+    type: action
+    action:
+      mcp_server: ehr-system
+      tool: save_clinical_encounter
+      inputs:
+        encounter_id: "bb.encounter_id"
+        patient_id: "bb.patient_id"
+        doctor_id: "bb.doctor_id"
+        clinical_note: "bb.signed_note"
+        icd10: "bb.icd10_codes"
+      output_path: "ehr_record_id"
+    position:
+      x: 320
+      y: 750
+
+  - name: DISPATCH_PATIENT_SUMMARY
+    type: action
+    action:
+      mcp_server: clinical-comm-service
+      tool: send_patient_summary
+      inputs:
+        patient_id: "bb.patient_id"
+        plan_summary: "bb.soap_plan"
+      output_path: "summary_delivery_status"
+    position:
+      x: 320
+      y: 890
+
+  - name: ENCOUNTER_ARCHIVED
+    type: terminal
+    position:
+      x: 320
+      y: 1030
+
+transitions:
+  - from: INTAKE
+    to: LOOKUP_PATIENT_SAFETY
+    trigger: fetch_safety_profile
+
+  - from: LOOKUP_PATIENT_SAFETY
+    to: GENERATE_SOAP_NOTE
+    trigger: ""
+
+  - from: LOOKUP_PATIENT_SAFETY
+    to: GENERATE_SOAP_NOTE
+    trigger: safety_profile_empty
+
+  - from: GENERATE_SOAP_NOTE
+    to: CHECK_CONTRAINDICATIONS
+    trigger: draft_generated
+
+  - from: CHECK_CONTRAINDICATIONS
+    to: DOCTOR_SIGN_OFF
+    trigger: ""
+
+  - from: CHECK_CONTRAINDICATIONS
+    to: DOCTOR_SIGN_OFF
+    trigger: skip_pharma_check
+
+  - from: DOCTOR_SIGN_OFF
+    to: COMMIT_TO_EHR
+    trigger: sign_and_commit
+
+  - from: COMMIT_TO_EHR
+    to: DISPATCH_PATIENT_SUMMARY
+    trigger: ""
+
+  - from: DISPATCH_PATIENT_SUMMARY
+    to: ENCOUNTER_ARCHIVED
+    trigger: ""
+
+agents:
+  - name: clinical-scribe
+    rules:
+      - "Follow clinical accuracy and standard SOAP documentation format."
+      - "Always flag any mention of drug sensitivities or acute allergic responses."
+

@@ -130,7 +130,7 @@ func main() {
 		}
 	}
 
-	api.SeedWorkflows(s, defaultTenant.ID)
+	_, _ = api.SeedWorkflows(s, defaultTenant.ID)
 
 	llmRegistry, activeLLMProvider, _ := llm.BuildRegistryFromDB(tenantCtx, s)
 	generatorProvider := activeLLMProvider

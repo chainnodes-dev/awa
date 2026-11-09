@@ -101,6 +101,17 @@ type ExecuteCodeParams struct {
 	ValidTriggers   []string
 }
 
+// ExecuteActionParams is the activity input for running a deterministic MCP action node.
+type ExecuteActionParams struct {
+	RunID           string
+	TenantID        string
+	WorkflowName    string // for metrics
+	WorkflowVersion string // for metrics
+	StateDef        asmtypes.StateDef
+	Blackboard      map[string]interface{}
+	Def             *asmtypes.WorkflowDef
+}
+
 // LoadWorkflowDefParams is the activity input for loading a WorkflowDef by name and version.
 // Used by subprocess states to resolve the child workflow before launching it.
 type LoadWorkflowDefParams struct {

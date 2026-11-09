@@ -147,8 +147,10 @@ const jsonSchema = computed(() => {
     // Inputs first (respecting the order in definition.inputs)
     for (const port of inputs) {
       const field = schema[port.name] || { type: port.type }
+      const isFile = field.type === 'file' || port.type === 'file'
       filtered[port.name] = { 
         ...field, 
+        type: isFile ? 'file' : (field.type || port.type || 'string'),
         required: true,
         title: port.description || field.title || port.name
       }

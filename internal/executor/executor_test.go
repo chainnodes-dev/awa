@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -655,4 +657,176 @@ func TestResolveModelProfile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExecuteAction(t *testing.T) {
+	memStore := store.NewMemoryStore()
+	bus := events.NewLocalBus()
+	reg := llm.NewRegistry()
+	exec := NewExecutor(reg, bus, memStore, "openrouter", nil, nil, nil)
+
+	t.Run("Missing Action Def", func(t *testing.T) {
+		task := orchestrator.ActionTask{
+			RunID: "run-1",
+			StateDef: asmtypes.StateDef{
+				Name: "ACTION_STATE",
+			},
+		}
+		_, err := exec.ExecuteAction(context.Background(), task)
+		if err == nil {
+			t.Fatal("expected error for missing action definition")
+		}
+	})
+
+	t.Run("Unreachable Server", func(t *testing.T) {
+		task := orchestrator.ActionTask{
+			RunID: "run-1",
+			StateDef: asmtypes.StateDef{
+				Name: "ACTION_STATE",
+				Action: &asmtypes.ActionDef{
+					MCPServer: "nonexistent-server",
+					Tool:      "some_tool",
+					OnError:   "fail_step",
+				},
+			},
+		}
+		out, err := exec.ExecuteAction(context.Background(), task)
+		if err == nil {
+			t.Fatal("expected error for nonexistent server")
+		}
+		if out.Trigger != "fail_step" {
+			t.Fatalf("expected trigger 'fail_step', got %q", out.Trigger)
+		}
+	})
+
+	t.Run("Successful Action Invocation with Expr", func(t *testing.T) {
+		// Mock MCP SSE server
+		var receivedTool string
+		var receivedArgs map[string]interface{}
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Method string `json:"method"`
+				Params struct {
+					Name      string                 `json:"name"`
+					Arguments map[string]interface{} `json:"arguments"`
+				} `json:"params"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			receivedTool = body.Params.Name
+			receivedArgs = body.Params.Arguments
+
+			resp := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"result": map[string]interface{}{
+					"content": []map[string]interface{}{
+						{
+							"type": "text",
+							"text": `{"status": "ok", "gross_amount": 119}`,
+						},
+					},
+					"isError": false,
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer ts.Close()
+
+		task := orchestrator.ActionTask{
+			RunID: "run-act-1",
+			StateDef: asmtypes.StateDef{
+				Name: "CALCULATE_STEP",
+				Action: &asmtypes.ActionDef{
+					MCPServer: ts.URL,
+					Tool:      "compute_tax",
+					Inputs: map[string]string{
+						"net":    "blackboard.base_amount * 10",
+						"factor": "blackboard.multiplier",
+					},
+					OutputPath: "tax_result",
+				},
+			},
+			Blackboard: map[string]interface{}{
+				"base_amount": 10,
+				"multiplier":  1.19,
+			},
+		}
+
+		out, err := exec.ExecuteAction(context.Background(), task)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if out.Trigger != "done" {
+			t.Fatalf("expected trigger 'done', got %q", out.Trigger)
+		}
+		if receivedTool != "compute_tax" {
+			t.Fatalf("expected tool 'compute_tax', got %q", receivedTool)
+		}
+		// In JSON unmarshaling, numbers unmarshal to float64
+		if netVal, ok := receivedArgs["net"].(float64); !ok || netVal != 100 {
+			t.Fatalf("expected net=100, got %v (%T)", receivedArgs["net"], receivedArgs["net"])
+		}
+
+		taxResult, ok := out.BlackboardUpdates["tax_result"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected tax_result in updates, got %v", out.BlackboardUpdates)
+		}
+		if taxResult["status"] != "ok" {
+			t.Fatalf("expected status 'ok', got %v", taxResult["status"])
+		}
+
+		// Verify MCP audit log was recorded in store
+		logs, err := memStore.ListMCPCalls(context.Background(), "run-act-1")
+		if err != nil {
+			t.Fatalf("failed to list MCP calls: %v", err)
+		}
+		if len(logs) == 0 {
+			t.Fatal("expected MCP audit log to be recorded")
+		}
+		if logs[0].ToolName != "compute_tax" {
+			t.Fatalf("expected tool name 'compute_tax' in audit log, got %q", logs[0].ToolName)
+		}
+	})
+
+	t.Run("MCP Tool Returns Error Flag", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			resp := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"result": map[string]interface{}{
+					"content": []map[string]interface{}{
+						{
+							"type": "text",
+							"text": "Division by zero in query",
+						},
+					},
+					"isError": true,
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer ts.Close()
+
+		task := orchestrator.ActionTask{
+			RunID: "run-act-2",
+			StateDef: asmtypes.StateDef{
+				Name: "ERROR_STEP",
+				Action: &asmtypes.ActionDef{
+					MCPServer: ts.URL,
+					Tool:      "divide",
+					OnError:   "handle_failure",
+				},
+			},
+		}
+
+		out, err := exec.ExecuteAction(context.Background(), task)
+		if err != nil {
+			t.Fatalf("unexpected Go error when tool returns isError: %v", err)
+		}
+		if out.Trigger != "handle_failure" {
+			t.Fatalf("expected trigger 'handle_failure', got %q", out.Trigger)
+		}
+		if out.BlackboardUpdates["last_error"] != "Division by zero in query" {
+			t.Fatalf("unexpected last_error: %v", out.BlackboardUpdates["last_error"])
+		}
+	})
 }

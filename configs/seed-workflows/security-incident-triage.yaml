@@ -7,6 +7,16 @@ metadata:
     Automated triage of security alerts: enrichment → severity assessment → remediation script → human approval.
     Showcases complex agent routing and multi-persona handovers.
 
+inputs:
+  - name: incident_id
+    type: string
+    required: true
+    description: "Security incident tracking ID"
+  - name: source_ip
+    type: string
+    required: true
+    description: "Suspicious source IP address to triage"
+
 blackboard:
   schema:
     incident_id: { type: string, required: true }

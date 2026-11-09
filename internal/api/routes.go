@@ -69,6 +69,7 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 				wf.GET("/:name/v/:version", h.GetWorkflowByVersion)
 				wf.GET("/:name/:version", h.GetWorkflow)
 				wf.POST("", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor, auth.RoleOperator), h.CreateWorkflow)
+				wf.POST("/seed", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor), h.SeedWorkflows)
 				wf.DELETE("/:name/:version", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor), h.DeleteWorkflow)
 			}
 
@@ -90,6 +91,9 @@ func registerRoutes(r *gin.Engine, h *Handlers, hub *Hub, jwtSvc *auth.JWTServic
 			protected.GET("/hitl/pending", h.GetPendingHITL)
 			protected.GET("/mcp-market", h.GetMCPMarket)
 			protected.POST("/mcp-market/publish", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor), h.PublishMCPMarket)
+			protected.GET("/node-catalog", h.GetNodeCatalog)
+			protected.POST("/node-catalog", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor), h.PublishNodeCatalog)
+			protected.DELETE("/node-catalog/:id", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor), h.DeleteNodeCatalog)
 			protected.GET("/mcp-servers", h.ListMCPServers)
 
 			mcpServers := protected.Group("/mcp-servers", auth.RequireRole(auth.RoleAdmin, auth.RoleEditor))

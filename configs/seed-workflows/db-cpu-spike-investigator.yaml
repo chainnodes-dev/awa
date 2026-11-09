@@ -7,6 +7,16 @@ metadata:
     AgSOP for investigating database CPU spikes. Analyzes Prometheus metrics, inspects pg_stat_activity
     via Postgres MCP, and recommends optimization indexes or query terminations to the team.
 
+inputs:
+  - name: incident_id
+    type: string
+    required: true
+    description: "Database incident identifier"
+  - name: service_name
+    type: string
+    required: true
+    description: "Database cluster / service name"
+
 blackboard:
   schema:
     incident_id: { type: string, required: true }

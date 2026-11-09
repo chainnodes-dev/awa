@@ -1,0 +1,98 @@
+[
+  {
+    "id": "eu-vat-calculator",
+    "name": "EU VAT & Tax Calculator",
+    "version": "1.0.0",
+    "category": "Finance",
+    "icon": "calculator",
+    "description": "Calculates standard VAT rates for European transactions based on country code.",
+    "inputs_schema": {
+      "type": "object",
+      "required": ["amount", "country_code"],
+      "properties": {
+        "amount": {
+          "type": "string",
+          "title": "Net Amount",
+          "description": "Blackboard expression or literal number",
+          "default": "blackboard.amount"
+        },
+        "country_code": {
+          "type": "string",
+          "title": "Country Code",
+          "enum": ["DE", "AT", "FR", "IT", "ES", "NL"],
+          "default": "DE"
+        },
+        "output_field": {
+          "type": "string",
+          "title": "Result Blackboard Field",
+          "default": "tax_calculation"
+        }
+      }
+    },
+    "code_template": "// EU VAT & Tax Calculator\nconst rates = { DE: 0.19, AT: 0.20, FR: 0.20, IT: 0.22, ES: 0.21, NL: 0.21 };\nconst rate = rates[inputs.country_code] || 0.19;\nconst net = Number(inputs.amount);\nconst vat = Math.round(net * rate * 100) / 100;\nbb[inputs.output_field || 'tax_calculation'] = {\n  net: net,\n  vat_rate: rate,\n  vat_amount: vat,\n  gross: Math.round((net + vat) * 100) / 100\n};\ntrigger('done');"
+  },
+  {
+    "id": "string-formatter",
+    "name": "String Formatter & Slugifier",
+    "version": "1.0.0",
+    "category": "Transform",
+    "icon": "type",
+    "description": "Transforms strings into uppercase, lowercase, title case, or URL-friendly slugs.",
+    "inputs_schema": {
+      "type": "object",
+      "required": ["text", "operation"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "title": "Input Text",
+          "description": "String expression or blackboard path",
+          "default": "blackboard.input_text"
+        },
+        "operation": {
+          "type": "string",
+          "title": "Transformation",
+          "enum": ["uppercase", "lowercase", "trim", "slugify"],
+          "default": "slugify"
+        },
+        "output_field": {
+          "type": "string",
+          "title": "Output Blackboard Field",
+          "default": "formatted_text"
+        }
+      }
+    },
+    "code_template": "// String Formatter\nlet val = String(inputs.text || '');\nswitch (inputs.operation) {\n  case 'uppercase': val = val.toUpperCase(); break;\n  case 'lowercase': val = val.toLowerCase(); break;\n  case 'trim': val = val.trim(); break;\n  case 'slugify': val = val.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); break;\n}\nbb[inputs.output_field || 'formatted_text'] = val;\ntrigger('done');"
+  },
+  {
+    "id": "json-validator",
+    "name": "JSON Required Fields Validator",
+    "version": "1.0.0",
+    "category": "Validation",
+    "icon": "check-circle",
+    "description": "Verifies that an object on the blackboard contains all expected non-empty fields.",
+    "inputs_schema": {
+      "type": "object",
+      "required": ["target_object", "required_keys"],
+      "properties": {
+        "target_object": {
+          "type": "string",
+          "title": "Target Blackboard Object",
+          "description": "Path to object on blackboard",
+          "default": "blackboard.data"
+        },
+        "required_keys": {
+          "type": "string",
+          "title": "Required Keys (comma-separated)",
+          "default": "id, email, status"
+        },
+        "output_field": {
+          "type": "string",
+          "title": "Validation Result Field",
+          "default": "validation"
+        }
+      }
+    },
+    "code_template": "// JSON Required Fields Validator\nconst obj = typeof inputs.target_object === 'object' ? inputs.target_object : {};\nconst keys = String(inputs.required_keys || '').split(',').map(s => s.trim()).filter(Boolean);\nconst missing = [];\nfor (const k of keys) {\n  if (obj[k] === undefined || obj[k] === null || obj[k] === '') {\n    missing.push(k);\n  }\n}\nconst valid = missing.length === 0;\nbb[inputs.output_field || 'validation'] = {\n  valid: valid,\n  missing: missing\n};\ntrigger(valid ? 'done' : 'invalid');"
+  }
+]
+
