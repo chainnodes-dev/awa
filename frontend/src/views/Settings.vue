@@ -314,7 +314,7 @@
                </div>
                <div v-else>
                  <label class="text-xs text-text-muted mb-1 block">Default Model</label>
-                 <input v-model="forms[prov.id].default_model" type="text" :placeholder="llmStore.DEFAULT_MODELS[prov.id]" class="input text-sm w-full font-mono text-xs" />
+                 <input v-model="forms[prov.id].default_model" type="text" :placeholder="llmStore.DEFAULT_MODELS[prov.id]" class="input text-xs w-full font-mono" />
                </div>
                <div>
                  <label class="text-xs text-text-muted mb-1 block">Max Output Tokens</label>
