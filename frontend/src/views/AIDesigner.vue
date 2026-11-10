@@ -852,6 +852,11 @@ const availableTriggers = computed(() => {
   const node = nodes.value.find(n => n.id === sourceId)
   if (node?.data) {
     const data = node.data
+    if (data.type === 'hitl') {
+      triggers.add('approve')
+      triggers.add('reject')
+      triggers.add('submit')
+    }
     if (data.type === 'subprocess' && data.subprocess) {
       if (data.subprocess.completion_trigger) triggers.add(data.subprocess.completion_trigger)
       if (data.subprocess.failure_trigger) triggers.add(data.subprocess.failure_trigger)

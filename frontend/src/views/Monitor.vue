@@ -638,27 +638,70 @@ const showDebugModal = ref(false)
 const triggerName  = ref('')
 const workflowDef  = ref(null)
 const currentTransitions = computed(() => {
+  const currentStateObj = workflowDef.value?.states?.find(s => s.name === displayCurrentState.value)
+  const hasForm = !!currentStateObj?.form_schema
+  const defaultPositiveLabel = hasForm ? 'Submit' : 'Approve'
+
   if (!workflowDef.value || !displayCurrentState.value) {
     return [
-      { trigger: 'accept', label: 'Accept' },
+      { trigger: 'approve', label: defaultPositiveLabel },
       { trigger: 'reject', label: 'Reject' }
     ]
   }
-  // Find all transitions originating from displayCurrentState.value
-  const list = workflowDef.value.transitions?.filter(t => t.from === displayCurrentState.value && t.trigger) || []
-  if (list.length > 0) {
-    // Return unique triggers
-    const triggers = [...new Set(list.map(t => t.trigger))]
-    return triggers.map(trig => ({
-      trigger: trig,
-      label: formatTriggerLabel(trig)
-    }))
+
+  const isNegative = (trig) => {
+    if (!trig) return false
+    const lower = trig.toLowerCase()
+    return lower.includes('reject') || lower.includes('cancel') || lower.includes('deny') || lower.includes('fail') || lower.includes('abort') || lower.includes('no')
   }
-  // Fallback if no transitions with triggers are defined
-  return [
-    { trigger: 'accept', label: 'Accept' },
-    { trigger: 'reject', label: 'Reject' }
-  ]
+
+  const stateName = displayCurrentState.value
+  const transitionsFromState = workflowDef.value.transitions?.filter(t => t.from === stateName) || []
+
+  if (transitionsFromState.length === 0) {
+    return [
+      { trigger: 'approve', label: defaultPositiveLabel },
+      { trigger: 'reject', label: 'Reject' }
+    ]
+  }
+
+  const triggers = []
+  const seen = new Set()
+
+  for (const t of transitionsFromState) {
+    let trig = t.trigger ? t.trigger.trim() : ''
+    let label = ''
+    if (!trig) {
+      trig = 'approve'
+      label = defaultPositiveLabel
+    } else {
+      label = formatTriggerLabel(trig)
+    }
+
+    if (!seen.has(trig)) {
+      seen.add(trig)
+      triggers.push({ trigger: trig, label })
+    }
+  }
+
+  // If ONLY negative triggers were defined in the workflow (e.g. only 'reject'),
+  // ensure there is ALWAYS a positive action button (Approve / Submit).
+  const hasPositive = triggers.some(item => !isNegative(item.trigger))
+  if (!hasPositive) {
+    triggers.unshift({
+      trigger: 'approve',
+      label: defaultPositiveLabel
+    })
+  }
+
+  // Sort so primary/positive actions come first, danger/negative actions come last
+  return triggers.sort((a, b) => {
+    const aNeg = isNegative(a.trigger)
+    const bNeg = isNegative(b.trigger)
+    if (aNeg && !bNeg) return 1
+    if (!aNeg && bNeg) return -1
+    return 0
+  })
 })
 
 function formatTriggerLabel(trigger) {

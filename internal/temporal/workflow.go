@@ -951,9 +951,60 @@ func ASMWorkflow(ctx workflow.Context, p WorkflowParams) error {
 	return nil
 }
 
+// matchTrigger checks if a candidate transition trigger matches the requested trigger,
+// either via exact match, case-insensitivity, or common semantic synonyms for approval/rejection.
+func matchTrigger(candidate, requested string) bool {
+	if candidate == requested {
+		return true
+	}
+	if strings.EqualFold(candidate, requested) {
+		return true
+	}
+
+	normCandidate := strings.ToLower(strings.TrimSpace(candidate))
+	normRequested := strings.ToLower(strings.TrimSpace(requested))
+
+	if normCandidate == normRequested {
+		return true
+	}
+
+	// Synonym groups for human/action triggers
+	approvalSynonyms := map[string]bool{
+		"approve": true, "approved": true,
+		"accept": true, "accepted": true,
+		"submit": true, "submitted": true,
+		"ok": true, "confirm": true, "confirmed": true,
+		"proceed": true, "continue": true, "pass": true,
+	}
+
+	rejectionSynonyms := map[string]bool{
+		"reject": true, "rejected": true,
+		"deny": true, "denied": true,
+		"cancel": true, "cancelled": true,
+		"abort": true, "aborted": true,
+		"fail": true, "failed": true,
+	}
+
+	if approvalSynonyms[normRequested] && approvalSynonyms[normCandidate] {
+		return true
+	}
+
+	if rejectionSynonyms[normRequested] && rejectionSynonyms[normCandidate] {
+		return true
+	}
+
+	return false
+}
+
 func applyTransition(def *asmtypes.WorkflowDef, fromState, trigger string, bb map[string]interface{}) ([]string, error) {
-	for _, t := range def.TransitionsFrom(fromState) {
-		if t.Trigger != trigger {
+	fromTransitions := def.TransitionsFrom(fromState)
+	if len(fromTransitions) == 0 {
+		return nil, fmt.Errorf("no transitions defined from state '%s'", fromState)
+	}
+
+	// Phase 1: Try exact or synonym match with guards evaluated
+	for _, t := range fromTransitions {
+		if !matchTrigger(t.Trigger, trigger) {
 			continue
 		}
 		if t.Guard != "" {
@@ -970,6 +1021,65 @@ func applyTransition(def *asmtypes.WorkflowDef, fromState, trigger string, bb ma
 		}
 		return []string{t.To}, nil
 	}
+
+	// Phase 2: If trigger is an approval / continuation trigger, check for empty-trigger default transition
+	approvalSynonyms := map[string]bool{
+		"approve": true, "approved": true, "accept": true, "accepted": true,
+		"submit": true, "submitted": true, "ok": true, "confirm": true, "confirmed": true,
+		"proceed": true, "continue": true,
+	}
+	if approvalSynonyms[strings.ToLower(strings.TrimSpace(trigger))] {
+		for _, t := range fromTransitions {
+			if strings.TrimSpace(t.Trigger) == "" {
+				if t.Guard != "" {
+					ok, err := orchestrator.EvalGuard(t.Guard, bb)
+					if err != nil {
+						return nil, fmt.Errorf("guard eval error: %w", err)
+					}
+					if !ok {
+						continue
+					}
+				}
+				if len(t.ToNodes) > 0 {
+					return t.ToNodes, nil
+				}
+				return []string{t.To}, nil
+			}
+		}
+
+		// Phase 3: If this is a HITL or initial state, fallback to a single forward (non-rejection) transition
+		state := def.StateByName(fromState)
+		if state != nil && (state.Type == asmtypes.StateHITL || state.Type == asmtypes.StateInitial) {
+			var nonRejectionTransitions []asmtypes.Transition
+			for _, t := range fromTransitions {
+				tLower := strings.ToLower(t.Trigger)
+				if !strings.Contains(tLower, "reject") && !strings.Contains(tLower, "cancel") && !strings.Contains(tLower, "deny") && !strings.Contains(tLower, "fail") {
+					nonRejectionTransitions = append(nonRejectionTransitions, t)
+				}
+			}
+			if len(nonRejectionTransitions) == 1 {
+				t := nonRejectionTransitions[0]
+				if t.Guard != "" {
+					ok, err := orchestrator.EvalGuard(t.Guard, bb)
+					if err != nil {
+						return nil, fmt.Errorf("guard eval error: %w", err)
+					}
+					if ok {
+						if len(t.ToNodes) > 0 {
+							return t.ToNodes, nil
+						}
+						return []string{t.To}, nil
+					}
+				} else {
+					if len(t.ToNodes) > 0 {
+						return t.ToNodes, nil
+					}
+					return []string{t.To}, nil
+				}
+			}
+		}
+	}
+
 	return nil, fmt.Errorf("no valid transition from '%s' for trigger '%s'", fromState, trigger)
 }
 
