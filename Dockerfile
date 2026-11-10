@@ -27,7 +27,9 @@ FROM alpine:3.21
 # python3/py3-pip: required to execute Python-based MCP servers
 # bash/curl/gcompat: required for npx wrappers and glibc-compiled native binaries
 # poppler-utils: required for pdftotext extraction in read_file tool
+# tesseract-ocr: required for optical character recognition MCP server (English + German models)
 RUN apk add --no-cache ca-certificates tzdata nodejs npm python3 py3-pip bash curl gcompat poppler-utils \
+    tesseract-ocr tesseract-ocr-data-eng tesseract-ocr-data-deu \
     && pip install --break-system-packages uv
 
 WORKDIR /app
@@ -40,6 +42,9 @@ RUN mkdir -p ./data
 
 # configs is resolved at runtime relative to the project root.
 COPY configs ./configs
+
+# scripts required for bundled MCP servers
+COPY scripts/tesseract_mcp.py ./scripts/tesseract_mcp.py
 
 EXPOSE 8080
 

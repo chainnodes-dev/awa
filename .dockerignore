@@ -60,7 +60,8 @@ env/
 
 # Local workspace directories & data
 .home/
-scripts/
+scripts/*
+!scripts/tesseract_mcp.py
 scratch/
 data/uploads/
 

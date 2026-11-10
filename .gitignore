@@ -1,7 +1,9 @@
 # Local config — never commit
 .env
 .home/
-scripts/
+scripts/.env
+scripts/.venv/
+scripts/__pycache__/
 
 
 # Go build artifacts — compiled binaries at repo root and in bin/

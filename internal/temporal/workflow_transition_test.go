@@ -124,3 +124,4 @@ func TestApplyTransition_HITL_SingleForwardFallback(t *testing.T) {
 		t.Fatalf("expected PROCESS on 'approve' fallback, got %v, err: %v", next, err)
 	}
 }
+

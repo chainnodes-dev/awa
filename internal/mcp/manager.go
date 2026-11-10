@@ -115,10 +115,10 @@ func (m *Manager) startStdioClient(srv *store.MCPServer) (*stdioProcess, io.Clos
 	// Listen for process exit asynchronously to update state and clear from cache.
 	go func() {
 		err := cmd.Wait()
-		p.mu.Lock()
+		p.stateMu.Lock()
 		p.exitErr = err
 		p.exited = true
-		p.mu.Unlock()
+		p.stateMu.Unlock()
 
 		m.mu.Lock()
 		if m.procs[srv.Name] == p {
@@ -174,10 +174,10 @@ func (m *Manager) TestStdioClientMap(command string, args []string, envVars map[
 	// Listen for process exit asynchronously to update state.
 	go func() {
 		err := cmd.Wait()
-		p.mu.Lock()
+		p.stateMu.Lock()
 		p.exitErr = err
 		p.exited = true
-		p.mu.Unlock()
+		p.stateMu.Unlock()
 	}()
 
 	return p, p, nil
@@ -192,6 +192,7 @@ type stdioProcess struct {
 	stderr  *bytes.Buffer
 	idCount int
 	mu      sync.Mutex
+	stateMu sync.Mutex
 	exitErr error
 	exited  bool
 }
@@ -237,6 +238,19 @@ func (p *stdioProcess) Call(ctx context.Context, method string, params interface
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// Ensure context cancellation terminates the process so Decode does not block forever
+	if ctx != nil && ctx.Done() != nil {
+		stopDone := make(chan struct{})
+		defer close(stopDone)
+		go func() {
+			select {
+			case <-ctx.Done():
+				_ = p.Close()
+			case <-stopDone:
+			}
+		}()
+	}
+
 	p.idCount++
 	id := p.idCount
 
@@ -263,14 +277,36 @@ func (p *stdioProcess) Call(ctx context.Context, method string, params interface
 
 	if err := p.decoder.Decode(&resp); err != nil {
 		if err == io.EOF {
-			p.mu.Lock()
+			// Give cmd.Wait() up to 200ms to register exit status if it just exited
+			for i := 0; i < 20; i++ {
+				p.stateMu.Lock()
+				ex := p.exited
+				p.stateMu.Unlock()
+				if ex {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+
+			p.stateMu.Lock()
 			exited := p.exited
 			exitErr := p.exitErr
-			p.mu.Unlock()
+			p.stateMu.Unlock()
+
+			stderrStr := strings.TrimSpace(p.stderr.String())
 			if exited && exitErr != nil {
-				return nil, fmt.Errorf("mcp server exited: %v (stderr: %s)", exitErr, p.stderr.String())
+				if stderrStr != "" {
+					return nil, fmt.Errorf("mcp server process exited: %v (stderr: %s)", exitErr, stderrStr)
+				}
+				return nil, fmt.Errorf("mcp server process exited: %v", exitErr)
 			}
-			return nil, fmt.Errorf("mcp server closed connection (EOF). stderr: %s", p.stderr.String())
+			if stderrStr != "" {
+				return nil, fmt.Errorf("mcp server closed connection (EOF). stderr: %s", stderrStr)
+			}
+			return nil, fmt.Errorf("mcp server closed connection (EOF)")
+		}
+		if ctx != nil && ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
 		return nil, err
 	}

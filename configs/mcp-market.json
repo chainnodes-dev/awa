@@ -878,5 +878,21 @@
     ],
     "is_verified": true,
     "doc_url": "https://github.com/donach/mattermost-mcp"
+  },
+  {
+    "id": "tesseract-ocr",
+    "name": "tesseract-ocr",
+    "description": "Deterministic Optical Character Recognition (OCR) for scanned images and documents (English & German) using native Tesseract 5.5.",
+    "icon": "scan",
+    "author": "Chain Nodes",
+    "category": "Documents",
+    "transport": "stdio",
+    "command": "python3",
+    "args": [
+      "scripts/tesseract_mcp.py"
+    ],
+    "env_vars": [],
+    "is_verified": true,
+    "doc_url": "https://github.com/tesseract-ocr/tesseract"
   }
 ]
