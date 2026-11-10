@@ -271,13 +271,14 @@
     "command": "npx",
     "args": [
       "-y",
-      "@modelcontextprotocol/server-postgres"
+      "@modelcontextprotocol/server-postgres",
+      "${DATABASE_URL}"
     ],
     "env_vars": [
       {
         "name": "DATABASE_URL",
-        "description": "",
-        "required": true
+        "description": "PostgreSQL connection string (defaults to platform DATABASE_URL)",
+        "required": false
       }
     ],
     "is_verified": true,
@@ -294,13 +295,14 @@
     "command": "npx",
     "args": [
       "-y",
-      "@modelcontextprotocol/server-redis"
+      "@modelcontextprotocol/server-redis",
+      "${REDIS_URL}"
     ],
     "env_vars": [
       {
         "name": "REDIS_URL",
-        "description": "",
-        "required": true
+        "description": "Redis connection URL (defaults to platform redis://redis:6379)",
+        "required": false
       }
     ],
     "is_verified": true,
@@ -834,12 +836,13 @@
     "command": "npx",
     "args": [
       "-y",
-      "@modelcontextprotocol/server-mysql"
+      "@modelcontextprotocol/server-mysql",
+      "${MYSQL_URL}"
     ],
     "env_vars": [
       {
         "name": "MYSQL_URL",
-        "description": "",
+        "description": "MySQL connection string (e.g. mysql://user:pass@host:3306/db)",
         "required": true
       }
     ],

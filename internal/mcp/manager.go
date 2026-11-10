@@ -72,7 +72,8 @@ func (m *Manager) findServer(ctx context.Context, name string) (*store.MCPServer
 }
 
 func (m *Manager) startStdioClient(srv *store.MCPServer) (*stdioProcess, io.Closer, error) {
-	cmd := exec.Command(srv.Command, srv.Args...)
+	resolvedArgs := resolveArgs(srv.Args, srv.EnvVars)
+	cmd := exec.Command(srv.Command, resolvedArgs...)
 	stderr := &bytes.Buffer{}
 	cmd.Stderr = stderr
 
@@ -130,9 +131,85 @@ func (m *Manager) startStdioClient(srv *store.MCPServer) (*stdioProcess, io.Clos
 	return p, p, nil
 }
 
+// resolveArgs expands environment variables in arguments (e.g. ${REDIS_URL})
+// and automatically appends connection strings for well-known MCP servers
+// if the argument was omitted by the user.
+func resolveArgs(args []string, envVars map[string]string) []string {
+	resolved := make([]string, 0, len(args)+1)
+	for _, arg := range args {
+		if strings.Contains(arg, "$") {
+			expanded := os.Expand(arg, func(key string) string {
+				if v, ok := envVars[key]; ok && v != "" {
+					return v
+				}
+				return os.Getenv(key)
+			})
+			if expanded != "" {
+				resolved = append(resolved, expanded)
+			}
+		} else if arg != "" {
+			resolved = append(resolved, arg)
+		}
+	}
+
+	// Auto-append connection strings for well-known MCP servers that require them as CLI args
+	for i, arg := range resolved {
+		switch {
+		case strings.Contains(arg, "@modelcontextprotocol/server-redis"):
+			if i == len(resolved)-1 {
+				redisURL := ""
+				if envVars != nil {
+					redisURL = envVars["REDIS_URL"]
+				}
+				if redisURL == "" {
+					redisURL = os.Getenv("REDIS_URL")
+				}
+				if redisURL == "" {
+					// Fall back to docker internal service name if running in docker
+					if _, err := os.Stat("/.dockerenv"); err == nil {
+						redisURL = "redis://redis:6379"
+					}
+				}
+				if redisURL != "" {
+					resolved = append(resolved, redisURL)
+				}
+			}
+		case strings.Contains(arg, "@modelcontextprotocol/server-postgres"):
+			if i == len(resolved)-1 {
+				dbURL := ""
+				if envVars != nil {
+					dbURL = envVars["DATABASE_URL"]
+				}
+				if dbURL == "" {
+					dbURL = os.Getenv("DATABASE_URL")
+				}
+				if dbURL != "" {
+					resolved = append(resolved, dbURL)
+				}
+			}
+		case strings.Contains(arg, "@modelcontextprotocol/server-mysql"):
+			if i == len(resolved)-1 {
+				mysqlURL := ""
+				if envVars != nil {
+					mysqlURL = envVars["MYSQL_URL"]
+				}
+				if mysqlURL == "" {
+					mysqlURL = os.Getenv("MYSQL_URL")
+				}
+				if mysqlURL != "" {
+					resolved = append(resolved, mysqlURL)
+				}
+			}
+		}
+	}
+
+	return resolved
+}
+
 // TestStdioClientMap starts a temporary process for discovery/testing with multiple env vars.
 func (m *Manager) TestStdioClientMap(command string, args []string, envVars map[string]string) (Client, io.Closer, error) {
-	cmd := exec.Command(command, args...)
+	resolvedArgs := resolveArgs(args, envVars)
+	cmd := exec.Command(command, resolvedArgs...)
 	stderr := &bytes.Buffer{}
 	cmd.Stderr = stderr
 
