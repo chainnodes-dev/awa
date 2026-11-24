@@ -176,7 +176,9 @@
             <label class="text-xs text-text-muted">MCP Server</label>
             <select class="input" v-model="form.action_server" @change="onActionServerChange">
               <option value="">Select an MCP server...</option>
-              <option v-for="s in mcpServers" :key="s.name" :value="s.name">{{ s.name }} ({{ s.transport }})</option>
+              <option v-for="s in mcpServers" :key="s.name" :value="s.name">
+                {{ s.name }} ({{ s.transport }}{{ s.tools?.length ? ` · ${s.tools.length} ${s.tools.length === 1 ? 'tool' : 'tools'}` : ' · no tools' }})
+              </option>
             </select>
           </div>
 

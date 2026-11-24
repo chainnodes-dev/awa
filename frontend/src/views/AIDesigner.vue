@@ -27,6 +27,9 @@
 
       <div class="flex-1"></div>
 
+      <!-- Mode toggle (AI Vertical / Classic Horizontal) -->
+      <DesignerModeToggle model-value="ai" @switch="switchDesignerMode" />
+
       <!-- Auto-layout -->
       <button
         @click="applyLayout"
@@ -101,30 +104,6 @@
               >
                 <span :class="['w-2 h-2 rounded-full shrink-0', node.dot]"></span>
                 <span class="truncate flex-1">{{ node.label }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- deterministic mcp servers (1 node per server) -->
-          <div v-if="mcpServers.length > 0" class="space-y-1.5">
-            <div class="text-[10px] text-cyan-400 font-bold uppercase tracking-wider px-1 flex items-center justify-between">
-              <span>MCP Servers</span>
-              <span class="text-[9px] text-text-muted font-normal">Deterministic</span>
-            </div>
-            <div class="grid grid-cols-1 gap-1.5">
-              <div
-                v-for="srv in mcpServers"
-                :key="srv.id || srv.name"
-                draggable="true"
-                @dragstart="onDragStart($event, { isAction: true, server: srv.name, label: `${srv.name} (MCP)` })"
-                class="flex items-center gap-2 p-2 rounded-lg border border-cyan-500/25 bg-cyan-500/5 hover:bg-cyan-500/15 cursor-grab active:cursor-grabbing text-xs text-cyan-200 transition-colors group"
-                :title="srv.description || srv.name"
-              >
-                <span class="w-2 h-2 rounded-full shrink-0 bg-cyan-400"></span>
-                <span class="truncate flex-1 font-medium">{{ srv.name }}</span>
-                <span v-if="srv.tools?.length" class="text-[9px] text-cyan-400/80 font-mono px-1 py-0.5 rounded bg-cyan-500/15">
-                  {{ srv.tools.length }} {{ srv.tools.length === 1 ? 'func' : 'funcs' }}
-                </span>
               </div>
             </div>
           </div>
@@ -435,7 +414,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick, shallowRef, markRaw } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, shallowRef, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background }  from '@vue-flow/background'
@@ -460,6 +439,7 @@ import AIGeneratePanel          from '@/components/designer/AIGeneratePanel.vue'
 import CodeEditorModal       from '@/components/designer/CodeEditorModal.vue'
 import CodeEditor            from '@/components/designer/CodeEditor.vue'
 import SchemaEditorModal    from '@/components/designer/SchemaEditorModal.vue'
+import DesignerModeToggle   from '@/components/designer/DesignerModeToggle.vue'
 
 import { api }              from '@/stores/auth'
 import { useWorkflowStore } from '@/stores/workflows'
@@ -467,6 +447,7 @@ import { useWorkflowIO }    from '@/composables/useWorkflowIO'
 import { useCanvasSync }    from '@/composables/useCanvasSync'
 import { useCanvasActions } from '@/composables/useCanvasActions'
 import { useLayout }        from '@/composables/useLayout'
+import { useDesignerHandoff } from '@/composables/useDesignerHandoff'
 
 const route   = useRoute()
 const router  = useRouter()
@@ -604,7 +585,6 @@ const paletteTriggers = [
   { isTrigger: true, triggerType: 'webhook', label: 'Webhook Trigger' },
 ]
 
-const mcpServers = ref([])
 const nodeCatalog = ref([])
 const showComponentModal = ref(false)
 const newComponent = reactive({
@@ -662,16 +642,8 @@ function onPublishComponentRequest(payload) {
 
 async function fetchPaletteData() {
   try {
-    const [srvRes, catRes] = await Promise.allSettled([
-      api.get('/mcp-servers'),
-      api.get('/node-catalog')
-    ])
-    if (srvRes.status === 'fulfilled') {
-      mcpServers.value = srvRes.value.data || []
-    }
-    if (catRes.status === 'fulfilled') {
-      nodeCatalog.value = catRes.value.data || []
-    }
+    const res = await api.get('/node-catalog')
+    nodeCatalog.value = res.data || []
   } catch (e) {
     console.error('Failed to load palette data', e)
   }
@@ -763,7 +735,7 @@ function onDrop(event) {
     }
   }
 
-  if (paletteNode.isAction) {
+  if (paletteNode.isAction || type === 'action') {
     newNode.data.type = 'action'
     newNode.data.action = {
       mcp_server: paletteNode.server || '',
@@ -947,6 +919,13 @@ function handleKeydown(e) {
   }
 }
 
+const { switchToMode: switchDesignerMode, restoreHandoffIfPresent } = useDesignerHandoff({
+  route, router, buildDefinition, loadDefinition, meta, yamlSource,
+  versions, isDirty, showTimeoutEdges, selected, nodes, edges, flowKey, fitView,
+  generatePrompt, generateHistory, generateInteractions, generateProvider,
+  generatePipelineStep, generatePipelineWarning,
+})
+
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
   sessionStorage.setItem('chainnodes_preferred_designer', 'ai')
@@ -966,6 +945,9 @@ onMounted(async () => {
       console.error('Failed to apply stored AI fix:', e)
     }
   }
+
+  // Restore seamless handoff when switching from Classic Designer
+  if (await restoreHandoffIfPresent()) return
 
   const { name, version } = route.params
   if (name && version && name !== 'new') {
@@ -1003,6 +985,10 @@ onMounted(async () => {
     await nextTick()
     flowKey.value++
   }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
 
